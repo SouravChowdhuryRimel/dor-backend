@@ -9,6 +9,7 @@ import {
 import { AuthService } from '../services/auth.service';
 import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
+import { VerifyOtpDto } from '../dto/verify-otp.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RefreshTokenGuard } from '../../../common/guards/refresh-token.guard';
 import {
@@ -48,24 +49,50 @@ export class AuthController {
 
   @Post('signin')
   @ApiOperation({
-    summary: 'Authenticate a user (Sign-in)',
+    summary: 'Authenticate a user (Sign-in Step 1)',
     description:
-      'Authenticates a user via email and password, returning JWT access & refresh tokens.',
+      'Authenticates a user via phone and password, and returns a temporary token to proceed with OTP verification.',
   })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: 200,
-    description: 'User authenticated successfully.',
-    type: AuthSuccessResponseDto,
+    description: 'Credentials verified successfully. OTP required.',
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized. Invalid email or password.',
+    description: 'Unauthorized. Invalid phone or password.',
     type: UnauthorizedErrorResponseDto,
   })
   signin(@Body() loginDto: LoginDto) {
     return this.authService.signIn(loginDto);
   }
+
+  @Post('verify-otp')
+  @ApiOperation({
+    summary: 'Verify OTP code (Sign-in Step 2)',
+    description:
+      'Verifies the 6-digit OTP code against the stored session and returns the final access & refresh tokens.',
+  })
+  @ApiBody({ type: VerifyOtpDto })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully. Tokens returned.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request. Invalid or expired OTP.',
+    type: BadRequestErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid or expired temporary token.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(verifyOtpDto);
+  }
+
 
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)

@@ -49,7 +49,44 @@ class EnvironmentVariables {
   @IsOptional()
   @IsNumber()
   QUEUE_REDIS_PORT: number = 6379;
+
+  @IsNotEmpty()
+  @IsString()
+  SMTP_HOST: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  SMTP_PORT: number = 587;
+
+  @IsNotEmpty()
+  @IsString()
+  SMTP_USER: string;
+
+  @IsNotEmpty()
+  @IsString()
+  SMTP_PASS: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_FROM: string;
+
+  @IsNotEmpty()
+  @IsString()
+  SUPERADMIN_PHONE: string;
+
+  @IsNotEmpty()
+  @IsString()
+  SUPERADMIN_EMAIL: string;
+
+  @IsNotEmpty()
+  @IsString()
+  SUPERADMIN_PASSWORD: string;
+
+  @IsNotEmpty()
+  @IsString()
+  SUPERADMIN_NAME: string;
 }
+
 
 export function validate(config: Record<string, unknown>) {
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {

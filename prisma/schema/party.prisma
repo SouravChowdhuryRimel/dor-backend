@@ -1,0 +1,30 @@
+model PartyProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Primary Info (Step 1)
+  businessName     String
+  ownerName        String
+  businessType     String?
+  
+  // Address & Location (Step 1 & 2)
+  district         String?
+  upazila          String?
+  detailedAddress  String?
+  marketArea       String?  // Market / Area (বাজার / এলাকা)
+  
+  // Documents (Step 2)
+  businessDocument String?  // NID / Business Document URL/Path
+  
+  // Notes
+  additionalNote   String?  // Additional note (ঐচ্ছিক)
+  
+  // Verification status
+  isVerified       Boolean  @default(false)
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("party_profiles")
+}

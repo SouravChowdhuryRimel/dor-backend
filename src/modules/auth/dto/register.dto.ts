@@ -9,13 +9,21 @@ import {
 
 export class RegisterDto {
   @ApiProperty({
-    description: 'Unique email address of the user used for authentication',
+    description: 'Unique phone number of the user used for authentication',
+    example: '+8801712345678',
+  })
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
+  @ApiPropertyOptional({
+    description: 'Email address of the user',
     example: 'alex.jones@example.com',
     format: 'email',
   })
   @IsEmail()
-  @IsNotEmpty()
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @ApiProperty({
     description: 'Secure password for the user account (minimum 6 characters)',
@@ -28,18 +36,11 @@ export class RegisterDto {
   password: string;
 
   @ApiPropertyOptional({
-    description: 'First name of the user',
-    example: 'Alex',
+    description: 'Full name of the user',
+    example: 'Alex Jones',
   })
   @IsString()
   @IsOptional()
-  firstName?: string;
-
-  @ApiPropertyOptional({
-    description: 'Last name of the user',
-    example: 'Jones',
-  })
-  @IsString()
-  @IsOptional()
-  lastName?: string;
+  name?: string;
 }
+

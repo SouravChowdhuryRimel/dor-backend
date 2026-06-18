@@ -1,0 +1,24 @@
+model CompanyProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Primary Info (Step 1)
+  companyName       String
+  ownerName         String
+  category          String?  // Category under which company operates
+  
+  // Documents (Step 2)
+  tradeLicenseCopy  String?  // URL/Path
+  nidCopyFront      String?  // URL/Path (Owner NID)
+  nidCopyBack       String?  // URL/Path
+  bankStatementCopy String?  // URL/Path (Cheque book or statement copy)
+  
+  // Verification status
+  isVerified        Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("company_profiles")
+}

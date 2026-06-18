@@ -1,35 +1,34 @@
 import { NestFactory } from '@nestjs/core';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import helmet from '@fastify/helmet';
+import helmet from 'helmet';
 import * as cluster from 'cluster';
 import * as os from 'os';
+import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   try {
-    const app = await NestFactory.create<NestFastifyApplication>(
+    const app = await NestFactory.create<NestExpressApplication>(
       AppModule,
-      new FastifyAdapter({
-        trustProxy: true,
-        connectionTimeout: 10000,
-      }),
       { bufferLogs: true },
     );
 
     app.useLogger(app.get(PinoLogger));
     const configService = app.get(ConfigService);
 
-    // Security - registered as Fastify plugin
-    await app.register(helmet, {
-      contentSecurityPolicy: true,
+    // Static Assets serving for uploaded documents
+    app.useStaticAssets(join(process.cwd(), 'uploads'), {
+      prefix: '/uploads',
     });
+
+    // Security - registered as Express middleware
+    app.use(helmet());
+
+
 
     app.enableCors({
       origin: configService.get<string>('CORS_ORIGIN', '*'),

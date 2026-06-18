@@ -1,0 +1,34 @@
+model DriverProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Personal Info (Step 1)
+  avatar               String?  // Driver Photo URL
+  presentAddress       String?
+  district             String?
+  upazila              String?
+  
+  // Vehicle Info (Step 2)
+  truckNumber          String
+  truckType            String
+  loadCapacity         String
+  
+  // Identification & License (Step 2)
+  drivingLicenseNumber String
+  nidNumber            String
+  
+  // Documents (Step 3)
+  nidCopyFront        String?  // URL/Path
+  nidCopyBack         String?  // URL/Path
+  drivingLicenseCopy  String?  // URL/Path
+  truckPhoto          String?  // URL/Path
+  
+  // Status/Verification
+  isVerified           Boolean  @default(false)
+  
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("driver_profiles")
+}

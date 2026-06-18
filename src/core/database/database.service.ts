@@ -5,9 +5,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import * as argon2 from 'argon2';
 
 @Injectable()
 export class PrismaService
@@ -69,6 +70,7 @@ export class PrismaService
       this.logger.log(
         'Prisma Engine database connections successfully established.',
       );
+      await this.seedSuperAdmin();
     } catch (error) {
       this.logger.error(
         `Prisma connection failure during initialization: ${error.message}`,
@@ -77,6 +79,59 @@ export class PrismaService
       throw error;
     }
   }
+
+  private async seedSuperAdmin() {
+    const phone = this.configService.get<string>('SUPERADMIN_PHONE');
+    const email = this.configService.get<string>('SUPERADMIN_EMAIL');
+    const password = this.configService.get<string>('SUPERADMIN_PASSWORD');
+    const name = this.configService.get<string>('SUPERADMIN_NAME');
+
+    if (!phone || !email || !password || !name) {
+      this.logger.warn(
+        'Super Admin init credentials missing from environment. Skipping seed.',
+      );
+      return;
+    }
+
+    try {
+      const existingSuperAdmin = await this.user.findFirst({
+        where: {
+          OR: [{ phone }, { email }],
+        },
+      });
+
+      if (existingSuperAdmin) {
+        this.logger.log(
+          'Super Admin user already exists. Skipping initialization.',
+        );
+        return;
+      }
+
+      const hashedPassword = await argon2.hash(password, {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+      });
+
+      await this.user.create({
+        data: {
+          phone,
+          email,
+          password: hashedPassword,
+          name,
+          roles: [Role.SUPER_ADMIN],
+        },
+      });
+
+      this.logger.log('Super Admin user successfully initialized.');
+    } catch (error) {
+      this.logger.error(
+        `Failed to seed Super Admin: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
 
   async onModuleDestroy() {
     try {

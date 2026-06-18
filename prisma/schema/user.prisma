@@ -1,12 +1,17 @@
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  password     String
-  name         String?
-  roles        Role[]   @default([USER])
-  refreshToken String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String          @id @default(uuid())
+  phone          String          @unique
+  email          String?         @unique
+  password       String
+  name           String?
+  roles          Role[]          @default([USER])
+  refreshToken   String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  driverProfile  DriverProfile?
+  companyProfile CompanyProfile?
+  partyProfile   PartyProfile?
 
   @@map("users")
 }
+

@@ -10,8 +10,10 @@ import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 import { UsersService } from '../../users/services/users.service';
 import { RedisService } from '../../../core/cache/redis.service';
+import { MailService } from '../../../core/mail/mail.service';
 import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
+import { VerifyOtpDto } from '../dto/verify-otp.dto';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -23,13 +25,21 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
+    private mailService: MailService,
   ) {}
 
   async signUp(registerDto: RegisterDto) {
     try {
-      const userExists = await this.usersService.findByEmail(registerDto.email);
+      const userExists = await this.usersService.findByPhone(registerDto.phone);
       if (userExists) {
-        throw new BadRequestException('User already exists');
+        throw new BadRequestException('User with this phone number already exists');
+      }
+
+      if (registerDto.email) {
+        const emailExists = await this.usersService.findByEmail(registerDto.email);
+        if (emailExists) {
+          throw new BadRequestException('User with this email already exists');
+        }
       }
 
       // Hash password safely. Argon2 is highly CPU-bound.
@@ -40,20 +50,17 @@ export class AuthService {
       });
 
       const newUser = await this.usersService.create({
-        ...registerDto,
+        phone: registerDto.phone,
         password: hashedPassword,
+        email: registerDto.email,
+        name: registerDto.name,
       });
 
-      const tokens = await this.getTokens(
-        newUser.id,
-        newUser.email,
-        newUser.roles,
-      );
-
-      // Persist the session reference in Redis (no DB hit)
-      await this.storeSession(newUser.id, tokens.refreshToken);
-
-      return tokens;
+      // Automatically trigger OTP/signIn flow
+      return this.signIn({
+        phone: newUser.phone,
+        password: registerDto.password,
+      });
     } catch (error) {
       this.logger.error(
         `Failed to register user: ${error.message}`,
@@ -65,7 +72,7 @@ export class AuthService {
 
   async signIn(loginDto: LoginDto) {
     try {
-      const user = await this.usersService.findByEmail(loginDto.email);
+      const user = await this.usersService.findByPhone(loginDto.phone);
       if (!user) throw new UnauthorizedException('Access Denied');
 
       const passwordMatches = await argon2.verify(
@@ -74,7 +81,87 @@ export class AuthService {
       );
       if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
-      const tokens = await this.getTokens(user.id, user.email, user.roles);
+      // Generate 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Store in Redis (valid for 5 minutes)
+      const otpKey = `otp:${user.phone}`;
+      await this.redisService.set(otpKey, otp, 300);
+
+      this.logger.log(`Generated OTP for user phone ${user.phone}: ${otp}`);
+
+      let sentStatus = 'logged to console';
+
+      // Send via email if email exists
+      if (user.email) {
+        try {
+          await this.mailService.sendOtp(user.email, otp);
+          sentStatus = `sent to email ${user.email}`;
+        } catch (mailError) {
+          this.logger.error(
+            `Failed to send OTP email: ${mailError.message}`,
+            mailError.stack,
+          );
+        }
+      }
+
+      // Generate temporary JWT token for OTP verification
+      const tempToken = await this.jwtService.signAsync(
+        {
+          sub: user.id,
+          phone: user.phone,
+          email: user.email,
+          type: 'temp',
+        },
+        {
+          secret: this.configService.get<string>('JWT_SECRET'),
+          expiresIn: '5m',
+        },
+      );
+
+      return {
+        otpRequired: true,
+        tempToken,
+        message: `OTP has been ${sentStatus}. Please verify to complete sign-in.`,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed login attempt for phone ${loginDto.phone}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async verifyOtp(verifyOtpDto: VerifyOtpDto) {
+    try {
+      let payload: any;
+      try {
+        payload = await this.jwtService.verifyAsync(verifyOtpDto.tempToken, {
+          secret: this.configService.get<string>('JWT_SECRET'),
+        });
+      } catch (err) {
+        throw new UnauthorizedException('Invalid or expired temporary token');
+      }
+
+      if (payload.type !== 'temp') {
+        throw new UnauthorizedException('Invalid token type');
+      }
+
+      const phone = payload.phone;
+      const cachedOtp = await this.redisService.get(`otp:${phone}`);
+
+      if (!cachedOtp || cachedOtp !== verifyOtpDto.code) {
+        throw new BadRequestException('Invalid or expired OTP code');
+      }
+
+      // Clear OTP
+      await this.redisService.del(`otp:${phone}`);
+
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) throw new UnauthorizedException('User not found');
+
+      const tokens = await this.getTokens(user.id, user.email || '', user.roles);
 
       // Store session token in Redis (sliding expiration)
       await this.storeSession(user.id, tokens.refreshToken);
@@ -82,7 +169,7 @@ export class AuthService {
       return tokens;
     } catch (error) {
       this.logger.error(
-        `Failed login attempt for email ${loginDto.email}: ${error.message}`,
+        `Failed OTP verification: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -117,7 +204,7 @@ export class AuthService {
       const user = await this.usersService.findById(userId);
       if (!user) throw new ForbiddenException('Access Denied');
 
-      const tokens = await this.getTokens(user.id, user.email, user.roles);
+      const tokens = await this.getTokens(user.id, user.email || '', user.roles);
 
       // Rotate refresh tokens dynamically to prevent token replay hijacking
       await this.storeSession(user.id, tokens.refreshToken);
@@ -200,3 +287,4 @@ export class AuthService {
     }
   }
 }
+
