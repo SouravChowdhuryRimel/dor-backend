@@ -24,11 +24,15 @@ async function main() {
     return;
   }
 
-  const existingSuperAdmin = await prisma.user.findFirst({
-    where: {
-      OR: [{ phone }, { email }],
-    },
+  let existingSuperAdmin = await prisma.user.findUnique({
+    where: { phone },
   });
+
+  if (!existingSuperAdmin && email) {
+    existingSuperAdmin = await prisma.user.findUnique({
+      where: { email },
+    });
+  }
 
   if (existingSuperAdmin) {
     console.log('Super Admin user already exists. Skipping seed.');

@@ -51,7 +51,8 @@ export class PrismaService
     // Track and warn on slow queries (> 100ms) for high-scale visibility
     if (process.env.NODE_ENV !== 'production') {
       (this as any).$on('query', (e: any) => {
-        if (e.duration > 100) {
+        // Exclude system warm-up / heartbeat checks from slow query logs
+        if (e.duration > 100 && !e.query.includes('SELECT 1')) {
           this.logger.warn(
             `Slow Database Query Detected: ${e.query} - Duration: ${e.duration}ms`,
           );
@@ -70,6 +71,11 @@ export class PrismaService
       this.logger.log(
         'Prisma Engine database connections successfully established.',
       );
+
+      // Pre-warm the PostgreSQL connection pool to avoid cold-start latencies
+      await this.$queryRawUnsafe('SELECT 1');
+      this.logger.debug('Database connection pool pre-warmed.');
+
       await this.seedSuperAdmin();
     } catch (error) {
       this.logger.error(
@@ -94,11 +100,16 @@ export class PrismaService
     }
 
     try {
-      const existingSuperAdmin = await this.user.findFirst({
-        where: {
-          OR: [{ phone }, { email }],
-        },
+      // Optimize query to use point-lookups (O(1) index seeks) instead of OR filters
+      let existingSuperAdmin = await this.user.findUnique({
+        where: { phone },
       });
+
+      if (!existingSuperAdmin && email) {
+        existingSuperAdmin = await this.user.findUnique({
+          where: { email },
+        });
+      }
 
       if (existingSuperAdmin) {
         this.logger.log(

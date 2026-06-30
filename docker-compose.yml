@@ -3,6 +3,7 @@ services:
     image: souravchowdhury/dor-backend:latest
     build:
       context: .
+    pull_policy: build
     ports:
       - '${PORT:-3000}:3000'
     environment:
