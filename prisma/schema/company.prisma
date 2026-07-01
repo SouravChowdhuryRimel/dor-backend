@@ -8,6 +8,11 @@ model CompanyProfile {
   ownerName         String
   category          String?  // Category under which company operates
   
+  // Address & Location
+  district          String?
+  upazila           String?
+  detailedAddress   String?
+  
   // Documents (Step 2)
   tradeLicenseCopy  String?  // URL/Path
   nidCopyFront      String?  // URL/Path (Owner NID)

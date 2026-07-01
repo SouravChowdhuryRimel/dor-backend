@@ -12,10 +12,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   try {
-    const app = await NestFactory.create<NestExpressApplication>(
-      AppModule,
-      { bufferLogs: true },
-    );
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+      bufferLogs: true,
+    });
 
     app.useLogger(app.get(PinoLogger));
     const configService = app.get(ConfigService);
@@ -27,8 +26,6 @@ async function bootstrap() {
 
     // Security - registered as Express middleware
     app.use(helmet());
-
-
 
     app.enableCors({
       origin: configService.get<string>('CORS_ORIGIN', '*'),
@@ -60,8 +57,9 @@ async function bootstrap() {
     const port = configService.get<number>('PORT') || 3000;
     // Fastify requires listening on 0.0.0.0 for external network reachability (especially inside containers)
     await app.listen(port, '0.0.0.0');
+    console.log(`Application is running on port: ${port}`);
 
-    Logger.log(`Application is running on: ${await app.getUrl()}`, 'Bootstrap');
+    Logger.log(`Application is running on port: ${port}`, 'Bootstrap');
   } catch (error) {
     Logger.error(
       `Critical Bootstrap failure: ${error.message}`,

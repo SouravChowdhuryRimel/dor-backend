@@ -67,6 +67,8 @@ export class AuthController {
     return this.authService.signIn(loginDto);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @Post('verify-otp')
   @ApiOperation({
     summary: 'Verify OTP code (Sign-in Step 2)',
@@ -89,8 +91,8 @@ export class AuthController {
     description: 'Unauthorized. Invalid or expired temporary token.',
     type: UnauthorizedErrorResponseDto,
   })
-  verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
-    return this.authService.verifyOtp(verifyOtpDto);
+  verifyOtp(@Req() req: any, @Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(req.user, verifyOtpDto);
   }
 
 

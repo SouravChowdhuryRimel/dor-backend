@@ -3,6 +3,7 @@ import { UsersService } from '../../users/services/users.service';
 import { AuthService } from '../../auth/services/auth.service';
 import { PrismaService } from '../../../core/database/database.service';
 import { CompanySignupDto } from '../dto/company-signup.dto';
+import { CompanyListQueryDto } from '../dto/company-list-query.dto';
 import * as argon2 from 'argon2';
 import { Role } from '@prisma/client';
 
@@ -77,5 +78,73 @@ export class CompaniesService {
       this.logger.error(`Failed company signup: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  async getCompaniesForParty(query: CompanyListQueryDto) {
+    const { search, category, page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      isVerified: true, // Only verified companies should be displayed to Parties
+    };
+
+    if (category && category.trim() !== '') {
+      where.category = {
+        equals: category.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    if (search && search.trim() !== '') {
+      const searchLower = search.trim();
+      where.OR = [
+        { companyName: { contains: searchLower, mode: 'insensitive' } },
+        { ownerName: { contains: searchLower, mode: 'insensitive' } },
+        { category: { contains: searchLower, mode: 'insensitive' } },
+        { district: { contains: searchLower, mode: 'insensitive' } },
+        { upazila: { contains: searchLower, mode: 'insensitive' } },
+        { detailedAddress: { contains: searchLower, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, companies] = await Promise.all([
+      this.prisma.companyProfile.count({ where }),
+      this.prisma.companyProfile.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          companyName: 'asc',
+        },
+        include: {
+          user: {
+            select: {
+              phone: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    // Format the list and append deterministic mock product counts based on the record UUID
+    const formattedCompanies = companies.map((company) => {
+      const charSum = company.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      const totalProducts = 20 + (charSum % 131); // Deterministic random-like count
+      return {
+        ...company,
+        totalProducts,
+      };
+    });
+
+    return {
+      data: formattedCompanies,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

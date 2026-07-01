@@ -133,25 +133,16 @@ export class AuthService {
     }
   }
 
-  async verifyOtp(verifyOtpDto: VerifyOtpDto) {
+  async verifyOtp(payload: any, verifyOtpDto: VerifyOtpDto) {
     try {
-      let payload: any;
-      try {
-        payload = await this.jwtService.verifyAsync(verifyOtpDto.tempToken, {
-          secret: this.configService.get<string>('JWT_SECRET'),
-        });
-      } catch (err) {
-        throw new UnauthorizedException('Invalid or expired temporary token');
-      }
-
-      if (payload.type !== 'temp') {
+      if (!payload || payload.type !== 'temp') {
         throw new UnauthorizedException('Invalid token type');
       }
 
       const phone = payload.phone;
       const cachedOtp = await this.redisService.get(`otp:${phone}`);
 
-      if (!cachedOtp || cachedOtp !== verifyOtpDto.code) {
+      if (!cachedOtp || cachedOtp !== verifyOtpDto.otp) {
         throw new BadRequestException('Invalid or expired OTP code');
       }
 
