@@ -1,12 +1,15 @@
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  password     String
-  name         String?
-  roles        Role[]   @default([USER])
-  refreshToken String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password         String
+  name             String?
+  roles            Role[]    @default([USER])
+  refreshToken     String?
+  managedCompanies Company[]
+  categoryId       String?   @map("category_id")
+  category         Category? @relation(fields: [categoryId], references: [categoryId])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@map("users")
 }

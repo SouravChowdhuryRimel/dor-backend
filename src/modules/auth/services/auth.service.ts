@@ -13,6 +13,7 @@ import { RedisService } from '../../../core/cache/redis.service';
 import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { Role } from '@prisma/client';
+import { CompanyService } from '../../company/services/company.service';
 
 @Injectable()
 export class AuthService {
@@ -20,10 +21,11 @@ export class AuthService {
 
   constructor(
     private usersService: UsersService,
+    private companyService: CompanyService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
-  ) {}
+  ) { }
 
   async signUp(registerDto: RegisterDto) {
     try {
@@ -83,6 +85,36 @@ export class AuthService {
     } catch (error) {
       this.logger.error(
         `Failed login attempt for email ${loginDto.email}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async signInCompany(loginDto: LoginDto) {
+    try {
+      const company = await this.companyService.findByEmail(loginDto.email);
+      if (!company) throw new UnauthorizedException('Access Denied');
+
+      if (company.status !== 'APPROVED') {
+        throw new ForbiddenException(`Access Denied: Company account is ${company.status}`);
+      }
+
+      const passwordMatches = await argon2.verify(
+        company.password,
+        loginDto.password,
+      );
+      if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+      // Issue token with VENDOR role for companies
+      const tokens = await this.getTokens(company.companyId, company.email, [Role.VENDOR]);
+
+      await this.storeSession(company.companyId, tokens.refreshToken);
+
+      return tokens;
+    } catch (error) {
+      this.logger.error(
+        `Failed company login attempt for email ${loginDto.email}: ${error.message}`,
         error.stack,
       );
       throw error;

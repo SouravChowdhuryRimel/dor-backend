@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { ConfigModule } from '@nestjs/config';
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { validate } from './core/config/env.validation';
 import appConfig from './core/config/app.config';
 import databaseConfig from './core/config/database.config';
@@ -18,7 +18,9 @@ import { LoggerModule } from './core/logger/logger.module';
 import { SecurityModule } from './core/security/security.module';
 import { GlobalExceptionFilter } from './core/exception/global-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { RolesGuard } from './common/guards/roles.guard';
+import { CategoryModule } from './modules/category/category.module';
+import { ProductModule } from './modules/product/product.module';
+import { SubCategoryModule } from './modules/sub-category/sub-category.module';
 
 @Module({
   imports: [
@@ -37,12 +39,11 @@ import { RolesGuard } from './common/guards/roles.guard';
     CompanyModule,
     PartyModule,
     DriverModule,
+    CategoryModule,
+    ProductModule,
+    SubCategoryModule,
   ],
   providers: [
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,

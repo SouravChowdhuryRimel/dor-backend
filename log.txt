@@ -1,0 +1,23 @@
+Creating new SUPER_ADMIN...
+error: column "updated_at" of relation "users" does not exist
+    at /home/sakib/Desktop/office/dor-backend/node_modules/pg/lib/client.js:631:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (/home/sakib/Desktop/office/dor-backend/pg-admin.js:19:5) {
+  length: 128,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '61',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_target.c',
+  line: '1075',
+  routine: 'checkInsertTargets'
+}

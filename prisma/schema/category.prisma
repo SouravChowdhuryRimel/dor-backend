@@ -2,6 +2,7 @@ model Category {
     categoryId String    @id @default(uuid()) @map("category_id")
     title      String
     companies  Company[]
+    admins     User[]
 
     @@map("categories")
 }

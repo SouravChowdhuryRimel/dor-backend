@@ -1,0 +1,85 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsArray,
+  IsOptional,
+  Min,
+} from 'class-validator';
+
+export class CreateProductDto {
+  @ApiPropertyOptional({
+    description: 'Array of product image URLs',
+    example: ['url1.jpg', 'url2.jpg'],
+    type: [String],
+  })
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  productImage?: string[];
+
+  @ApiProperty({
+    description: 'Name of the product',
+    example: 'Premium Cement',
+  })
+  @IsString()
+  @IsNotEmpty()
+  productName: string;
+
+  @ApiProperty({
+    description: 'Unit of measurement',
+    example: 'Bags',
+  })
+  @IsString()
+  @IsNotEmpty()
+  unit: string;
+
+  @ApiProperty({
+    description: 'Size of the bag',
+    example: '50kg',
+  })
+  @IsString()
+  @IsNotEmpty()
+  bagSize: string;
+
+  @ApiProperty({
+    description: 'Default price of the product',
+    example: 450.5,
+  })
+  @IsNumber()
+  @Min(0)
+  defaultPrice: number;
+
+  @ApiProperty({
+    description: 'Minimum order quantity',
+    example: 50,
+  })
+  @IsNumber()
+  @Min(1)
+  minimumOrder: number;
+
+  @ApiProperty({
+    description: 'Description of the product',
+    example: 'High strength cement for structural use.',
+  })
+  @IsString()
+  @IsNotEmpty()
+  description: string;
+
+  @ApiProperty({
+    description: 'Available stock size',
+    example: 1000,
+  })
+  @IsNumber()
+  @Min(0)
+  stockSize: number;
+
+  @ApiProperty({
+    description: 'ID of the SubCategory',
+    example: 'uuid-string',
+  })
+  @IsString()
+  @IsNotEmpty()
+  subCategoryId: string;
+}

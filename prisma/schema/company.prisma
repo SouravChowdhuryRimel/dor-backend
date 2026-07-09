@@ -11,6 +11,8 @@ model Company {
     companyDocument String[]      @map("company_document")
     categoryId      String        @map("category_id")
     category        Category      @relation(fields: [categoryId], references: [categoryId])
+    adminId         String?       @map("admin_id")
+    admin           User?         @relation(fields: [adminId], references: [id])
     orders          Order[]
 
     createdAt DateTime @default(now()) @map("created_at")

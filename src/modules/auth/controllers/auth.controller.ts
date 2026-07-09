@@ -23,7 +23,7 @@ import {
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Post('signup')
   @ApiOperation({
@@ -65,6 +65,31 @@ export class AuthController {
   })
   signin(@Body() loginDto: LoginDto) {
     return this.authService.signIn(loginDto);
+  }
+
+  @Post('company/login')
+  @ApiOperation({
+    summary: 'Authenticate a Company (Sign-in)',
+    description: 'Authenticates a company via email and password. Requires the company status to be APPROVED. Returns JWT tokens.',
+  })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Company authenticated successfully.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid email or password.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden. Company account is not approved.',
+    type: ForbiddenErrorResponseDto,
+  })
+  companyLogin(@Body() loginDto: LoginDto) {
+    return this.authService.signInCompany(loginDto);
   }
 
   @ApiBearerAuth()
