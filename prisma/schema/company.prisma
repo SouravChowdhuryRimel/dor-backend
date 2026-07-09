@@ -1,0 +1,20 @@
+model Company {
+    companyId       String        @id @default(uuid()) @map("company_id")
+    phoneNumber     String        @map("phone_number")
+    password        String
+    ownerName       String        @map("owner_name")
+    email           String        @unique
+    district        String
+    upozela         String
+    address         String
+    status          CompanyStatus @default(PENDING)
+    companyDocument String[]      @map("company_document")
+    categoryId      String        @map("category_id")
+    category        Category      @relation(fields: [categoryId], references: [categoryId])
+    orders          Order[]
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("companies")
+}

@@ -1,0 +1,16 @@
+model Order {
+    orderId     String  @id @default(uuid()) @map("order_id")
+    showOrderId String  @unique @map("show_order_id")
+    companyId   String  @map("company_id")
+    company     Company @relation(fields: [companyId], references: [companyId])
+    productId   String  @map("product_id")
+    product     Product @relation(fields: [productId], references: [productId])
+    bag         Int
+    bagSize     String  @map("bag_size")
+    totalRate   Float   @map("total_rate")
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("orders")
+}

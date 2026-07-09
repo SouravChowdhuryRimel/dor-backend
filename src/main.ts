@@ -8,7 +8,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from '@fastify/helmet';
-import * as cluster from 'cluster';
+import cluster, { Worker } from 'cluster';
 import * as os from 'os';
 import { AppModule } from './app.module';
 
@@ -56,14 +56,19 @@ async function bootstrap() {
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('docs', app, document);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
 
     const port = configService.get<number>('PORT') || 3000;
     // Fastify requires listening on 0.0.0.0 for external network reachability (especially inside containers)
     await app.listen(port, '0.0.0.0');
 
     Logger.log(`Application is running on: ${await app.getUrl()}`, 'Bootstrap');
-  } catch (error) {
+  } catch (rawError) {
+    const error = rawError as Error;
     Logger.error(
       `Critical Bootstrap failure: ${error.message}`,
       error.stack,
@@ -76,22 +81,22 @@ async function bootstrap() {
 // Clustering for high-load (10M user handle)
 // In production, horizontal scaling (Kubernetes) is preferred over local clustering,
 // but local clustering helps maximize single-node performance.
-const clusterModule = cluster as any;
 const numCPUs = os.cpus().length;
 
-if (clusterModule.isPrimary && process.env.NODE_ENV === 'production') {
+if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
   console.log(`Master ${process.pid} is running`);
 
   // Fork workers.
   for (let i = 0; i < numCPUs; i++) {
-    clusterModule.fork();
+    cluster.fork();
   }
 
-  clusterModule.on('exit', (worker: any) => {
-    console.log(`worker ${worker.process.pid} died. forking a new one...`);
-    clusterModule.fork();
+  cluster.on('exit', (worker: Worker) => {
+    const pid = worker.process?.pid ?? 'unknown';
+    console.log(`worker ${pid} died. forking a new one...`);
+    cluster.fork();
   });
 } else {
-  bootstrap();
+  void bootstrap();
 }
 // Trigger dev watcher reload for database connection to lawaldb

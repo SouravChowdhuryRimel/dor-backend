@@ -10,6 +10,9 @@ import { DatabaseModule } from './core/database/database.module';
 import { CacheModule } from './core/cache/cache.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { CompanyModule } from './modules/company/company.module';
+import { PartyModule } from './modules/party/party.module';
+import { DriverModule } from './modules/driver/driver.module';
 import { HealthModule } from './core/health/health.module';
 import { LoggerModule } from './core/logger/logger.module';
 import { SecurityModule } from './core/security/security.module';
@@ -31,6 +34,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     SecurityModule,
     AuthModule,
     UsersModule,
+    CompanyModule,
+    PartyModule,
+    DriverModule,
   ],
   providers: [
     {

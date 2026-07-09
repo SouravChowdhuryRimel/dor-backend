@@ -4,3 +4,17 @@ enum Role {
   VENDOR
   SUPER_ADMIN
 }
+
+enum CompanyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+}
+
+enum DeliveryStatus {
+  VAN_COMING
+  TRANSFER_IN_PROGRESS
+  NEAREST_TRANSFER
+  DELIVERED
+}
