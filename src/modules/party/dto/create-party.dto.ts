@@ -12,6 +12,11 @@ export class CreatePartyDto {
   @IsNotEmpty()
   phoneNumber: string;
 
+  @ApiProperty({ description: 'Password for logging in', minLength: 6 })
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
   @ApiProperty({ description: 'Address of the party' })
   @IsString()
   @IsNotEmpty()

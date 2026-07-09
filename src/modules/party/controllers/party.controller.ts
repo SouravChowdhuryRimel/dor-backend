@@ -15,20 +15,19 @@ import { UpdatePartyDto } from '../dto/update-party.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 
 @ApiTags('Parties')
-@ApiBearerAuth()
-@UseGuards(AccessTokenGuard)
 @Controller('parties')
 export class PartyController {
   constructor(private readonly partyService: PartyService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Create a new Party' })
-  create(@Body() createPartyDto: CreatePartyDto) {
+  @Post('register')
+  @ApiOperation({ summary: 'Register a new Party' })
+  register(@Body() createPartyDto: CreatePartyDto) {
     return this.partyService.create(createPartyDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all parties' })
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   findAll() {
     return this.partyService.findAll();
   }

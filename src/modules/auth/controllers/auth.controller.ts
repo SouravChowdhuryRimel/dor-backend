@@ -8,6 +8,7 @@ import {
 } from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
 import { LoginDto } from '../dto/login.dto';
+import { PartyLoginDto } from '../dto/party-login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RefreshTokenGuard } from '../../../common/guards/refresh-token.guard';
@@ -23,7 +24,7 @@ import {
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private authService: AuthService) {}
 
   @Post('signup')
   @ApiOperation({
@@ -70,7 +71,8 @@ export class AuthController {
   @Post('company/login')
   @ApiOperation({
     summary: 'Authenticate a Company (Sign-in)',
-    description: 'Authenticates a company via email and password. Requires the company status to be APPROVED. Returns JWT tokens.',
+    description:
+      'Authenticates a company via email and password. Requires the company status to be APPROVED. Returns JWT tokens.',
   })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
@@ -90,6 +92,26 @@ export class AuthController {
   })
   companyLogin(@Body() loginDto: LoginDto) {
     return this.authService.signInCompany(loginDto);
+  }
+
+  @Post('party/login')
+  @ApiOperation({
+    summary: 'Authenticate a Party (Sign-in)',
+    description:
+      'Authenticates a party via phone number and password. Returns JWT tokens with PARTY role.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Party authenticated successfully.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid phone number or password.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  partyLogin(@Body() partyLoginDto: PartyLoginDto) {
+    return this.authService.signInParty(partyLoginDto);
   }
 
   @ApiBearerAuth()

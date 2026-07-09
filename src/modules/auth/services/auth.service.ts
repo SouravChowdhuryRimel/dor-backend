@@ -11,9 +11,11 @@ import * as argon2 from 'argon2';
 import { UsersService } from '../../users/services/users.service';
 import { RedisService } from '../../../core/cache/redis.service';
 import { LoginDto } from '../dto/login.dto';
+import { PartyLoginDto } from '../dto/party-login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { Role } from '@prisma/client';
 import { CompanyService } from '../../company/services/company.service';
+import { PartyService } from '../../party/services/party.service';
 
 @Injectable()
 export class AuthService {
@@ -22,10 +24,11 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private companyService: CompanyService,
+    private partyService: PartyService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
-  ) { }
+  ) {}
 
   async signUp(registerDto: RegisterDto) {
     try {
@@ -97,7 +100,9 @@ export class AuthService {
       if (!company) throw new UnauthorizedException('Access Denied');
 
       if (company.status !== 'APPROVED') {
-        throw new ForbiddenException(`Access Denied: Company account is ${company.status}`);
+        throw new ForbiddenException(
+          `Access Denied: Company account is ${company.status}`,
+        );
       }
 
       const passwordMatches = await argon2.verify(
@@ -107,7 +112,9 @@ export class AuthService {
       if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
       // Issue token with VENDOR role for companies
-      const tokens = await this.getTokens(company.companyId, company.email, [Role.VENDOR]);
+      const tokens = await this.getTokens(company.companyId, company.email, [
+        Role.VENDOR,
+      ]);
 
       await this.storeSession(company.companyId, tokens.refreshToken);
 
@@ -115,6 +122,38 @@ export class AuthService {
     } catch (error) {
       this.logger.error(
         `Failed company login attempt for email ${loginDto.email}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async signInParty(partyLoginDto: PartyLoginDto) {
+    try {
+      const party = await this.partyService.findByPhone(
+        partyLoginDto.phoneNumber,
+      );
+      if (!party)
+        throw new UnauthorizedException('Access Denied: Party not found');
+
+      const passwordMatches = await argon2.verify(
+        party.password,
+        partyLoginDto.password,
+      );
+      if (!passwordMatches)
+        throw new UnauthorizedException('Access Denied: Incorrect Password');
+
+      // Issue token with PARTY role for independent party users
+      const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
+        Role.PARTY,
+      ]);
+
+      await this.storeSession(party.partyId, tokens.refreshToken);
+
+      return tokens;
+    } catch (error) {
+      this.logger.error(
+        `Failed party login attempt for phone ${partyLoginDto.phoneNumber}: ${error.message}`,
         error.stack,
       );
       throw error;

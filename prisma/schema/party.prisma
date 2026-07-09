@@ -1,7 +1,8 @@
 model Party {
     partyId     String  @id @default(uuid()) @map("party_id")
     partyName   String  @map("party_name")
-    phoneNumber String  @map("phone_number")
+    phoneNumber String  @unique @map("phone_number")
+    password    String
     address     String
     district    String
     upozela     String

@@ -25,12 +25,12 @@ import { Role } from 'src/common/constants/role.enum';
 @ApiTags('SubCategories')
 @Controller('sub_categories')
 export class SubCategoryController {
-  constructor(private readonly subCategoryService: SubCategoryService) {}
+  constructor(private readonly subCategoryService: SubCategoryService) { }
 
   @Post()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Create a new SubCategory (SUPER_ADMIN, ADMIN)' })
   @ApiResponse({
     status: 201,
@@ -57,7 +57,7 @@ export class SubCategoryController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Update a SubCategory (SUPER_ADMIN, ADMIN)' })
   @ApiResponse({
     status: 200,
@@ -73,7 +73,7 @@ export class SubCategoryController {
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Delete a SubCategory (SUPER_ADMIN, ADMIN)' })
   @ApiResponse({
     status: 200,

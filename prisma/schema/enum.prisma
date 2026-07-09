@@ -3,6 +3,7 @@ enum Role {
   ADMIN
   VENDOR
   SUPER_ADMIN
+  PARTY
 }
 
 enum CompanyStatus {

@@ -25,12 +25,12 @@ import { Role } from 'src/common/constants/role.enum';
 @ApiTags('Products')
 @Controller('products')
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(private readonly productService: ProductService) { }
 
   @Post()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Create a new product (SUPER_ADMIN, ADMIN)' })
   @ApiResponse({ status: 201, description: 'Product successfully created.' })
   create(@Body() createProductDto: CreateProductDto) {
@@ -54,7 +54,7 @@ export class ProductController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Update a product (SUPER_ADMIN, ADMIN)' })
   @ApiResponse({ status: 200, description: 'Product successfully updated.' })
   update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
@@ -64,7 +64,7 @@ export class ProductController {
   @Delete(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Delete a product (SUPER_ADMIN, ADMIN)' })
   @ApiResponse({ status: 200, description: 'Product successfully deleted.' })
   remove(@Param('id') id: string) {
