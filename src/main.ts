@@ -69,6 +69,7 @@ async function bootstrap() {
     Logger.log(`Application is running on: ${await app.getUrl()}`, 'Bootstrap');
   } catch (rawError) {
     const error = rawError as Error;
+    console.error('Critical Bootstrap failure:', error);
     Logger.error(
       `Critical Bootstrap failure: ${error.message}`,
       error.stack,

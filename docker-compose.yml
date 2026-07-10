@@ -17,6 +17,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
     networks:
       - app-network
 
