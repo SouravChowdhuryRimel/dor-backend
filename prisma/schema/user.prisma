@@ -11,5 +11,6 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  @@index([roles], type: Gin)
   @@map("users")
 }

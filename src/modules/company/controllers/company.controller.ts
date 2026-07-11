@@ -8,6 +8,8 @@ import {
   Delete,
   UseGuards,
   Req,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { CompanyService } from '../services/company.service';
 import {
@@ -15,6 +17,8 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiResponse,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
@@ -22,19 +26,85 @@ import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as fs from 'fs';
 
 @ApiTags('Companies')
 @Controller('companies')
 export class CompanyController {
-  constructor(private readonly companyService: CompanyService) { }
+  constructor(private readonly companyService: CompanyService) {}
 
   @Post('register')
+  @UseInterceptors(
+    FilesInterceptor('companyDocument', 10, {
+      storage: diskStorage({
+        destination: (req, file, callback) => {
+          const path = './uploads/documents';
+          if (!fs.existsSync(path)) {
+            fs.mkdirSync(path, { recursive: true });
+          }
+          callback(null, path);
+        },
+        filename: (req, file, callback) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `doc-${uniqueSuffix}${ext}`);
+        },
+      }),
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        phoneNumber: { type: 'string' },
+        password: { type: 'string' },
+        ownerName: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        district: { type: 'string' },
+        upozela: { type: 'string' },
+        address: { type: 'string' },
+        categoryId: { type: 'string' },
+        companyDocument: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: [
+        'phoneNumber',
+        'password',
+        'ownerName',
+        'email',
+        'district',
+        'upozela',
+        'address',
+        'categoryId',
+      ],
+    },
+  })
   @ApiOperation({ summary: 'Register a new Company' })
   @ApiResponse({
     status: 201,
     description: 'Company successfully registered with PENDING status.',
   })
-  register(@Body() createCompanyDto: CreateCompanyDto) {
+  register(
+    @Body() createCompanyDto: CreateCompanyDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    if (files && files.length > 0) {
+      createCompanyDto.companyDocument = files.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
+    } else {
+      createCompanyDto.companyDocument = [];
+    }
     return this.companyService.register(createCompanyDto);
   }
 
