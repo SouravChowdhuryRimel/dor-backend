@@ -1,4 +1,104 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Role, CompanyStatus } from '@prisma/client';
+
+export class UserInfoDto {
+  @ApiProperty({ example: '1234567890' })
+  id: string;
+
+  @ApiProperty({ example: 'alex.jones@example.com' })
+  email: string;
+
+  @ApiPropertyOptional({ example: 'Alex Jones', nullable: true })
+  name: string | null;
+
+  @ApiProperty({ example: ['USER'], enum: Role, isArray: true })
+  roles: Role[];
+
+  @ApiPropertyOptional({ example: 'uuid-string', nullable: true })
+  categoryId: string | null;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  createdAt: Date;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  updatedAt: Date;
+}
+
+export class CompanyInfoDto {
+  @ApiProperty({ example: '1234567890' })
+  companyId: string;
+
+  @ApiProperty({ example: '+1234567890' })
+  phoneNumber: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  ownerName: string;
+
+  @ApiProperty({ example: 'company@example.com' })
+  email: string;
+
+  @ApiProperty({ example: 'Dhaka' })
+  district: string;
+
+  @ApiProperty({ example: 'Mirpur' })
+  upozela: string;
+
+  @ApiProperty({ example: '123 Main St' })
+  address: string;
+
+  @ApiProperty({ example: 'APPROVED', enum: CompanyStatus })
+  status: CompanyStatus;
+
+  @ApiProperty({ example: ['doc.pdf'] })
+  companyDocument: string[];
+
+  @ApiProperty({ example: 'uuid-string' })
+  categoryId: string;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  createdAt: Date;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  updatedAt: Date;
+}
+
+export class PartyInfoDto {
+  @ApiProperty({ example: '1234567890' })
+  partyId: string;
+
+  @ApiProperty({ example: 'Party Name' })
+  partyName: string;
+
+  @ApiProperty({ example: '+1234567890' })
+  phoneNumber: string;
+
+  @ApiProperty({ example: '123 Main St' })
+  address: string;
+
+  @ApiProperty({ example: 'Dhaka' })
+  district: string;
+
+  @ApiProperty({ example: 'Mirpur' })
+  upozela: string;
+
+  @ApiProperty({ example: 'Party description' })
+  description: string;
+
+  @ApiProperty({ example: 100.0 })
+  openingDue: number;
+
+  @ApiProperty({ example: 1000.0 })
+  creditLimit: number;
+
+  @ApiProperty({ example: 'ACTIVE' })
+  status: string;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  createdAt: Date;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  updatedAt: Date;
+}
 
 export class TokenResponseDto {
   @ApiProperty({
@@ -16,6 +116,24 @@ export class TokenResponseDto {
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZW1haWwiOiJhbGV4LmpvbmVzQGV4YW1wbGUuY29tIiwicm9sZXMiOlsiVVNFUiJdLCJpYXQiOjE3NDc1Nzg0MDAsImV4cCI6MTc0ODE4MzIwMH0.yyyy',
   })
   refreshToken: string;
+
+  @ApiPropertyOptional({
+    description: 'Detailed user information if authenticated as a standard user/admin',
+    type: UserInfoDto,
+  })
+  user?: UserInfoDto;
+
+  @ApiPropertyOptional({
+    description: 'Detailed company information if authenticated as a vendor/company',
+    type: CompanyInfoDto,
+  })
+  company?: CompanyInfoDto;
+
+  @ApiPropertyOptional({
+    description: 'Detailed party information if authenticated as an independent party',
+    type: PartyInfoDto,
+  })
+  party?: PartyInfoDto;
 }
 
 export class AuthSuccessResponseDto {

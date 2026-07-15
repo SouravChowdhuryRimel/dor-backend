@@ -58,7 +58,18 @@ export class AuthService {
       // Persist the session reference in Redis (no DB hit)
       await this.storeSession(newUser.id, tokens.refreshToken);
 
-      return tokens;
+      return {
+        ...tokens,
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          roles: newUser.roles,
+          categoryId: newUser.categoryId,
+          createdAt: newUser.createdAt,
+          updatedAt: newUser.updatedAt,
+        },
+      };
     } catch (error) {
       this.logger.error(
         `Failed to register user: ${error.message}`,
@@ -84,7 +95,18 @@ export class AuthService {
       // Store session token in Redis (sliding expiration)
       await this.storeSession(user.id, tokens.refreshToken);
 
-      return tokens;
+      return {
+        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          roles: user.roles,
+          categoryId: user.categoryId,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      };
     } catch (error) {
       this.logger.error(
         `Failed login attempt for email ${loginDto.email}: ${error.message}`,
@@ -118,7 +140,23 @@ export class AuthService {
 
       await this.storeSession(company.companyId, tokens.refreshToken);
 
-      return tokens;
+      return {
+        ...tokens,
+        company: {
+          companyId: company.companyId,
+          phoneNumber: company.phoneNumber,
+          ownerName: company.ownerName,
+          email: company.email,
+          district: company.district,
+          upozela: company.upozela,
+          address: company.address,
+          status: company.status,
+          companyDocument: company.companyDocument,
+          categoryId: company.categoryId,
+          createdAt: company.createdAt,
+          updatedAt: company.updatedAt,
+        },
+      };
     } catch (error) {
       this.logger.error(
         `Failed company login attempt for email ${loginDto.email}: ${error.message}`,
@@ -150,7 +188,23 @@ export class AuthService {
 
       await this.storeSession(party.partyId, tokens.refreshToken);
 
-      return tokens;
+      return {
+        ...tokens,
+        party: {
+          partyId: party.partyId,
+          partyName: party.partyName,
+          phoneNumber: party.phoneNumber,
+          address: party.address,
+          district: party.district,
+          upozela: party.upozela,
+          description: party.description,
+          openingDue: party.openingDue,
+          creditLimit: party.creditLimit,
+          status: party.status,
+          createdAt: party.createdAt,
+          updatedAt: party.updatedAt,
+        },
+      };
     } catch (error) {
       this.logger.error(
         `Failed party login attempt for phone ${partyLoginDto.phoneNumber}: ${error.message}`,
@@ -193,7 +247,18 @@ export class AuthService {
       // Rotate refresh tokens dynamically to prevent token replay hijacking
       await this.storeSession(user.id, tokens.refreshToken);
 
-      return tokens;
+      return {
+        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          roles: user.roles,
+          categoryId: user.categoryId,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+      };
     } catch (error) {
       this.logger.error(
         `Failed to refresh session tokens for user ${userId}: ${error.message}`,

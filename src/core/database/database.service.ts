@@ -50,7 +50,7 @@ export class PrismaService
     // Track and warn on slow queries (> 100ms) for high-scale visibility
     if (process.env.NODE_ENV !== 'production') {
       (this as any).$on('query', (e: any) => {
-        if (e.duration > 100) {
+        if (e.duration > 100 && e.query !== 'SELECT 1') {
           this.logger.warn(
             `Slow Database Query Detected: ${e.query} - Duration: ${e.duration}ms`,
           );
@@ -69,6 +69,8 @@ export class PrismaService
       this.logger.log(
         'Prisma Engine database connections successfully established.',
       );
+      // Warm up connection pool to avoid slow first query warning during bootstrap
+      await this.$executeRawUnsafe('SELECT 1');
     } catch (error) {
       this.logger.error(
         `Prisma connection failure during initialization: ${error.message}`,

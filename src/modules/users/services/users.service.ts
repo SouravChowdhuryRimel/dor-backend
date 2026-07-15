@@ -21,6 +21,9 @@ export class UsersService implements OnApplicationBootstrap {
           has: Role.SUPER_ADMIN,
         },
       },
+      select: {
+        id: true,
+      },
     });
 
     if (!superAdmin) {
