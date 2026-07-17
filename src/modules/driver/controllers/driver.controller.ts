@@ -39,10 +39,14 @@ export class DriverController {
       storage: diskStorage({
         destination: (req, file, callback) => {
           const path = './uploads/documents';
-          if (!fs.existsSync(path)) {
-            fs.mkdirSync(path, { recursive: true });
+          try {
+            if (!fs.existsSync(path)) {
+              fs.mkdirSync(path, { recursive: true });
+            }
+            callback(null, path);
+          } catch (error) {
+            callback(error as Error, path);
           }
-          callback(null, path);
         },
         filename: (req, file, callback) => {
           const uniqueSuffix =

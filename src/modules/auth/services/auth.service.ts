@@ -32,7 +32,7 @@ export class AuthService {
 
   async signUp(registerDto: RegisterDto) {
     try {
-      const userExists = await this.usersService.findByEmail(registerDto.email);
+      const userExists = await this.usersService.findByPhone(registerDto.phoneNumber);
       if (userExists) {
         throw new BadRequestException('User already exists');
       }
@@ -63,6 +63,7 @@ export class AuthService {
         user: {
           id: newUser.id,
           email: newUser.email,
+          phoneNumber: newUser.phoneNumber,
           name: newUser.name,
           roles: newUser.roles,
           categoryId: newUser.categoryId,
@@ -81,7 +82,7 @@ export class AuthService {
 
   async signIn(loginDto: LoginDto) {
     try {
-      const user = await this.usersService.findByEmail(loginDto.email);
+      const user = await this.usersService.findByPhone(loginDto.phoneNumber);
       if (!user) throw new UnauthorizedException('Access Denied');
 
       const passwordMatches = await argon2.verify(
@@ -100,6 +101,7 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
+          phoneNumber: user.phoneNumber,
           name: user.name,
           roles: user.roles,
           categoryId: user.categoryId,
@@ -109,7 +111,7 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed login attempt for email ${loginDto.email}: ${error.message}`,
+        `Failed login attempt for phone ${loginDto.phoneNumber}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -118,7 +120,7 @@ export class AuthService {
 
   async signInCompany(loginDto: LoginDto) {
     try {
-      const company = await this.companyService.findByEmail(loginDto.email);
+      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
       if (!company) throw new UnauthorizedException('Access Denied');
 
       if (company.status !== 'APPROVED') {
@@ -159,7 +161,7 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed company login attempt for email ${loginDto.email}: ${error.message}`,
+        `Failed company login attempt for phone ${loginDto.phoneNumber}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -252,6 +254,7 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
+          phoneNumber: user.phoneNumber,
           name: user.name,
           roles: user.roles,
           categoryId: user.categoryId,
@@ -290,13 +293,13 @@ export class AuthService {
     }
   }
 
-  async getTokens(userId: string, email: string, roles: Role[]) {
+  async getTokens(userId: string, email: string | null, roles: Role[]) {
     try {
       const [accessToken, refreshToken] = await Promise.all([
         this.jwtService.signAsync(
           {
             sub: userId,
-            email,
+            email: email || '',
             roles,
           },
           {
@@ -310,7 +313,7 @@ export class AuthService {
         this.jwtService.signAsync(
           {
             sub: userId,
-            email,
+            email: email || '',
             roles,
           },
           {

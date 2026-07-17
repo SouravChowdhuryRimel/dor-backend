@@ -38,6 +38,9 @@ WORKDIR /app
 # Create a non-privileged user
 RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
 
+# Pre-create uploads directory and set correct permissions
+RUN mkdir -p uploads/documents && chown -R nodejs:nodejs uploads
+
 # Copy built assets from builder
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules

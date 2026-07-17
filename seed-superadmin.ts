@@ -5,24 +5,25 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = 'superadmin@example.com';
+  const phoneNumber = '01700000000';
   const plainPassword = 'password123';
 
   // Check if exists
-  let superAdmin = await prisma.user.findUnique({ where: { email } });
+  let superAdmin = await prisma.user.findUnique({ where: { phoneNumber } });
   
   if (superAdmin) {
     if (!superAdmin.roles.includes('SUPER_ADMIN' as any)) {
       superAdmin = await prisma.user.update({
-        where: { email },
+        where: { phoneNumber },
         data: {
           roles: {
             push: 'SUPER_ADMIN' as any
           }
         }
       });
-      console.log(`User existed, but upgraded to SUPER_ADMIN. Email - ${email}`);
+      console.log(`User existed, but upgraded to SUPER_ADMIN. Phone - ${phoneNumber}`);
     } else {
-      console.log(`Super admin already exists: Email - ${email}, ID - ${superAdmin.id}`);
+      console.log(`Super admin already exists: Phone - ${phoneNumber}, ID - ${superAdmin.id}`);
     }
   } else {
     const hashedPassword = await argon2.hash(plainPassword, {
@@ -34,12 +35,13 @@ async function main() {
     superAdmin = await prisma.user.create({
       data: {
         email,
+        phoneNumber,
         password: hashedPassword,
         name: 'Super Admin',
         roles: ['SUPER_ADMIN' as any],
       },
     });
-    console.log(`Super admin created: Email - ${email}, Password - ${plainPassword}`);
+    console.log(`Super admin created: Phone - ${phoneNumber}, Password - ${plainPassword}`);
   }
 }
 

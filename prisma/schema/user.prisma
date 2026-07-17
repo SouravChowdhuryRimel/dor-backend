@@ -1,6 +1,7 @@
 model User {
   id               String    @id @default(uuid())
-  email            String    @unique
+  email            String?   @unique
+  phoneNumber      String    @unique @map("phone_number")
   password         String
   name             String?
   roles            Role[]    @default([USER])

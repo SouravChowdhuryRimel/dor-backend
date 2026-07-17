@@ -8,14 +8,22 @@ import {
 } from 'class-validator';
 
 export class CreateAdminDto {
-  @ApiProperty({
-    description: 'Unique email address of the admin',
+  @ApiPropertyOptional({
+    description: 'Email address of the admin',
     example: 'admin@example.com',
     format: 'email',
   })
   @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @ApiProperty({
+    description: 'Unique phone number of the admin',
+    example: '01712345678',
+  })
+  @IsString()
   @IsNotEmpty()
-  email: string;
+  phoneNumber: string;
 
   @ApiProperty({
     description: 'Secure password for the admin account (minimum 6 characters)',

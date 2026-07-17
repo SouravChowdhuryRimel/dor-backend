@@ -8,14 +8,22 @@ import {
 } from 'class-validator';
 
 export class RegisterDto {
-  @ApiProperty({
-    description: 'Unique email address of the user used for authentication',
+  @ApiPropertyOptional({
+    description: 'Email address of the user',
     example: 'alex.jones@example.com',
     format: 'email',
   })
   @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @ApiProperty({
+    description: 'Unique phone number of the user',
+    example: '01712345678',
+  })
+  @IsString()
   @IsNotEmpty()
-  email: string;
+  phoneNumber: string;
 
   @ApiProperty({
     description: 'Secure password for the user account (minimum 6 characters)',

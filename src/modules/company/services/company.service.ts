@@ -128,4 +128,10 @@ export class CompanyService {
       where: { email },
     });
   }
+
+  async findByPhone(phoneNumber: string) {
+    return this.prisma.company.findFirst({
+      where: { phoneNumber },
+    });
+  }
 }

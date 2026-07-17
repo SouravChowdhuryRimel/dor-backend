@@ -34,9 +34,9 @@ export class UsersController {
         description: 'Forbidden. Requires SUPER_ADMIN role.',
     })
     async createAdmin(@Body() createAdminDto: CreateAdminDto) {
-        const existing = await this.usersService.findByEmail(createAdminDto.email);
+        const existing = await this.usersService.findByPhone(createAdminDto.phoneNumber);
         if (existing) {
-            throw new ConflictException('User with that email already exists.');
+            throw new ConflictException('User with that phone number already exists.');
         }
         return this.usersService.createAdmin(createAdminDto);
     }

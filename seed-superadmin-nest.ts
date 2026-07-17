@@ -9,14 +9,15 @@ async function bootstrap() {
   const prisma = app.get(PrismaService);
 
   const email = 'superadmin@example.com';
+  const phoneNumber = '01700000000';
   const plainPassword = 'password123';
   
-  let user = await prisma.user.findUnique({ where: { email } });
+  let user = await prisma.user.findUnique({ where: { phoneNumber } });
   
   if (user) {
     if (!user.roles.includes('SUPER_ADMIN' as any)) {
       await prisma.user.update({
-        where: { email },
+        where: { phoneNumber },
         data: { roles: { push: 'SUPER_ADMIN' as any } }
       });
       console.log('Upgraded existing user to SUPER_ADMIN.');
@@ -28,6 +29,7 @@ async function bootstrap() {
     await prisma.user.create({
       data: {
         email,
+        phoneNumber,
         password: hashedPassword,
         name: 'Super Admin',
         roles: ['SUPER_ADMIN' as any],
@@ -36,6 +38,7 @@ async function bootstrap() {
     console.log('Successfully created SUPER_ADMIN!');
   }
   
+  console.log(`Phone: ${phoneNumber}`);
   console.log(`Email: ${email}`);
   console.log(`Password: ${plainPassword}`);
 

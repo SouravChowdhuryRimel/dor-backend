@@ -16,13 +16,12 @@ export class PartyLoginDto {
 
 export class LoginDto {
   @ApiProperty({
-    description: 'The registered email address of the user',
-    example: 'superadmin@example.com',
-    format: 'email',
+    description: 'The registered phone number of the user',
+    example: '01700000000',
   })
-  @IsEmail()
+  @IsString()
   @IsNotEmpty()
-  email: string;
+  phoneNumber: string;
 
   @ApiProperty({
     description: 'The password associated with the user account',

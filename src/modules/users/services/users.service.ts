@@ -33,6 +33,9 @@ export class UsersService implements OnApplicationBootstrap {
       const email =
         this.configService.get<string>('SUPER_ADMIN_EMAIL') ||
         'superadmin@example.com';
+      const phoneNumber =
+        this.configService.get<string>('SUPER_ADMIN_PHONE') ||
+        '01700000000';
       const password =
         this.configService.get<string>('SUPER_ADMIN_PASSWORD') || 'password123';
 
@@ -45,19 +48,20 @@ export class UsersService implements OnApplicationBootstrap {
       await this.prisma.user.create({
         data: {
           email,
+          phoneNumber,
           password: hashedPassword,
           name: 'Super Admin',
           roles: [Role.SUPER_ADMIN],
         },
       });
-      this.logger.log(`Super Admin created successfully with email: ${email}`);
+      this.logger.log(`Super Admin created successfully with phone: ${phoneNumber}`);
       this.logger.log('--- EXAMPLE LOGIN ROUTE ---');
       this.logger.log(
         `curl -X POST http://localhost:3000/api/v1/auth/signin \\`,
       );
       this.logger.log(`  -H "Content-Type: application/json" \\`);
       this.logger.log(
-        `  -d '{"email": "${email}", "password": "${password}"}'`,
+        `  -d '{"phoneNumber": "${phoneNumber}", "password": "${password}"}'`,
       );
       this.logger.log('---------------------------');
     } else {
@@ -87,6 +91,7 @@ export class UsersService implements OnApplicationBootstrap {
       select: {
         id: true,
         email: true,
+        phoneNumber: true,
         name: true,
         roles: true,
         categoryId: true,
@@ -106,6 +111,7 @@ export class UsersService implements OnApplicationBootstrap {
       select: {
         id: true,
         email: true,
+        phoneNumber: true,
         name: true,
         roles: true,
         categoryId: true,
@@ -124,6 +130,12 @@ export class UsersService implements OnApplicationBootstrap {
   async findByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email },
+    });
+  }
+
+  async findByPhone(phoneNumber: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { phoneNumber },
     });
   }
 
