@@ -19,7 +19,7 @@ export class PartyService {
       data: {
         ...createPartyDto,
         password: hashedPassword,
-      },
+      } as any,
     });
   }
 
@@ -49,7 +49,7 @@ export class PartyService {
 
     return this.prisma.party.update({
       where: { partyId: id },
-      data: updatePartyDto,
+      data: updatePartyDto as any,
     });
   }
 

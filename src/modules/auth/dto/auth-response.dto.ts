@@ -34,6 +34,9 @@ export class CompanyInfoDto {
   @ApiProperty({ example: 'John Doe' })
   ownerName: string;
 
+  @ApiProperty({ example: 'Acme Corp' })
+  companyName: string;
+
   @ApiProperty({ example: 'company@example.com' })
   email: string;
 
@@ -69,8 +72,14 @@ export class PartyInfoDto {
   @ApiProperty({ example: 'Party Name' })
   partyName: string;
 
+  @ApiProperty({ example: 'Acme Business' })
+  businessName: string;
+
   @ApiProperty({ example: '+1234567890' })
   phoneNumber: string;
+
+  @ApiProperty({ example: 'party@example.com' })
+  email: string;
 
   @ApiProperty({ example: '123 Main St' })
   address: string;
@@ -80,6 +89,9 @@ export class PartyInfoDto {
 
   @ApiProperty({ example: 'Mirpur' })
   upozela: string;
+
+  @ApiProperty({ example: 'Mirpur Bazaar' })
+  bazzarArea: string;
 
   @ApiProperty({ example: 'Party description' })
   description: string;
@@ -92,6 +104,9 @@ export class PartyInfoDto {
 
   @ApiProperty({ example: 'ACTIVE' })
   status: string;
+
+  @ApiProperty({ example: ['party-doc-1.jpg'] })
+  partyDocument: string[];
 
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   createdAt: Date;

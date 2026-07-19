@@ -36,6 +36,14 @@ export class CreateCompanyDto {
   ownerName: string;
 
   @ApiProperty({
+    description: 'Name of the company',
+    example: 'Acme Corp',
+  })
+  @IsString()
+  @IsNotEmpty()
+  companyName: string;
+
+  @ApiProperty({
     description: 'Unique email address of the company',
     example: 'company@example.com',
     format: 'email',

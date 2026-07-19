@@ -67,6 +67,7 @@ export class CompanyController {
       properties: {
         phoneNumber: { type: 'string' },
         password: { type: 'string' },
+        companyName: { type: 'string' },
         ownerName: { type: 'string' },
         email: { type: 'string', format: 'email' },
         district: { type: 'string' },
@@ -84,6 +85,7 @@ export class CompanyController {
       required: [
         'phoneNumber',
         'password',
+        'companyName',
         'ownerName',
         'email',
         'district',

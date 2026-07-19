@@ -9,6 +9,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  BadRequestException,
 } from '@nestjs/common';
 import { DriverService } from '../services/driver.service';
 import {
@@ -21,7 +22,7 @@ import {
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
@@ -35,27 +36,34 @@ export class DriverController {
 
   @Post()
   @UseInterceptors(
-    FilesInterceptor('driverDocument', 10, {
-      storage: diskStorage({
-        destination: (req, file, callback) => {
-          const path = './uploads/documents';
-          try {
-            if (!fs.existsSync(path)) {
-              fs.mkdirSync(path, { recursive: true });
+    FileFieldsInterceptor(
+      [
+        { name: 'driverDocument', maxCount: 10 },
+        { name: 'driverImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req, file, callback) => {
+            const path = './uploads/documents';
+            try {
+              if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+              }
+              callback(null, path);
+            } catch (error) {
+              callback(error as Error, path);
             }
-            callback(null, path);
-          } catch (error) {
-            callback(error as Error, path);
-          }
-        },
-        filename: (req, file, callback) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `driver-doc-${uniqueSuffix}${ext}`);
-        },
-      }),
-    }),
+          },
+          filename: (req, file, callback) => {
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            const prefix = file.fieldname === 'driverImage' ? 'driver-img' : 'driver-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
+          },
+        }),
+      },
+    ),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -65,30 +73,98 @@ export class DriverController {
         phoneNumber: { type: 'string' },
         email: { type: 'string', format: 'email' },
         password: { type: 'string' },
+        driverName: { type: 'string' },
+        address: { type: 'string' },
+        district: { type: 'string', description: 'District of the driver' },
+        districs: { type: 'string', description: 'District of the driver (alias)' },
+        upozela: { type: 'string', description: 'Upozela of the driver' },
+        upazela: { type: 'string', description: 'Upazela of the driver (alias)' },
+        truckNumber: { type: 'string', description: 'Truck/Track Number (optional)' },
+        trackNumber: { type: 'string', description: 'Track Number (alias, optional)' },
+        truckType: { type: 'string', description: 'Truck/Track Type (optional)' },
+        trackType: { type: 'string', description: 'Track Type (alias, optional)' },
+        loadCapacity: { type: 'string', description: 'Load Capacity (optional)' },
+        drivingLicenceNumber: { type: 'string' },
+        nidNumber: { type: 'string' },
+        driverImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'Driver Profile Image (optional)',
+        },
         driverDocument: {
           type: 'array',
           items: {
             type: 'string',
             format: 'binary',
           },
+          description: 'Driver documents (optional)',
         },
       },
-      required: ['phoneNumber', 'email', 'password'],
+      required: [
+        'phoneNumber',
+        'email',
+        'password',
+        'driverName',
+        'address',
+        'drivingLicenceNumber',
+        'nidNumber',
+      ],
     },
   })
   @ApiOperation({ summary: 'Create a new driver' })
   create(
     @Body() createDriverDto: CreateDriverDto,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles()
+    files: {
+      driverDocument?: Express.Multer.File[];
+      driverImage?: Express.Multer.File[];
+    },
   ) {
-    if (files && files.length > 0) {
-      createDriverDto.driverDocument = files.map(
-        (file) => `/uploads/documents/${file.filename}`,
-      );
+    if (files) {
+      if (files.driverDocument && files.driverDocument.length > 0) {
+        createDriverDto.driverDocument = files.driverDocument.map(
+          (file) => `/uploads/documents/${file.filename}`,
+        );
+      } else {
+        createDriverDto.driverDocument = [];
+      }
+
+      if (files.driverImage && files.driverImage.length > 0) {
+        createDriverDto.driverImage = `/uploads/documents/${files.driverImage[0].filename}`;
+      }
     } else {
       createDriverDto.driverDocument = [];
     }
-    return this.driverService.create(createDriverDto);
+
+    // Normalize district/districs and upozela/upazela
+    const district = createDriverDto.district || createDriverDto.districs;
+    const upozela = createDriverDto.upozela || createDriverDto.upazela;
+
+    if (!district) {
+      throw new BadRequestException('district or districs is required');
+    }
+    if (!upozela) {
+      throw new BadRequestException('upozela or upazela is required');
+    }
+
+    const truckNumber = createDriverDto.truckNumber || createDriverDto.trackNumber;
+    const truckType = createDriverDto.truckType || createDriverDto.trackType;
+
+    const normalizedDto: any = {
+      ...createDriverDto,
+      district,
+      upozela,
+      truckNumber,
+      truckType,
+    };
+
+    // Remove alias properties to avoid Prisma model pollution
+    delete normalizedDto.districs;
+    delete normalizedDto.upazela;
+    delete normalizedDto.trackNumber;
+    delete normalizedDto.trackType;
+
+    return this.driverService.create(normalizedDto);
   }
 
   @Get()

@@ -2,6 +2,7 @@ model Company {
     companyId       String        @id @default(uuid()) @map("company_id")
     phoneNumber     String        @map("phone_number")
     password        String
+    companyName     String        @map("company_name")
     ownerName       String        @map("owner_name")
     email           String        @unique
     district        String

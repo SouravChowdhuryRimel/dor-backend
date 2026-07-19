@@ -14,7 +14,7 @@ export class DriverService {
       data: {
         ...createDriverDto,
         password: hashedPassword,
-      },
+      } as any,
     });
   }
 
@@ -43,7 +43,7 @@ export class DriverService {
 
     return this.prisma.driver.update({
       where: { driverId: id },
-      data: dataToUpdate,
+      data: dataToUpdate as any,
     });
   }
 

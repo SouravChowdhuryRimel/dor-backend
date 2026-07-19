@@ -1,10 +1,20 @@
 model Driver {
-    driverId       String     @id @default(uuid()) @map("driver_id")
-    phoneNumber    String     @map("phone_number")
-    password       String
-    email          String     @unique
-    driverDocument String[]   @map("driver_document")
-    deliveries     Delivery[]
+    driverId             String     @id @default(uuid()) @map("driver_id")
+    phoneNumber          String     @map("phone_number")
+    password             String
+    email                String     @unique
+    driverImage          String?    @map("driver_image")
+    driverName           String     @map("driver_name")
+    address              String
+    district             String
+    upozela              String
+    truckNumber          String?    @map("truck_number")
+    truckType            String?    @map("truck_type")
+    loadCapacity         String?    @map("load_capacity")
+    drivingLicenceNumber String     @map("driving_licence_number")
+    nidNumber            String     @map("nid_number")
+    driverDocument       String[]   @map("driver_document")
+    deliveries           Delivery[]
 
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
