@@ -31,7 +31,7 @@ export class PartyController {
     FileFieldsInterceptor(
       [
         { name: 'partyDocument', maxCount: 10 },
-        { name: 'documents', maxCount: 10 },
+        { name: 'profileImage', maxCount: 1 },
       ],
       {
         storage: diskStorage({
@@ -50,7 +50,139 @@ export class PartyController {
             const uniqueSuffix =
               Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = extname(file.originalname);
-            callback(null, `party-doc-${uniqueSuffix}${ext}`);
+            const prefix = file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
+          },
+        }),
+      },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        partyName: { type: 'string' },
+        businessName: { type: 'string' },
+        phoneNumber: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        password: { type: 'string' },
+        address: { type: 'string' },
+        district: { type: 'string' },
+        upozela: { type: 'string' },
+        bazzarArea: { type: 'string', description: 'Bazzar/Area' },
+        bazzar: { type: 'string', description: 'Bazzar (alias)' },
+        area: { type: 'string', description: 'Area (alias)' },
+        description: { type: 'string' },
+        partyDocument: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+        profileImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'profile image of the party',
+        },
+      },
+      required: [
+        'partyName',
+        'businessName',
+        'phoneNumber',
+        'email',
+        'password',
+        'address',
+        'district',
+        'upozela',
+        'description',
+      ],
+    },
+  })
+  @ApiOperation({ summary: 'Register a new Party' })
+  register(
+    @Body() createPartyDto: CreatePartyDto,
+    @UploadedFiles()
+    files: {
+      partyDocument?: Express.Multer.File[];
+      profileImage?: Express.Multer.File[];
+    },
+  ) {
+    let uploadedDocs: string[] = [];
+    if (files) {
+      if (files.partyDocument && files.partyDocument.length > 0) {
+        uploadedDocs = files.partyDocument.map((file) => `/uploads/documents/${file.filename}`);
+      }
+      if (files.profileImage && files.profileImage.length > 0) {
+        createPartyDto.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
+      }
+    }
+    createPartyDto.partyDocument = uploadedDocs;
+
+    // Normalize bazzarArea
+    const bazzarAreaValue = createPartyDto.bazzarArea || createPartyDto.bazzar || createPartyDto.area;
+    if (!bazzarAreaValue) {
+      throw new BadRequestException('bazzarArea, bazzar, or area is required');
+    }
+
+    // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
+    const openingDue = Number((createPartyDto as any).openingDue);
+    const creditLimit = Number((createPartyDto as any).creditLimit);
+
+    const normalizedDto: any = {
+      ...createPartyDto,
+      bazzarArea: bazzarAreaValue,
+      openingDue: isNaN(openingDue) ? 0 : openingDue,
+      creditLimit: isNaN(creditLimit) ? 0 : creditLimit,
+    };
+
+    // Remove alias properties
+    delete normalizedDto.bazzar;
+    delete normalizedDto.area;
+
+    return this.partyService.create(normalizedDto);
+  }
+
+  @Get()
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  findAll() {
+    return this.partyService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a party by ID' })
+  findOne(@Param('id') id: string) {
+    return this.partyService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'partyDocument', maxCount: 10 },
+        { name: 'profileImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req, file, callback) => {
+            const path = './uploads/documents';
+            try {
+              if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+              }
+              callback(null, path);
+            } catch (error) {
+              callback(error as Error, path);
+            }
+          },
+          filename: (req, file, callback) => {
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            const prefix = file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
           },
         }),
       },
@@ -75,6 +207,7 @@ export class PartyController {
         description: { type: 'string' },
         openingDue: { type: 'number' },
         creditLimit: { type: 'number' },
+        status: { type: 'string', description: 'Status of the party (ACTIVE/INACTIVE)' },
         partyDocument: {
           type: 'array',
           items: {
@@ -82,96 +215,58 @@ export class PartyController {
             format: 'binary',
           },
         },
-        documents: {
-          type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
-          description: 'documents (alias)',
+        profileImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'profile image of the party',
         },
       },
-      required: [
-        'partyName',
-        'businessName',
-        'phoneNumber',
-        'email',
-        'password',
-        'address',
-        'district',
-        'upozela',
-        'description',
-        'openingDue',
-        'creditLimit',
-      ],
     },
   })
-  @ApiOperation({ summary: 'Register a new Party' })
-  register(
-    @Body() createPartyDto: CreatePartyDto,
+  @ApiOperation({ summary: 'Update a party' })
+  update(
+    @Param('id') id: string,
+    @Body() updatePartyDto: UpdatePartyDto,
     @UploadedFiles()
     files: {
       partyDocument?: Express.Multer.File[];
-      documents?: Express.Multer.File[];
+      profileImage?: Express.Multer.File[];
     },
   ) {
-    let uploadedDocs: string[] = [];
+    const dataToUpdate: any = { ...updatePartyDto };
+
     if (files) {
       if (files.partyDocument && files.partyDocument.length > 0) {
-        uploadedDocs = uploadedDocs.concat(
-          files.partyDocument.map((file) => `/uploads/documents/${file.filename}`),
+        dataToUpdate.partyDocument = files.partyDocument.map(
+          (file) => `/uploads/documents/${file.filename}`,
         );
       }
-      if (files.documents && files.documents.length > 0) {
-        uploadedDocs = uploadedDocs.concat(
-          files.documents.map((file) => `/uploads/documents/${file.filename}`),
-        );
+      if (files.profileImage && files.profileImage.length > 0) {
+        dataToUpdate.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
       }
     }
-    createPartyDto.partyDocument = uploadedDocs;
 
     // Normalize bazzarArea
-    const bazzarAreaValue = createPartyDto.bazzarArea || createPartyDto.bazzar || createPartyDto.area;
-    if (!bazzarAreaValue) {
-      throw new BadRequestException('bazzarArea, bazzar, or area is required');
+    const bazzarAreaValue = updatePartyDto.bazzarArea || updatePartyDto.bazzar || updatePartyDto.area;
+    if (bazzarAreaValue) {
+      dataToUpdate.bazzarArea = bazzarAreaValue;
     }
 
-    // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
-    const openingDue = Number(createPartyDto.openingDue);
-    const creditLimit = Number(createPartyDto.creditLimit);
-
-    const normalizedDto: any = {
-      ...createPartyDto,
-      bazzarArea: bazzarAreaValue,
-      openingDue: isNaN(openingDue) ? 0 : openingDue,
-      creditLimit: isNaN(creditLimit) ? 0 : creditLimit,
-    };
-
     // Remove alias properties
-    delete normalizedDto.bazzar;
-    delete normalizedDto.area;
-    delete normalizedDto.documents;
+    delete dataToUpdate.bazzar;
+    delete dataToUpdate.area;
 
-    return this.partyService.create(normalizedDto);
-  }
+    // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
+    if (dataToUpdate.openingDue !== undefined) {
+      const openingDue = Number(dataToUpdate.openingDue);
+      dataToUpdate.openingDue = isNaN(openingDue) ? 0 : openingDue;
+    }
+    if (dataToUpdate.creditLimit !== undefined) {
+      const creditLimit = Number(dataToUpdate.creditLimit);
+      dataToUpdate.creditLimit = isNaN(creditLimit) ? 0 : creditLimit;
+    }
 
-  @Get()
-  @ApiBearerAuth()
-  @UseGuards(AccessTokenGuard)
-  findAll() {
-    return this.partyService.findAll();
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a party by ID' })
-  findOne(@Param('id') id: string) {
-    return this.partyService.findOne(id);
-  }
-
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update a party' })
-  update(@Param('id') id: string, @Body() updatePartyDto: UpdatePartyDto) {
-    return this.partyService.update(id, updatePartyDto);
+    return this.partyService.update(id, dataToUpdate);
   }
 
   @Delete(':id')

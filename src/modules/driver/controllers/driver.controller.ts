@@ -28,8 +28,6 @@ import { extname } from 'path';
 import * as fs from 'fs';
 
 @ApiTags('Drivers')
-@ApiBearerAuth()
-@UseGuards(AccessTokenGuard)
 @Controller('drivers')
 export class DriverController {
   constructor(private readonly driverService: DriverService) {}
@@ -76,13 +74,6 @@ export class DriverController {
         driverName: { type: 'string' },
         address: { type: 'string' },
         district: { type: 'string', description: 'District of the driver' },
-        districs: { type: 'string', description: 'District of the driver (alias)' },
-        upozela: { type: 'string', description: 'Upozela of the driver' },
-        upazela: { type: 'string', description: 'Upazela of the driver (alias)' },
-        truckNumber: { type: 'string', description: 'Truck/Track Number (optional)' },
-        trackNumber: { type: 'string', description: 'Track Number (alias, optional)' },
-        truckType: { type: 'string', description: 'Truck/Track Type (optional)' },
-        trackType: { type: 'string', description: 'Track Type (alias, optional)' },
         loadCapacity: { type: 'string', description: 'Load Capacity (optional)' },
         drivingLicenceNumber: { type: 'string' },
         nidNumber: { type: 'string' },
@@ -106,6 +97,7 @@ export class DriverController {
         'password',
         'driverName',
         'address',
+        'district',
         'drivingLicenceNumber',
         'nidNumber',
       ],
@@ -137,18 +129,15 @@ export class DriverController {
     }
 
     // Normalize district/districs and upozela/upazela
-    const district = createDriverDto.district || createDriverDto.districs;
-    const upozela = createDriverDto.upozela || createDriverDto.upazela;
+    const district = createDriverDto.district || (createDriverDto as any).districs;
+    const upozela = (createDriverDto as any).upozela || (createDriverDto as any).upazela;
 
     if (!district) {
-      throw new BadRequestException('district or districs is required');
-    }
-    if (!upozela) {
-      throw new BadRequestException('upozela or upazela is required');
+      throw new BadRequestException('district is required');
     }
 
-    const truckNumber = createDriverDto.truckNumber || createDriverDto.trackNumber;
-    const truckType = createDriverDto.truckType || createDriverDto.trackType;
+    const truckNumber = (createDriverDto as any).truckNumber || (createDriverDto as any).trackNumber;
+    const truckType = (createDriverDto as any).truckType || (createDriverDto as any).trackType;
 
     const normalizedDto: any = {
       ...createDriverDto,
@@ -168,24 +157,32 @@ export class DriverController {
   }
 
   @Get()
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Get all drivers' })
   findAll() {
     return this.driverService.findAll();
   }
 
   @Get(':id')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Get a driver by ID' })
   findOne(@Param('id') id: string) {
     return this.driverService.findOne(id);
   }
 
   @Patch(':id')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Update a driver' })
   update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto) {
     return this.driverService.update(id, updateDriverDto);
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Delete a driver' })
   remove(@Param('id') id: string) {
     return this.driverService.remove(id);

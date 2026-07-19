@@ -16,6 +16,7 @@ import { RegisterDto } from '../dto/register.dto';
 import { Role } from '@prisma/client';
 import { CompanyService } from '../../company/services/company.service';
 import { PartyService } from '../../party/services/party.service';
+import { DriverService } from '../../driver/services/driver.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +26,7 @@ export class AuthService {
     private usersService: UsersService,
     private companyService: CompanyService,
     private partyService: PartyService,
+    private driverService: DriverService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
@@ -82,33 +84,148 @@ export class AuthService {
 
   async signIn(loginDto: LoginDto) {
     try {
+      // 1. Check User table
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
-      if (!user) throw new UnauthorizedException('Access Denied');
+      if (user) {
+        const passwordMatches = await argon2.verify(
+          user.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
-      const passwordMatches = await argon2.verify(
-        user.password,
-        loginDto.password,
-      );
-      if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+        const tokens = await this.getTokens(user.id, user.email, user.roles);
+        await this.storeSession(user.id, tokens.refreshToken);
 
-      const tokens = await this.getTokens(user.id, user.email, user.roles);
+        return {
+          ...tokens,
+          user: {
+            id: user.id,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            name: user.name,
+            roles: user.roles,
+            categoryId: user.categoryId,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          },
+        };
+      }
 
-      // Store session token in Redis (sliding expiration)
-      await this.storeSession(user.id, tokens.refreshToken);
+      // 2. Check Company table
+      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
+      if (company) {
+        if (company.status !== 'APPROVED') {
+          throw new ForbiddenException(
+            `Access Denied: Company account is ${company.status}`,
+          );
+        }
+        const passwordMatches = await argon2.verify(
+          company.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-          roles: user.roles,
-          categoryId: user.categoryId,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-      };
+        const tokens = await this.getTokens(company.companyId, company.email, [
+          Role.VENDOR,
+        ]);
+        await this.storeSession(company.companyId, tokens.refreshToken);
+
+        return {
+          ...tokens,
+          company: {
+            companyId: company.companyId,
+            phoneNumber: company.phoneNumber,
+            ownerName: company.ownerName,
+            companyName: company.companyName,
+            email: company.email,
+            district: company.district,
+            upozela: company.upozela,
+            address: company.address,
+            status: company.status,
+            companyDocument: company.companyDocument,
+            categoryId: company.categoryId,
+            createdAt: company.createdAt,
+            updatedAt: company.updatedAt,
+          },
+        };
+      }
+
+      // 3. Check Party table
+      const party = await this.partyService.findByPhone(loginDto.phoneNumber);
+      if (party) {
+        const passwordMatches = await argon2.verify(
+          party.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
+          Role.PARTY,
+        ]);
+        await this.storeSession(party.partyId, tokens.refreshToken);
+
+        return {
+          ...tokens,
+          party: {
+            partyId: party.partyId,
+            partyName: party.partyName,
+            businessName: party.businessName,
+            phoneNumber: party.phoneNumber,
+            email: party.email,
+            address: party.address,
+            district: party.district,
+            upozela: party.upozela,
+            bazzarArea: party.bazzarArea,
+            description: party.description,
+            openingDue: party.openingDue,
+            creditLimit: party.creditLimit,
+            status: party.status,
+            partyDocument: party.partyDocument,
+            profileImage: party.profileImage,
+            createdAt: party.createdAt,
+            updatedAt: party.updatedAt,
+          },
+        };
+      }
+
+      // 4. Check Driver table
+      const driver = await this.driverService.findByPhone(loginDto.phoneNumber);
+      if (driver) {
+        const passwordMatches = await argon2.verify(
+          driver.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        const tokens = await this.getTokens(driver.driverId, driver.email, [
+          Role.DRIVER,
+        ]);
+        await this.storeSession(driver.driverId, tokens.refreshToken);
+
+        return {
+          ...tokens,
+          driver: {
+            driverId: driver.driverId,
+            phoneNumber: driver.phoneNumber,
+            email: driver.email,
+            driverImage: driver.driverImage,
+            driverName: driver.driverName,
+            address: driver.address,
+            district: driver.district,
+            upozela: driver.upozela,
+            truckNumber: driver.truckNumber,
+            truckType: driver.truckType,
+            loadCapacity: driver.loadCapacity,
+            drivingLicenceNumber: driver.drivingLicenceNumber,
+            nidNumber: driver.nidNumber,
+            driverDocument: driver.driverDocument,
+            createdAt: driver.createdAt,
+            updatedAt: driver.updatedAt,
+          },
+        };
+      }
+
+      throw new UnauthorizedException('Access Denied: Invalid credentials');
     } catch (error) {
       this.logger.error(
         `Failed login attempt for phone ${loginDto.phoneNumber}: ${error.message}`,
@@ -208,6 +325,7 @@ export class AuthService {
           creditLimit: party.creditLimit,
           status: party.status,
           partyDocument: party.partyDocument,
+          profileImage: party.profileImage,
           createdAt: party.createdAt,
           updatedAt: party.updatedAt,
         },

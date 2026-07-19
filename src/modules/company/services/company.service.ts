@@ -36,6 +36,7 @@ export class CompanyService {
         companyName: true,
         ownerName: true,
         status: true,
+        isVerified: true,
         categoryId: true,
         createdAt: true,
       },
@@ -52,6 +53,7 @@ export class CompanyService {
         companyName: true,
         ownerName: true,
         status: true,
+        isVerified: true,
         createdAt: true,
       },
     });
@@ -68,12 +70,14 @@ export class CompanyService {
       data: {
         status: CompanyStatus.APPROVED,
         adminId: adminId,
+        isVerified: true,
       },
       select: {
         companyId: true,
         email: true,
         status: true,
         adminId: true,
+        isVerified: true,
       },
     });
   }
@@ -87,6 +91,7 @@ export class CompanyService {
         companyName: true,
         ownerName: true,
         status: true,
+        isVerified: true,
       },
     });
   }

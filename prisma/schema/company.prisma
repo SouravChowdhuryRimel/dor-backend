@@ -9,6 +9,7 @@ model Company {
     upozela         String
     address         String
     status          CompanyStatus @default(PENDING)
+    isVerified      Boolean       @default(false) @map("is_verified")
     companyDocument String[]      @map("company_document")
     categoryId      String        @map("category_id")
     category        Category      @relation(fields: [categoryId], references: [categoryId])

@@ -4,6 +4,7 @@ enum Role {
   VENDOR
   SUPER_ADMIN
   PARTY
+  DRIVER
 }
 
 enum CompanyStatus {

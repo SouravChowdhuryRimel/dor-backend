@@ -108,6 +108,59 @@ export class PartyInfoDto {
   @ApiProperty({ example: ['party-doc-1.jpg'] })
   partyDocument: string[];
 
+  @ApiPropertyOptional({ example: 'party-profile.jpg' })
+  profileImage?: string;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  createdAt: Date;
+
+  @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
+  updatedAt: Date;
+}
+
+export class DriverInfoDto {
+  @ApiProperty({ example: '1234567890' })
+  driverId: string;
+
+  @ApiProperty({ example: '+1234567890' })
+  phoneNumber: string;
+
+  @ApiProperty({ example: 'driver@example.com' })
+  email: string;
+
+  @ApiPropertyOptional({ example: 'url-to-image' })
+  driverImage?: string;
+
+  @ApiProperty({ example: 'John Driver' })
+  driverName: string;
+
+  @ApiProperty({ example: '123 Driver Rd' })
+  address: string;
+
+  @ApiProperty({ example: 'Dhaka' })
+  district: string;
+
+  @ApiProperty({ example: 'Mirpur' })
+  upozela: string;
+
+  @ApiPropertyOptional({ example: 'DHA-1234' })
+  truckNumber?: string;
+
+  @ApiPropertyOptional({ example: '10 Ton Lorry' })
+  truckType?: string;
+
+  @ApiPropertyOptional({ example: '10 Ton' })
+  loadCapacity?: string;
+
+  @ApiProperty({ example: 'DL-987654321' })
+  drivingLicenceNumber: string;
+
+  @ApiProperty({ example: 'NID-123456789' })
+  nidNumber: string;
+
+  @ApiProperty({ example: ['doc.pdf'] })
+  driverDocument: string[];
+
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   createdAt: Date;
 
@@ -149,6 +202,12 @@ export class TokenResponseDto {
     type: PartyInfoDto,
   })
   party?: PartyInfoDto;
+
+  @ApiPropertyOptional({
+    description: 'Detailed driver information if authenticated as a driver',
+    type: DriverInfoDto,
+  })
+  driver?: DriverInfoDto;
 }
 
 export class AuthSuccessResponseDto {

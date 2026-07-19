@@ -18,6 +18,12 @@ export class DriverService {
     });
   }
 
+  async findByPhone(phoneNumber: string) {
+    return this.prisma.driver.findFirst({
+      where: { phoneNumber },
+    });
+  }
+
   async findAll() {
     return this.prisma.driver.findMany();
   }

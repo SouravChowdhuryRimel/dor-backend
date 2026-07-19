@@ -7,7 +7,7 @@ model Driver {
     driverName           String     @map("driver_name")
     address              String
     district             String
-    upozela              String
+    upozela              String?
     truckNumber          String?    @map("truck_number")
     truckType            String?    @map("truck_type")
     loadCapacity         String?    @map("load_capacity")

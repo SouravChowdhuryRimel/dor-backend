@@ -62,15 +62,6 @@ export class CreatePartyDto {
   @IsNotEmpty()
   description: string;
 
-  @ApiProperty({ description: 'Opening due amount', example: 0 })
-  @IsNumber()
-  @IsNotEmpty()
-  openingDue: number;
-
-  @ApiProperty({ description: 'Credit limit amount', example: 50000 })
-  @IsNumber()
-  @IsNotEmpty()
-  creditLimit: number;
 
   @ApiPropertyOptional({
     description: 'Documents of the party',
@@ -82,13 +73,8 @@ export class CreatePartyDto {
   @IsOptional()
   partyDocument?: string[];
 
-  @ApiPropertyOptional({
-    description: 'Documents of the party (alias for partyDocument)',
-    type: [String],
-    example: ['doc1.jpg', 'doc2.jpg'],
-  })
-  @IsArray()
-  @IsString({ each: true })
+  @ApiPropertyOptional({ description: 'Profile image URL/path of the party' })
+  @IsString()
   @IsOptional()
-  documents?: string[];
+  profileImage?: string;
 }

@@ -40,45 +40,11 @@ export class CreateDriverDto {
   @IsNotEmpty()
   address: string;
 
-  @ApiPropertyOptional({ description: 'District of the driver', example: 'Dhaka' })
+  @ApiProperty({ description: 'District of the driver', example: 'Dhaka' })
   @IsString()
-  @IsOptional()
-  district?: string;
+  @IsNotEmpty()
+  district: string;
 
-  @ApiPropertyOptional({ description: 'District of the driver (alias: districs)', example: 'Dhaka' })
-  @IsString()
-  @IsOptional()
-  districs?: string;
-
-  @ApiPropertyOptional({ description: 'Upozela of the driver', example: 'Mirpur' })
-  @IsString()
-  @IsOptional()
-  upozela?: string;
-
-  @ApiPropertyOptional({ description: 'Upazela of the driver (alias: upazela)', example: 'Mirpur' })
-  @IsString()
-  @IsOptional()
-  upazela?: string;
-
-  @ApiPropertyOptional({ description: 'Truck Number', example: 'DHA-1234' })
-  @IsString()
-  @IsOptional()
-  truckNumber?: string;
-
-  @ApiPropertyOptional({ description: 'Track Number (alias for truckNumber)', example: 'DHA-1234' })
-  @IsString()
-  @IsOptional()
-  trackNumber?: string;
-
-  @ApiPropertyOptional({ description: 'Truck Type', example: '10 Ton Lorry' })
-  @IsString()
-  @IsOptional()
-  truckType?: string;
-
-  @ApiPropertyOptional({ description: 'Track Type (alias for truckType)', example: '10 Ton Lorry' })
-  @IsString()
-  @IsOptional()
-  trackType?: string;
 
   @ApiPropertyOptional({ description: 'Load Capacity', example: '10 Ton' })
   @IsString()
