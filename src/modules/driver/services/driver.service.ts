@@ -9,6 +9,13 @@ export class DriverService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createDriverDto: CreateDriverDto) {
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId: createDriverDto.categoryId },
+    });
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
     const hashedPassword = await argon2.hash(createDriverDto.password);
     return this.prisma.driver.create({
       data: {
@@ -23,6 +30,24 @@ export class DriverService {
       where: { phoneNumber },
     });
   }
+
+  async findByEmail(email: string) {
+    return this.prisma.driver.findUnique({ where: { email } });
+  }
+
+  async updatePassword(driverId: string, password: string): Promise<void> {
+    const hashedPassword = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+    });
+
+    await this.prisma.driver.update({
+      where: { driverId },
+      data: { password: hashedPassword },
+    });
+  }
+
 
   async findAll() {
     return this.prisma.driver.findMany();

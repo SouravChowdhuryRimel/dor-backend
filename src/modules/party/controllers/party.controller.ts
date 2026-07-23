@@ -74,6 +74,8 @@ export class PartyController {
         bazzar: { type: 'string', description: 'Bazzar (alias)' },
         area: { type: 'string', description: 'Area (alias)' },
         description: { type: 'string' },
+        companyId: { type: 'string' },
+        treadLicense: { type: 'string' },
         partyDocument: {
           type: 'array',
           items: {
@@ -205,6 +207,8 @@ export class PartyController {
         bazzar: { type: 'string', description: 'Bazzar (alias)' },
         area: { type: 'string', description: 'Area (alias)' },
         description: { type: 'string' },
+        companyId: { type: 'string' },
+        treadLicense: { type: 'string' },
         openingDue: { type: 'number' },
         creditLimit: { type: 'number' },
         status: { type: 'string', description: 'Status of the party (ACTIVE/INACTIVE)' },

@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,16 @@ import { Role } from '@prisma/client';
 import { CompanyService } from '../../company/services/company.service';
 import { PartyService } from '../../party/services/party.service';
 import { DriverService } from '../../driver/services/driver.service';
+import { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
+import * as nodemailer from 'nodemailer';
+import { randomBytes } from 'crypto';
+
+type PasswordResetAccount = {
+  id: string;
+  email: string;
+  accountType: 'user' | 'company' | 'party' | 'driver';
+};
 
 @Injectable()
 export class AuthService {
@@ -68,9 +79,16 @@ export class AuthService {
           phoneNumber: newUser.phoneNumber,
           name: newUser.name,
           roles: newUser.roles,
-          categoryId: newUser.categoryId,
-          createdAt: newUser.createdAt,
+            categoryId: newUser.categoryId,
+            businessName: null,
+            district: null,
+            upozela: null,
+            address: null,
+            bazzarArea: null,
+            createdAt: newUser.createdAt,
           updatedAt: newUser.updatedAt,
+          isVerified: newUser.roles.includes(Role.SUPER_ADMIN) || newUser.roles.includes(Role.ADMIN),
+          status: 'APPROVED',
         },
       };
     } catch (error) {
@@ -87,6 +105,10 @@ export class AuthService {
       // 1. Check User table
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
       if (user) {
+        if (!user.isActive) {
+          throw new ForbiddenException('Access Denied: Account is inactive');
+        }
+
         const passwordMatches = await argon2.verify(
           user.password,
           loginDto.password,
@@ -105,8 +127,15 @@ export class AuthService {
             name: user.name,
             roles: user.roles,
             categoryId: user.categoryId,
+            businessName: null,
+            district: null,
+            upozela: null,
+            address: null,
+            bazzarArea: null,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
+            isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
+            status: 'APPROVED',
           },
         };
       }
@@ -114,11 +143,6 @@ export class AuthService {
       // 2. Check Company table
       const company = await this.companyService.findByPhone(loginDto.phoneNumber);
       if (company) {
-        if (company.status !== 'APPROVED') {
-          throw new ForbiddenException(
-            `Access Denied: Company account is ${company.status}`,
-          );
-        }
         const passwordMatches = await argon2.verify(
           company.password,
           loginDto.password,
@@ -132,20 +156,22 @@ export class AuthService {
 
         return {
           ...tokens,
-          company: {
-            companyId: company.companyId,
-            phoneNumber: company.phoneNumber,
-            ownerName: company.ownerName,
-            companyName: company.companyName,
+          user: {
+            id: company.companyId,
             email: company.email,
+            phoneNumber: company.phoneNumber,
+            name: company.ownerName,
+            roles: [Role.VENDOR],
+            categoryId: company.categoryId,
+            businessName: company.companyName,
             district: company.district,
             upozela: company.upozela,
             address: company.address,
-            status: company.status,
-            companyDocument: company.companyDocument,
-            categoryId: company.categoryId,
+            bazzarArea: null,
             createdAt: company.createdAt,
             updatedAt: company.updatedAt,
+            isVerified: company.isVerified,
+            status: company.status,
           },
         };
       }
@@ -166,24 +192,22 @@ export class AuthService {
 
         return {
           ...tokens,
-          party: {
-            partyId: party.partyId,
-            partyName: party.partyName,
-            businessName: party.businessName,
-            phoneNumber: party.phoneNumber,
+          user: {
+            id: party.partyId,
             email: party.email,
-            address: party.address,
+            phoneNumber: party.phoneNumber,
+            name: party.partyName,
+            roles: [Role.PARTY],
+            categoryId: null,
+            businessName: party.businessName,
             district: party.district,
             upozela: party.upozela,
+            address: party.address,
             bazzarArea: party.bazzarArea,
-            description: party.description,
-            openingDue: party.openingDue,
-            creditLimit: party.creditLimit,
-            status: party.status,
-            partyDocument: party.partyDocument,
-            profileImage: party.profileImage,
             createdAt: party.createdAt,
             updatedAt: party.updatedAt,
+            isVerified: party.isVerified,
+            status: party.status,
           },
         };
       }
@@ -204,23 +228,22 @@ export class AuthService {
 
         return {
           ...tokens,
-          driver: {
-            driverId: driver.driverId,
-            phoneNumber: driver.phoneNumber,
+          user: {
+            id: driver.driverId,
             email: driver.email,
-            driverImage: driver.driverImage,
-            driverName: driver.driverName,
-            address: driver.address,
+            phoneNumber: driver.phoneNumber,
+            name: driver.driverName,
+            roles: [Role.DRIVER],
+            categoryId: null,
+            businessName: null,
             district: driver.district,
             upozela: driver.upozela,
-            truckNumber: driver.truckNumber,
-            truckType: driver.truckType,
-            loadCapacity: driver.loadCapacity,
-            drivingLicenceNumber: driver.drivingLicenceNumber,
-            nidNumber: driver.nidNumber,
-            driverDocument: driver.driverDocument,
+            address: driver.address,
+            bazzarArea: null,
             createdAt: driver.createdAt,
             updatedAt: driver.updatedAt,
+            isVerified: driver.isVerified,
+            status: 'APPROVED',
           },
         };
       }
@@ -240,12 +263,6 @@ export class AuthService {
       const company = await this.companyService.findByPhone(loginDto.phoneNumber);
       if (!company) throw new UnauthorizedException('Access Denied');
 
-      if (company.status !== 'APPROVED') {
-        throw new ForbiddenException(
-          `Access Denied: Company account is ${company.status}`,
-        );
-      }
-
       const passwordMatches = await argon2.verify(
         company.password,
         loginDto.password,
@@ -261,20 +278,22 @@ export class AuthService {
 
       return {
         ...tokens,
-        company: {
-          companyId: company.companyId,
-          phoneNumber: company.phoneNumber,
-          ownerName: company.ownerName,
-          companyName: company.companyName,
+        user: {
+          id: company.companyId,
           email: company.email,
+          phoneNumber: company.phoneNumber,
+          name: company.ownerName,
+          roles: [Role.VENDOR],
+          categoryId: company.categoryId,
+          businessName: company.companyName,
           district: company.district,
           upozela: company.upozela,
           address: company.address,
-          status: company.status,
-          companyDocument: company.companyDocument,
-          categoryId: company.categoryId,
+          bazzarArea: null,
           createdAt: company.createdAt,
           updatedAt: company.updatedAt,
+          isVerified: company.isVerified,
+          status: company.status,
         },
       };
     } catch (error) {
@@ -310,24 +329,22 @@ export class AuthService {
 
       return {
         ...tokens,
-        party: {
-          partyId: party.partyId,
-          partyName: party.partyName,
-          businessName: party.businessName,
-          phoneNumber: party.phoneNumber,
+        user: {
+          id: party.partyId,
           email: party.email,
-          address: party.address,
+          phoneNumber: party.phoneNumber,
+          name: party.partyName,
+          roles: [Role.PARTY],
+          categoryId: null,
+          businessName: party.businessName,
           district: party.district,
           upozela: party.upozela,
+          address: party.address,
           bazzarArea: party.bazzarArea,
-          description: party.description,
-          openingDue: party.openingDue,
-          creditLimit: party.creditLimit,
-          status: party.status,
-          partyDocument: party.partyDocument,
-          profileImage: party.profileImage,
           createdAt: party.createdAt,
           updatedAt: party.updatedAt,
+          isVerified: party.isVerified,
+          status: party.status,
         },
       };
     } catch (error) {
@@ -337,6 +354,67 @@ export class AuthService {
       );
       throw error;
     }
+  }
+
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const account = await this.findPasswordResetAccount(
+      forgotPasswordDto.email,
+      forgotPasswordDto.role,
+    );
+
+    // Always return the same response to avoid email-account enumeration.
+    if (account) {
+      const token = randomBytes(32).toString('hex');
+      const ttlSeconds = 15 * 60;
+
+      await this.redisService.setJson(
+        `password-reset:${token}`,
+        account,
+        ttlSeconds,
+      );
+      await this.sendPasswordResetEmail(account.email, token);
+    }
+
+    return {
+      message:
+        'If an account exists for this email, a password-reset token has been sent.',
+    };
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const key = `password-reset:${resetPasswordDto.token}`;
+    const account = await this.redisService.getJson<PasswordResetAccount>(key);
+
+    if (!account) {
+      throw new BadRequestException('Invalid or expired password-reset token');
+    }
+
+    // Consume the token before updating the password so it cannot be reused.
+    await this.redisService.del(key);
+
+    switch (account.accountType) {
+      case 'user':
+        await this.usersService.updatePassword(account.id, resetPasswordDto.password);
+        break;
+      case 'company':
+        await this.companyService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
+        break;
+      case 'party':
+        await this.partyService.updatePassword(account.id, resetPasswordDto.password);
+        break;
+      case 'driver':
+        await this.driverService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
+        break;
+    }
+
+    await this.redisService.del(`session:${account.id}`);
+    return { message: 'Password reset successfully. Please sign in again.' };
   }
 
   async logout(userId: string) {
@@ -366,6 +444,9 @@ export class AuthService {
 
       const user = await this.usersService.findById(userId);
       if (!user) throw new ForbiddenException('Access Denied');
+      if (!user.isActive) {
+        throw new ForbiddenException('Access Denied: Account is inactive');
+      }
 
       const tokens = await this.getTokens(user.id, user.email, user.roles);
 
@@ -381,8 +462,15 @@ export class AuthService {
           name: user.name,
           roles: user.roles,
           categoryId: user.categoryId,
+          businessName: null,
+          district: null,
+          upozela: null,
+          address: null,
+          bazzarArea: null,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
+          isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
+          status: 'APPROVED',
         },
       };
     } catch (error) {
@@ -414,6 +502,77 @@ export class AuthService {
       );
       throw new Error('Internal session storage service unavailable');
     }
+  }
+
+  private async findPasswordResetAccount(
+    email: string,
+    role?: Role,
+  ): Promise<PasswordResetAccount | null> {
+    if (
+      !role ||
+      role === Role.USER ||
+      role === Role.ADMIN ||
+      role === Role.SUPER_ADMIN
+    ) {
+      const user = await this.usersService.findByEmail(email);
+      if (user && (!role || user.roles.includes(role))) {
+        return { id: user.id, email, accountType: 'user' };
+      }
+    }
+
+    if (!role || role === Role.VENDOR) {
+      const company = await this.companyService.findByEmail(email);
+      if (company) {
+        return { id: company.companyId, email, accountType: 'company' };
+      }
+    }
+
+    if (!role || role === Role.PARTY) {
+      const party = await this.partyService.findByEmail(email);
+      if (party) {
+        return { id: party.partyId, email, accountType: 'party' };
+      }
+    }
+
+    if (!role || role === Role.DRIVER) {
+      const driver = await this.driverService.findByEmail(email);
+      if (driver) {
+        return { id: driver.driverId, email, accountType: 'driver' };
+      }
+    }
+
+    return null;
+  }
+
+  private async sendPasswordResetEmail(
+    email: string,
+    token: string,
+  ): Promise<void> {
+    const host = this.configService.get<string>('SMTP_HOST');
+    const port = Number(this.configService.get<number>('SMTP_PORT', 587));
+    const user = this.configService.get<string>('SMTP_USER');
+    const password = this.configService.get<string>('SMTP_PASSWORD');
+    const from = this.configService.get<string>('SMTP_FROM') || user;
+
+    if (!host || !from) {
+      throw new InternalServerErrorException(
+        'Password-reset email service is not configured',
+      );
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      ...(user && password ? { auth: { user, pass: password } } : {}),
+    });
+
+    await transporter.sendMail({
+      from,
+      to: email,
+      subject: 'Password reset token',
+      text: `Use this token to reset your password: ${token}\n\nThis token expires in 15 minutes and can be used once.`,
+    });
   }
 
   async getTokens(userId: string, email: string | null, roles: Role[]) {

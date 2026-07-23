@@ -61,6 +61,11 @@ export class CreateDriverDto {
   @IsNotEmpty()
   nidNumber: string;
 
+  @ApiProperty({ description: 'Category ID this driver belongs to' })
+  @IsString()
+  @IsNotEmpty()
+  categoryId: string;
+
   @ApiPropertyOptional({
     description: 'Documents of the driver',
     type: [String],

@@ -25,6 +25,47 @@ export class CategoryService {
     return category;
   }
 
+  async findCompaniesByCategoryId(categoryId: string) {
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId },
+      select: {
+        companies: {
+          select: {
+            companyId: true,
+            phoneNumber: true,
+            companyName: true,
+            ownerName: true,
+            email: true,
+            district: true,
+            upozela: true,
+            address: true,
+            status: true,
+            isVerified: true,
+            companyDocument: true,
+            categoryId: true,
+            adminId: true,
+            createdAt: true,
+            updatedAt: true,
+            admin: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phoneNumber: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    return category.companies;
+  }
+
   async update(id: string, updateCategoryDto: UpdateCategoryDto) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: id },

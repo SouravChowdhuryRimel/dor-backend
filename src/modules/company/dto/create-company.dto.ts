@@ -85,6 +85,14 @@ export class CreateCompanyDto {
   categoryId: string;
 
   @ApiPropertyOptional({
+    description: 'Income tax identification number or reference',
+    example: 'TIN-1234567890',
+  })
+  @IsString()
+  @IsOptional()
+  incomeTax?: string;
+
+  @ApiPropertyOptional({
     description: 'Array of document URLs for the company registration',
     example: ['url1.jpg', 'url2.jpg'],
     type: [String],

@@ -13,12 +13,17 @@ model Party {
     openingDue    Float    @map("opening_due")
     creditLimit   Float    @map("credit_limit")
     status        String   @default("ACTIVE")
+    isVerified    Boolean  @default(false) @map("is_verified")
+    treadLicense  String?  @map("tread_license")
     partyDocument String[] @map("party_document")
     profileImage  String?  @map("profile_image")
+    companyId     String?  @map("company_id")
+    company       Company? @relation(fields: [companyId], references: [companyId], onDelete: SetNull)
     offers        Offer[]
 
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
 
     @@map("parties")
+    @@index([companyId])
 }

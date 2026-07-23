@@ -26,6 +26,7 @@ import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
+import { CompanyStatus } from '@prisma/client';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -74,6 +75,7 @@ export class CompanyController {
         upozela: { type: 'string' },
         address: { type: 'string' },
         categoryId: { type: 'string' },
+        incomeTax: { type: 'string' },
         companyDocument: {
           type: 'array',
           items: {
@@ -155,8 +157,66 @@ export class CompanyController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
+  @UseInterceptors(
+    FilesInterceptor('companyDocument', 10, {
+      storage: diskStorage({
+        destination: (req, file, callback) => {
+          const path = './uploads/documents';
+          try {
+            if (!fs.existsSync(path)) {
+              fs.mkdirSync(path, { recursive: true });
+            }
+            callback(null, path);
+          } catch (error) {
+            callback(error as Error, path);
+          }
+        },
+        filename: (req, file, callback) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `doc-${uniqueSuffix}${ext}`);
+        },
+      }),
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        phoneNumber: { type: 'string' },
+        password: { type: 'string' },
+        companyName: { type: 'string' },
+        ownerName: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        district: { type: 'string' },
+        upozela: { type: 'string' },
+        address: { type: 'string' },
+        categoryId: { type: 'string' },
+        incomeTax: { type: 'string' },
+        status: { type: 'string', enum: Object.values(CompanyStatus) },
+        companyDocument: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+    },
+  })
   @ApiOperation({ summary: 'Update a company' })
-  update(@Param('id') id: string, @Body() updateCompanyDto: UpdateCompanyDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateCompanyDto: UpdateCompanyDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    if (files && files.length > 0) {
+      updateCompanyDto.companyDocument = files.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
+    }
     return this.companyService.update(id, updateCompanyDto);
   }
 

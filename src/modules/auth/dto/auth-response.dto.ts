@@ -8,6 +8,9 @@ export class UserInfoDto {
   @ApiProperty({ example: 'alex.jones@example.com' })
   email: string;
 
+  @ApiProperty({ example: '01700000000' })
+  phoneNumber: string;
+
   @ApiPropertyOptional({ example: 'Alex Jones', nullable: true })
   name: string | null;
 
@@ -17,11 +20,32 @@ export class UserInfoDto {
   @ApiPropertyOptional({ example: 'uuid-string', nullable: true })
   categoryId: string | null;
 
+  @ApiPropertyOptional({ example: 'Acme Business', nullable: true })
+  businessName: string | null;
+
+  @ApiPropertyOptional({ example: 'Dhaka', nullable: true })
+  district: string | null;
+
+  @ApiPropertyOptional({ example: 'Mirpur', nullable: true })
+  upozela: string | null;
+
+  @ApiPropertyOptional({ example: '123 Main Street', nullable: true })
+  address: string | null;
+
+  @ApiPropertyOptional({ example: 'Mirpur Bazaar', nullable: true })
+  bazzarArea: string | null;
+
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   createdAt: Date;
 
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   updatedAt: Date;
+
+  @ApiProperty({ example: true })
+  isVerified: boolean;
+
+  @ApiProperty({ example: 'APPROVED' })
+  status: string;
 }
 
 export class CompanyInfoDto {
@@ -63,6 +87,9 @@ export class CompanyInfoDto {
 
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   updatedAt: Date;
+
+  @ApiProperty({ example: false })
+  isVerified: boolean;
 }
 
 export class PartyInfoDto {
@@ -116,6 +143,9 @@ export class PartyInfoDto {
 
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   updatedAt: Date;
+
+  @ApiProperty({ example: false })
+  isVerified: boolean;
 }
 
 export class DriverInfoDto {
@@ -166,6 +196,12 @@ export class DriverInfoDto {
 
   @ApiProperty({ example: '2026-05-18T12:00:00.000Z' })
   updatedAt: Date;
+
+  @ApiProperty({ example: false })
+  isVerified: boolean;
+
+  @ApiProperty({ example: 'APPROVED' })
+  status: string;
 }
 
 export class TokenResponseDto {
@@ -186,28 +222,10 @@ export class TokenResponseDto {
   refreshToken: string;
 
   @ApiPropertyOptional({
-    description: 'Detailed user information if authenticated as a standard user/admin',
+    description: 'Authenticated account information for every role',
     type: UserInfoDto,
   })
   user?: UserInfoDto;
-
-  @ApiPropertyOptional({
-    description: 'Detailed company information if authenticated as a vendor/company',
-    type: CompanyInfoDto,
-  })
-  company?: CompanyInfoDto;
-
-  @ApiPropertyOptional({
-    description: 'Detailed party information if authenticated as an independent party',
-    type: PartyInfoDto,
-  })
-  party?: PartyInfoDto;
-
-  @ApiPropertyOptional({
-    description: 'Detailed driver information if authenticated as a driver',
-    type: DriverInfoDto,
-  })
-  driver?: DriverInfoDto;
 }
 
 export class AuthSuccessResponseDto {

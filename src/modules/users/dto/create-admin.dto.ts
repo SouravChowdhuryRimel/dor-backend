@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
+  IsBoolean,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -50,4 +51,13 @@ export class CreateAdminDto {
   @IsString()
   @IsNotEmpty()
   categoryId: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether the admin account can sign in',
+    example: true,
+    default: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

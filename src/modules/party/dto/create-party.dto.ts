@@ -62,6 +62,19 @@ export class CreatePartyDto {
   @IsNotEmpty()
   description: string;
 
+  @ApiProperty({ description: 'Company ID this party belongs to' })
+  @IsString()
+  @IsNotEmpty()
+  companyId: string;
+
+  @ApiPropertyOptional({
+    description: 'Trade license number or reference',
+    example: 'TL-1234567890',
+  })
+  @IsString()
+  @IsOptional()
+  treadLicense?: string;
+
 
   @ApiPropertyOptional({
     description: 'Documents of the party',

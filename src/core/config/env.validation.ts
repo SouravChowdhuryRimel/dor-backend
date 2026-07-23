@@ -49,6 +49,26 @@ class EnvironmentVariables {
   @IsOptional()
   @IsNumber()
   QUEUE_REDIS_PORT: number = 6379;
+
+  @IsOptional()
+  @IsString()
+  SMTP_HOST?: string;
+
+  @IsOptional()
+  @IsNumber()
+  SMTP_PORT?: number;
+
+  @IsOptional()
+  @IsString()
+  SMTP_USER?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASSWORD?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_FROM?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

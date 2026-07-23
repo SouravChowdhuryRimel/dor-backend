@@ -77,6 +77,7 @@ export class DriverController {
         loadCapacity: { type: 'string', description: 'Load Capacity (optional)' },
         drivingLicenceNumber: { type: 'string' },
         nidNumber: { type: 'string' },
+        categoryId: { type: 'string' },
         driverImage: {
           type: 'string',
           format: 'binary',

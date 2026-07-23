@@ -3,7 +3,40 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
 import * as argon2 from 'argon2';
-import { CompanyStatus } from '@prisma/client';
+import { CompanyStatus, Prisma } from '@prisma/client';
+
+const companyDetailsSelect = {
+  companyId: true,
+  phoneNumber: true,
+  companyName: true,
+  ownerName: true,
+  email: true,
+  district: true,
+  upozela: true,
+  address: true,
+  status: true,
+  isVerified: true,
+  incomeTax: true,
+  companyDocument: true,
+  categoryId: true,
+  adminId: true,
+  createdAt: true,
+  updatedAt: true,
+  category: {
+    select: {
+      categoryId: true,
+      title: true,
+    },
+  },
+  admin: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phoneNumber: true,
+    },
+  },
+} satisfies Prisma.CompanySelect;
 
 @Injectable()
 export class CompanyService {
@@ -37,6 +70,7 @@ export class CompanyService {
         ownerName: true,
         status: true,
         isVerified: true,
+        incomeTax: true,
         categoryId: true,
         createdAt: true,
       },
@@ -54,6 +88,7 @@ export class CompanyService {
         ownerName: true,
         status: true,
         isVerified: true,
+        incomeTax: true,
         createdAt: true,
       },
     });
@@ -84,21 +119,14 @@ export class CompanyService {
 
   async findAll() {
     return this.prisma.company.findMany({
-      select: {
-        companyId: true,
-        email: true,
-        phoneNumber: true,
-        companyName: true,
-        ownerName: true,
-        status: true,
-        isVerified: true,
-      },
+      select: companyDetailsSelect,
     });
   }
 
   async findOne(id: string) {
     const company = await this.prisma.company.findUnique({
       where: { companyId: id },
+      select: companyDetailsSelect,
     });
     if (!company) throw new NotFoundException('Company not found');
     return company;
@@ -134,6 +162,19 @@ export class CompanyService {
   async findByEmail(email: string) {
     return this.prisma.company.findUnique({
       where: { email },
+    });
+  }
+
+  async updatePassword(companyId: string, password: string): Promise<void> {
+    const hashedPassword = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+    });
+
+    await this.prisma.company.update({
+      where: { companyId },
+      data: { password: hashedPassword },
     });
   }
 

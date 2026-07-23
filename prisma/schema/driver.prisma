@@ -14,10 +14,14 @@ model Driver {
     drivingLicenceNumber String     @map("driving_licence_number")
     nidNumber            String     @map("nid_number")
     driverDocument       String[]   @map("driver_document")
+    isVerified          Boolean    @default(false) @map("is_verified")
+    categoryId           String?   @map("category_id")
+    category             Category? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
     deliveries           Delivery[]
 
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
 
     @@map("drivers")
+    @@index([categoryId])
 }

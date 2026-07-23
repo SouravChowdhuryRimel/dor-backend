@@ -3,6 +3,7 @@ model Category {
     title      String
     companies  Company[]
     admins     User[]
+    drivers    Driver[]
 
     @@map("categories")
 }

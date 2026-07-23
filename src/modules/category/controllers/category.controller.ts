@@ -30,6 +30,17 @@ export class CategoryController {
     return this.categoryService.findAll();
   }
 
+  @Get(':id/companies')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiOperation({ summary: 'Get companies by category ID' })
+  @ApiResponse({ status: 200, description: 'Returns companies in the category.' })
+  @ApiResponse({ status: 404, description: 'Category not found.' })
+  findCompaniesByCategoryId(@Param('id') id: string) {
+    return this.categoryService.findCompaniesByCategoryId(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get category by ID' })
   @ApiResponse({ status: 200, description: 'Return the category.' })
