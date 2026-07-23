@@ -119,21 +119,28 @@ export class CompanyController {
   @Get('pending')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Get all pending company registrations (ADMIN only)',
+    summary: 'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
   })
   getPending() {
     return this.companyService.findPending();
   }
 
+  @Get('verified')
+  @ApiOperation({ summary: 'Get all verified companies' })
+  @ApiResponse({ status: 200, description: 'Returns all verified companies.' })
+  getVerified() {
+    return this.companyService.findVerified();
+  }
+
   @Patch(':id/approve')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary:
-      'Approve a company registration and assign it to the Admin (ADMIN only)',
+      'Approve a company registration and assign it to the approver (ADMIN and SUPER_ADMIN only)',
   })
   approve(@Param('id') id: string, @Req() req: any) {
     const adminId = req.user['sub'];

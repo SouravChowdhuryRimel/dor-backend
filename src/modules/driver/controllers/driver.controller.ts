@@ -22,6 +22,9 @@ import {
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { Role } from '../../../common/constants/role.enum';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -75,9 +78,18 @@ export class DriverController {
         address: { type: 'string' },
         district: { type: 'string', description: 'District of the driver' },
         loadCapacity: { type: 'string', description: 'Load Capacity (optional)' },
+        companyIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Companies hiring the driver (optional)',
+        },
+        partyIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Parties hiring the driver (optional)',
+        },
         drivingLicenceNumber: { type: 'string' },
         nidNumber: { type: 'string' },
-        categoryId: { type: 'string' },
         driverImage: {
           type: 'string',
           format: 'binary',
@@ -171,6 +183,15 @@ export class DriverController {
   @ApiOperation({ summary: 'Get a driver by ID' })
   findOne(@Param('id') id: string) {
     return this.driverService.findOne(id);
+  }
+
+  @Patch(':id/verify')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Verify a driver (ADMIN and SUPER_ADMIN only)' })
+  verify(@Param('id') id: string) {
+    return this.driverService.verify(id);
   }
 
   @Patch(':id')

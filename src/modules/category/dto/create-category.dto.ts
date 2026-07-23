@@ -1,9 +1,30 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsArray, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
+export enum CategoryStatusDto {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+}
 
 export class CreateCategoryDto {
-  @ApiProperty({ description: 'The title of the category' })
+  @ApiProperty({ description: 'The name of the category' })
   @IsString()
   @IsNotEmpty()
-  title: string;
+  categoryName: string;
+
+  @ApiPropertyOptional({ description: 'Category thumbnail URL or path' })
+  @IsString()
+  @IsOptional()
+  categoryThumbnail?: string;
+
+  @ApiPropertyOptional({ description: 'IDs of admins assigned to this category', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  adminIds?: string[];
+
+  @ApiPropertyOptional({ enum: CategoryStatusDto, default: CategoryStatusDto.ACTIVE })
+  @IsEnum(CategoryStatusDto)
+  @IsOptional()
+  status?: CategoryStatusDto;
 }

@@ -8,18 +8,28 @@ export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
   async create(createCategoryDto: CreateCategoryDto) {
+    const { adminIds = [], ...categoryData } = createCategoryDto;
+    await this.ensureAdminsExist(adminIds);
+
     return this.prisma.category.create({
-      data: createCategoryDto,
+      data: {
+        ...categoryData,
+        admins: {
+          connect: [...new Set(adminIds)].map((id) => ({ id })),
+        },
+      },
+      include: { admins: true },
     });
   }
 
   async findAll() {
-    return this.prisma.category.findMany();
+    return this.prisma.category.findMany({ include: { admins: true } });
   }
 
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: id },
+      include: { admins: true },
     });
     if (!category) throw new NotFoundException('Category not found');
     return category;
@@ -72,10 +82,34 @@ export class CategoryService {
     });
     if (!category) throw new NotFoundException('Category not found');
 
+    const { adminIds, ...categoryData } = updateCategoryDto;
+    if (adminIds !== undefined) await this.ensureAdminsExist(adminIds);
+
     return this.prisma.category.update({
       where: { categoryId: id },
-      data: updateCategoryDto,
+      data: {
+        ...categoryData,
+        ...(adminIds !== undefined && {
+          admins: { set: [...new Set(adminIds)].map((id) => ({ id })) },
+        }),
+      },
+      include: { admins: true },
     });
+  }
+
+  private async ensureAdminsExist(adminIds: string[]) {
+    const uniqueAdminIds = [...new Set(adminIds)];
+    if (uniqueAdminIds.length === 0) return;
+
+    const count = await this.prisma.user.count({
+      where: {
+        id: { in: uniqueAdminIds },
+        roles: { has: 'ADMIN' },
+      },
+    });
+    if (count !== uniqueAdminIds.length) {
+      throw new NotFoundException('One or more admins were not found or do not have the ADMIN role');
+    }
   }
 
   async remove(id: string) {

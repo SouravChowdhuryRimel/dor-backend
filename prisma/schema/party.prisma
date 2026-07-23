@@ -20,6 +20,7 @@ model Party {
     companyId     String?  @map("company_id")
     company       Company? @relation(fields: [companyId], references: [companyId], onDelete: SetNull)
     offers        Offer[]
+    partyDrivers  PartyDriver[]
 
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")

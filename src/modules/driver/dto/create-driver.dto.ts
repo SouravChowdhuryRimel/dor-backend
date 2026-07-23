@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsNotEmpty,
   IsString,
@@ -51,6 +52,26 @@ export class CreateDriverDto {
   @IsOptional()
   loadCapacity?: string;
 
+  @ApiPropertyOptional({ description: 'Company IDs hiring this driver', type: [String] })
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    return Array.isArray(value) ? value : [value];
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  companyIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Party IDs hiring this driver', type: [String] })
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    return Array.isArray(value) ? value : [value];
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  partyIds?: string[];
+
   @ApiProperty({ description: 'Driving Licence Number', example: 'DL-987654321' })
   @IsString()
   @IsNotEmpty()
@@ -60,11 +81,6 @@ export class CreateDriverDto {
   @IsString()
   @IsNotEmpty()
   nidNumber: string;
-
-  @ApiProperty({ description: 'Category ID this driver belongs to' })
-  @IsString()
-  @IsNotEmpty()
-  categoryId: string;
 
   @ApiPropertyOptional({
     description: 'Documents of the driver',

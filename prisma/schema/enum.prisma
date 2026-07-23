@@ -14,6 +14,11 @@ enum CompanyStatus {
   BLOCKED
 }
 
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum DeliveryStatus {
   VAN_COMING
   TRANSFER_IN_PROGRESS

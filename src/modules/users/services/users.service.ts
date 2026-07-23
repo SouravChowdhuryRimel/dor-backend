@@ -137,7 +137,7 @@ export class UsersService implements OnApplicationBootstrap {
         category: {
           select: {
             categoryId: true,
-            title: true,
+            categoryName: true,
           },
         },
         createdAt: true,
@@ -163,7 +163,7 @@ export class UsersService implements OnApplicationBootstrap {
         category: {
           select: {
             categoryId: true,
-            title: true,
+            categoryName: true,
           },
         },
         createdAt: true,

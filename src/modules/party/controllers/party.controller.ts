@@ -16,6 +16,9 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nes
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { Role } from '../../../common/constants/role.enum';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -157,6 +160,15 @@ export class PartyController {
   @ApiOperation({ summary: 'Get a party by ID' })
   findOne(@Param('id') id: string) {
     return this.partyService.findOne(id);
+  }
+
+  @Patch(':id/verify')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Verify a party (ADMIN and SUPER_ADMIN only)' })
+  verify(@Param('id') id: string) {
+    return this.partyService.verify(id);
   }
 
   @Patch(':id')

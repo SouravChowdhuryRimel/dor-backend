@@ -77,6 +77,27 @@ export class PartyService {
     });
   }
 
+  async verify(id: string) {
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: id },
+    });
+    if (!party) throw new NotFoundException('Party not found');
+
+    return this.prisma.party.update({
+      where: { partyId: id },
+      data: { isVerified: true },
+      select: {
+        partyId: true,
+        partyName: true,
+        businessName: true,
+        email: true,
+        phoneNumber: true,
+        isVerified: true,
+        updatedAt: true,
+      },
+    });
+  }
+
   async remove(id: string) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },

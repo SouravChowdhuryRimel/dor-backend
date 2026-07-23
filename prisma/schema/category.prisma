@@ -1,9 +1,10 @@
 model Category {
-    categoryId String    @id @default(uuid()) @map("category_id")
-    title      String
-    companies  Company[]
-    admins     User[]
-    drivers    Driver[]
+    categoryId        String         @id @default(uuid()) @map("category_id")
+    categoryName      String         @map("category_name")
+    categoryThumbnail String?        @map("category_thumbnail")
+    status            CategoryStatus @default(ACTIVE)
+    companies         Company[]
+    admins            User[]
 
     @@map("categories")
 }

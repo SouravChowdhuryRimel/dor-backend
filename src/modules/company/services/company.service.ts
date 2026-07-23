@@ -25,7 +25,7 @@ const companyDetailsSelect = {
   category: {
     select: {
       categoryId: true,
-      title: true,
+      categoryName: true,
     },
   },
   admin: {
@@ -91,6 +91,13 @@ export class CompanyService {
         incomeTax: true,
         createdAt: true,
       },
+    });
+  }
+
+  async findVerified() {
+    return this.prisma.company.findMany({
+      where: { isVerified: true },
+      select: companyDetailsSelect,
     });
   }
 
