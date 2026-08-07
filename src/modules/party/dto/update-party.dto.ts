@@ -17,4 +17,9 @@ export class UpdatePartyDto extends PartialType(CreatePartyDto) {
   @IsNumber()
   @IsOptional()
   creditLimit?: number;
+
+  @ApiPropertyOptional({ description: 'Company ID this party belongs to' })
+  @IsString()
+  @IsOptional()
+  companyId?: string;
 }

@@ -41,6 +41,28 @@ export class CategoryController {
     return this.categoryService.findCompaniesByCategoryId(id);
   }
 
+  @Get(':id/parties')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiOperation({ summary: 'Get parties by category ID' })
+  @ApiResponse({ status: 200, description: 'Returns parties in the category.' })
+  @ApiResponse({ status: 404, description: 'Category not found.' })
+  findPartiesByCategoryId(@Param('id') id: string) {
+    return this.categoryService.findPartiesByCategoryId(id);
+  }
+
+  @Get(':id/drivers')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiOperation({ summary: 'Get drivers by category ID' })
+  @ApiResponse({ status: 200, description: 'Returns drivers in the category.' })
+  @ApiResponse({ status: 404, description: 'Category not found.' })
+  findDriversByCategoryId(@Param('id') id: string) {
+    return this.categoryService.findDriversByCategoryId(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get category by ID' })
   @ApiResponse({ status: 200, description: 'Return the category.' })

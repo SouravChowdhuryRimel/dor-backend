@@ -9,11 +9,12 @@ export class PartyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createPartyDto: CreatePartyDto) {
-    const company = await this.prisma.company.findUnique({
-      where: { companyId: createPartyDto.companyId },
+
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId: createPartyDto.categoryId },
     });
-    if (!company) {
-      throw new NotFoundException('Company not found');
+    if (!category) {
+      throw new NotFoundException(`Category with ID "${createPartyDto.categoryId}" not found`);
     }
 
     const hashedPassword = await argon2.hash(createPartyDto.password, {
@@ -27,16 +28,59 @@ export class PartyService {
         ...createPartyDto,
         password: hashedPassword,
       } as any,
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+        company: {
+          select: {
+            companyId: true,
+            companyName: true,
+          },
+        },
+      },
     });
   }
 
   async findAll() {
-    return this.prisma.party.findMany();
+    return this.prisma.party.findMany({
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+        company: {
+          select: {
+            companyId: true,
+            companyName: true,
+          },
+        },
+      },
+    });
   }
 
   async findOne(id: string) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+        company: {
+          select: {
+            companyId: true,
+            companyName: true,
+          },
+        },
+      },
     });
     if (!party) throw new NotFoundException('Party not found');
     return party;

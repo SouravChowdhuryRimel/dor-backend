@@ -77,7 +77,7 @@ export class PartyController {
         bazzar: { type: 'string', description: 'Bazzar (alias)' },
         area: { type: 'string', description: 'Area (alias)' },
         description: { type: 'string' },
-        companyId: { type: 'string' },
+        categoryId: { type: 'string' },
         treadLicense: { type: 'string' },
         partyDocument: {
           type: 'array',
@@ -102,6 +102,7 @@ export class PartyController {
         'district',
         'upozela',
         'description',
+        'categoryId',
       ],
     },
   })
@@ -220,6 +221,7 @@ export class PartyController {
         area: { type: 'string', description: 'Area (alias)' },
         description: { type: 'string' },
         companyId: { type: 'string' },
+        categoryId: { type: 'string' },
         treadLicense: { type: 'string' },
         openingDue: { type: 'number' },
         creditLimit: { type: 'number' },

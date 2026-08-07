@@ -25,3 +25,11 @@ enum DeliveryStatus {
   NEAREST_TRANSFER
   DELIVERED
 }
+
+enum ComplaintStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  REOPENED
+  CANCELLED
+}

@@ -1,20 +1,20 @@
 model Product {
-    productId     String      @id @default(uuid()) @map("product_id")
-    productImage  String[]    @map("product_image")
-    productName   String      @map("product_name")
-    unit          String
-    bagSize       String      @map("bag_size")
-    defaultPrice  Float       @map("default_price")
-    minimumOrder  Int         @map("minimum_order")
-    description   String
-    stockSize     Int         @map("stock_size")
-    subCategoryId String      @map("sub_category_id")
-    subCategory   SubCategory @relation(fields: [subCategoryId], references: [subCategoryId])
-    offers        Offer[]
-    orders        Order[]
+  productId     String      @id @default(uuid()) @map("product_id")
+  productImage  String[]    @map("product_image")
+  productName   String      @map("product_name")
+  unit          String
+  bagSize       String      @map("bag_size")
+  defaultPrice  Float       @map("default_price")
+  minimumOrder  Int         @map("minimum_order")
+  description   String
+  stockSize     Int         @map("stock_size")
+  subCategoryId String      @map("sub_category_id")
+  subCategory   SubCategory @relation(fields: [subCategoryId], references: [subCategoryId])
+  offers        Offer[]
+  orders        Order[]
 
-    createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-    @@map("products")
+  @@map("products")
 }

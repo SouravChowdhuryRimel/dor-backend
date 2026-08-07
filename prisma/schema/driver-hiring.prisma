@@ -1,23 +1,23 @@
 model CompanyDriver {
-    companyId String   @map("company_id")
-    driverId  String   @map("driver_id")
-    company   Company  @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
-    driver    Driver   @relation(fields: [driverId], references: [driverId], onDelete: Cascade)
-    createdAt DateTime @default(now()) @map("created_at")
+  companyId String   @map("company_id")
+  driverId  String   @map("driver_id")
+  company   Company  @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  driver    Driver   @relation(fields: [driverId], references: [driverId], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
 
-    @@id([companyId, driverId])
-    @@index([driverId])
-    @@map("company_drivers")
+  @@id([companyId, driverId])
+  @@index([driverId])
+  @@map("company_drivers")
 }
 
 model PartyDriver {
-    partyId   String   @map("party_id")
-    driverId  String   @map("driver_id")
-    party     Party    @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
-    driver    Driver   @relation(fields: [driverId], references: [driverId], onDelete: Cascade)
-    createdAt DateTime @default(now()) @map("created_at")
+  partyId   String   @map("party_id")
+  driverId  String   @map("driver_id")
+  party     Party    @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
+  driver    Driver   @relation(fields: [driverId], references: [driverId], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
 
-    @@id([partyId, driverId])
-    @@index([driverId])
-    @@map("party_drivers")
+  @@id([partyId, driverId])
+  @@index([driverId])
+  @@map("party_drivers")
 }

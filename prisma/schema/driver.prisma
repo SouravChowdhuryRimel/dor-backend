@@ -1,26 +1,30 @@
 model Driver {
-    driverId             String     @id @default(uuid()) @map("driver_id")
-    phoneNumber          String     @map("phone_number")
-    password             String
-    email                String     @unique
-    driverImage          String?    @map("driver_image")
-    driverName           String     @map("driver_name")
-    address              String
-    district             String
-    upozela              String?
-    truckNumber          String?    @map("truck_number")
-    truckType            String?    @map("truck_type")
-    loadCapacity         String?    @map("load_capacity")
-    drivingLicenceNumber String     @map("driving_licence_number")
-    nidNumber            String     @map("nid_number")
-    driverDocument       String[]   @map("driver_document")
-    isVerified          Boolean    @default(false) @map("is_verified")
-    companyDrivers       CompanyDriver[]
-    partyDrivers         PartyDriver[]
-    deliveries           Delivery[]
+  driverId             String          @id @default(uuid()) @map("driver_id")
+  phoneNumber          String          @map("phone_number")
+  password             String
+  email                String          @unique
+  driverImage          String?         @map("driver_image")
+  driverName           String          @map("driver_name")
+  address              String
+  district             String
+  upozela              String?
+  truckNumber          String?         @map("truck_number")
+  truckType            String?         @map("truck_type")
+  loadCapacity         String?         @map("load_capacity")
+  drivingLicenceNumber String          @map("driving_licence_number")
+  nidNumber            String          @map("nid_number")
+  driverDocument       String[]        @map("driver_document")
+  isVerified           Boolean         @default(false) @map("is_verified")
+  categoryId           String          @map("category_id")
+  category             Category        @relation(fields: [categoryId], references: [categoryId])
+  companyDrivers       CompanyDriver[]
+  partyDrivers         PartyDriver[]
+  deliveries           Delivery[]
+  complaints           Complaint[]
 
-    createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-    @@map("drivers")
+  @@index([categoryId])
+  @@map("drivers")
 }

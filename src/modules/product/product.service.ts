@@ -27,6 +27,9 @@ export class ProductService {
       include: {
         subCategory: true,
       },
+      orderBy: {
+        defaultPrice: 'asc',
+      },
     });
   }
 

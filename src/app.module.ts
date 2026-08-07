@@ -21,6 +21,14 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { CategoryModule } from './modules/category/category.module';
 import { ProductModule } from './modules/product/product.module';
 import { SubCategoryModule } from './modules/sub-category/sub-category.module';
+import { OrderModule } from './modules/order/order.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
+import { OfferModule } from './modules/offer/offer.module';
+import { ComplaintModule } from './modules/complaint/complaint.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { InquiryModule } from './modules/inquiry/inquiry.module';
+import { NotificationModule } from './modules/notification/notification.module';
+
 
 @Module({
   imports: [
@@ -42,6 +50,13 @@ import { SubCategoryModule } from './modules/sub-category/sub-category.module';
     CategoryModule,
     ProductModule,
     SubCategoryModule,
+    OrderModule,
+    DeliveryModule,
+    OfferModule,
+    ComplaintModule,
+    DashboardModule,
+    InquiryModule,
+    NotificationModule,
   ],
   providers: [
     {

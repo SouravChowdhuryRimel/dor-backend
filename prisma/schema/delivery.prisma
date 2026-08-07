@@ -1,18 +1,20 @@
 model Delivery {
-    deliveryId        String         @id @default(uuid()) @map("delivery_id")
-    address           String
-    upozela           String
-    district          String
-    description       String
-    deliveryTime      DateTime       @map("delivery_time")
-    status            DeliveryStatus @default(VAN_COMING)
-    startDeliveryTime DateTime?      @map("start_delivery_time")
-    endDeliveryTime   DateTime?      @map("end_delivery_time")
-    driverId          String         @map("driver_id")
-    driver            Driver         @relation(fields: [driverId], references: [driverId])
+  deliveryId        String         @id @default(uuid()) @map("delivery_id")
+  address           String
+  upozela           String
+  district          String
+  description       String
+  deliveryTime      DateTime       @map("delivery_time")
+  status            DeliveryStatus @default(VAN_COMING)
+  startDeliveryTime DateTime?      @map("start_delivery_time")
+  endDeliveryTime   DateTime?      @map("end_delivery_time")
+  driverId          String         @map("driver_id")
+  driver            Driver         @relation(fields: [driverId], references: [driverId])
+  orderId           String?        @map("order_id")
+  order             Order?         @relation(fields: [orderId], references: [orderId])
 
-    createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-    @@map("deliveries")
+  @@map("deliveries")
 }

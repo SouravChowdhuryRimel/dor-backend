@@ -62,10 +62,13 @@ export class CreatePartyDto {
   @IsNotEmpty()
   description: string;
 
-  @ApiProperty({ description: 'Company ID this party belongs to' })
+  @ApiProperty({
+    description: 'Category ID associated with the party',
+    example: 'uuid-string',
+  })
   @IsString()
   @IsNotEmpty()
-  companyId: string;
+  categoryId: string;
 
   @ApiPropertyOptional({
     description: 'Trade license number or reference',

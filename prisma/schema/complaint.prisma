@@ -1,0 +1,37 @@
+model Complaint {
+  complaintId     String             @id @default(uuid()) @map("complaint_id")
+  showComplaintId String             @unique @map("show_complaint_id")
+  title           String
+  description     String
+  attachments     String[]
+  status          ComplaintStatus    @default(PENDING)
+  partyId         String             @map("party_id")
+  party           Party              @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
+  companyId       String             @map("company_id")
+  company         Company            @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  orderId         String?            @map("order_id")
+  order           Order?             @relation(fields: [orderId], references: [orderId], onDelete: SetNull)
+  driverId        String?            @map("driver_id")
+  driver          Driver?            @relation(fields: [driverId], references: [driverId], onDelete: SetNull)
+  messages        ComplaintMessage[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("complaints")
+}
+
+model ComplaintMessage {
+  messageId   String    @id @default(uuid()) @map("message_id")
+  complaintId String    @map("complaint_id")
+  complaint   Complaint @relation(fields: [complaintId], references: [complaintId], onDelete: Cascade)
+  senderId    String    @map("sender_id")
+  senderRole  Role      @map("sender_role")
+  senderName  String    @map("sender_name")
+  message     String
+  attachments String[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("complaint_messages")
+}

@@ -76,6 +76,79 @@ export class CategoryService {
     return category.companies;
   }
 
+  async findPartiesByCategoryId(categoryId: string) {
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId },
+      select: {
+        parties: {
+          select: {
+            partyId: true,
+            partyName: true,
+            businessName: true,
+            phoneNumber: true,
+            email: true,
+            address: true,
+            district: true,
+            upozela: true,
+            bazzarArea: true,
+            description: true,
+            openingDue: true,
+            creditLimit: true,
+            status: true,
+            isVerified: true,
+            treadLicense: true,
+            partyDocument: true,
+            profileImage: true,
+            companyId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    return category.parties;
+  }
+
+  async findDriversByCategoryId(categoryId: string) {
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId },
+      select: {
+        drivers: {
+          select: {
+            driverId: true,
+            phoneNumber: true,
+            email: true,
+            driverImage: true,
+            driverName: true,
+            address: true,
+            district: true,
+            upozela: true,
+            truckNumber: true,
+            truckType: true,
+            loadCapacity: true,
+            drivingLicenceNumber: true,
+            nidNumber: true,
+            driverDocument: true,
+            isVerified: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    return category.drivers;
+  }
+
   async update(id: string, updateCategoryDto: UpdateCategoryDto) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: id },
