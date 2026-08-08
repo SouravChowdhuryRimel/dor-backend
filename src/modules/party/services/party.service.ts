@@ -6,7 +6,7 @@ import * as argon2 from 'argon2';
 
 @Injectable()
 export class PartyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(createPartyDto: CreatePartyDto) {
 
