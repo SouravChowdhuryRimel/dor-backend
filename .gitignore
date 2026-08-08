@@ -38,3 +38,4 @@ Thumbs.db
 # Docker
 .docker/
 docker-compose.override.yml
+*.mp4
