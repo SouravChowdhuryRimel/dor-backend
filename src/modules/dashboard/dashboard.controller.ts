@@ -33,4 +33,26 @@ export class DashboardController {
   getCompanySummary(@Param('companyId') companyId: string) {
     return this.dashboardService.getCompanySummary(companyId);
   }
+
+  @Get('party/:partyId/summary')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.PARTY)
+  @ApiOperation({
+    summary: 'Get summary metrics and recent orders for a specific party',
+  })
+  @ApiResponse({ status: 200, description: 'Return party dashboard details.' })
+  @ApiResponse({ status: 404, description: 'Party not found.' })
+  getPartySummary(@Param('partyId') partyId: string) {
+    return this.dashboardService.getPartySummary(partyId);
+  }
+
+  @Get('driver/:driverId/summary')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.DRIVER)
+  @ApiOperation({
+    summary: 'Get summary metrics and ongoing deliveries for a specific driver',
+  })
+  @ApiResponse({ status: 200, description: 'Return driver dashboard details.' })
+  @ApiResponse({ status: 404, description: 'Driver not found.' })
+  getDriverSummary(@Param('driverId') driverId: string) {
+    return this.dashboardService.getDriverSummary(driverId);
+  }
 }

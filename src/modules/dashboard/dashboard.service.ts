@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
-import { CompanyStatus, ComplaintStatus } from '@prisma/client';
+import { CompanyStatus, ComplaintStatus, DeliveryStatus } from '@prisma/client';
+
 
 @Injectable()
 export class DashboardService {
@@ -168,6 +169,247 @@ export class DashboardService {
       },
       growthChart: weekdays,
       documents,
+    };
+  }
+
+  async getPartySummary(partyId: string) {
+    const party = await this.prisma.party.findUnique({
+      where: { partyId },
+    });
+    if (!party) {
+      throw new NotFoundException(`Party with ID "${partyId}" not found`);
+    }
+
+    const totalOrders = await this.prisma.order.count({
+      where: { partyId },
+    });
+
+    const ongoingOrders = await this.prisma.order.count({
+      where: {
+        partyId,
+        deliveries: {
+          some: {
+            status: {
+              in: [
+                DeliveryStatus.VAN_COMING,
+                DeliveryStatus.TRANSFER_IN_PROGRESS,
+                DeliveryStatus.NEAREST_TRANSFER,
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const deliveryRemaining = await this.prisma.order.count({
+      where: {
+        partyId,
+        deliveries: {
+          none: {},
+        },
+      },
+    });
+
+    // Active companies: companies from party's orders plus party's own companyId
+    const orderedCompanies = await this.prisma.order.findMany({
+      where: { partyId },
+      select: { companyId: true },
+      distinct: ['companyId'],
+    });
+    const companyIds = new Set<string>(orderedCompanies.map((o) => o.companyId));
+    if (party.companyId) {
+      companyIds.add(party.companyId);
+    }
+    const activeCompanies = companyIds.size;
+
+    const pendingComplaints = await this.prisma.complaint.count({
+      where: {
+        partyId,
+        status: {
+          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+        },
+      },
+    });
+
+    // Fetch the 5 most recent orders with related details for the "Recent Orders" list
+    const recentOrdersRaw = await this.prisma.order.findMany({
+      where: { partyId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        company: {
+          select: {
+            companyName: true,
+          },
+        },
+        product: {
+          select: {
+            productName: true,
+          },
+        },
+        deliveries: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            driver: {
+              select: {
+                driverName: true,
+                phoneNumber: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const recentOrders = recentOrdersRaw.map((o) => {
+      const latestDelivery = o.deliveries?.[0] || null;
+      return {
+        orderId: o.orderId,
+        showOrderId: o.showOrderId,
+        companyName: o.company?.companyName || null,
+        productName: o.product?.productName || null,
+        bag: o.bag,
+        bagSize: o.bagSize,
+        totalRate: o.totalRate,
+        createdAt: o.createdAt,
+        driverName: latestDelivery?.driver?.driverName || null,
+        driverPhone: latestDelivery?.driver?.phoneNumber || null,
+        deliveryStatus: latestDelivery?.status || null,
+      };
+    });
+
+    return {
+      businessName: party.businessName,
+      metrics: {
+        totalOrders,
+        ongoingOrders,
+        deliveryRemaining,
+        activeCompanies,
+        pendingComplaints,
+      },
+      recentOrders,
+    };
+  }
+
+  async getDriverSummary(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId },
+    });
+    if (!driver) {
+      throw new NotFoundException(`Driver with ID "${driverId}" not found`);
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const todaysAssignments = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        deliveryTime: {
+          gte: startOfToday,
+          lte: endOfToday,
+        },
+      },
+    });
+
+    const ongoingDeliveries = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        status: {
+          in: [
+            DeliveryStatus.VAN_COMING,
+            DeliveryStatus.TRANSFER_IN_PROGRESS,
+            DeliveryStatus.NEAREST_TRANSFER,
+          ],
+        },
+      },
+    });
+
+    const completedDeliveries = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        status: DeliveryStatus.DELIVERED,
+      },
+    });
+
+    const proofUploadPending = 0; // Default or mocked to 0 as there is no proof table/column
+
+    const currentLocation = driver.upozela && driver.district 
+      ? `${driver.upozela}, ${driver.district}` 
+      : driver.district || driver.upozela || '';
+
+    // Fetch ongoing deliveries list with order, company and party details
+    const ongoingDeliveriesRaw = await this.prisma.delivery.findMany({
+      where: {
+        driverId,
+        status: {
+          in: [
+            DeliveryStatus.VAN_COMING,
+            DeliveryStatus.TRANSFER_IN_PROGRESS,
+            DeliveryStatus.NEAREST_TRANSFER,
+          ],
+        },
+      },
+      include: {
+        order: {
+          include: {
+            company: {
+              select: {
+                companyName: true,
+                address: true,
+                upozela: true,
+                district: true,
+              },
+            },
+            party: {
+              select: {
+                businessName: true,
+                partyName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const ongoingDeliveriesList = ongoingDeliveriesRaw.map((d) => {
+      const company = d.order?.company;
+      const party = d.order?.party;
+      const pickupPoint = company 
+        ? `${company.companyName} গেট, ${company.upozela || company.district || ''}` 
+        : null;
+
+      return {
+        deliveryId: d.deliveryId,
+        status: d.status,
+        orderId: d.orderId,
+        showOrderId: d.order?.showOrderId || null,
+        companyName: company?.companyName || null,
+        partyName: party?.businessName || party?.partyName || null,
+        pickupPoint,
+        destinationAddress: d.address,
+        upozela: d.upozela,
+        district: d.district,
+        deliveryTime: d.deliveryTime,
+      };
+    });
+
+    return {
+      driverName: driver.driverName,
+      metrics: {
+        todaysAssignments,
+        ongoingDeliveries,
+        completedDeliveries,
+        proofUploadPending,
+      },
+      currentLocation,
+      ongoingDeliveries: ongoingDeliveriesList,
     };
   }
 }
