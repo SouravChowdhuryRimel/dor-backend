@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,18 @@ import { RegisterDto } from '../dto/register.dto';
 import { Role } from '@prisma/client';
 import { CompanyService } from '../../company/services/company.service';
 import { PartyService } from '../../party/services/party.service';
+import { DriverService } from '../../driver/services/driver.service';
+import { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
+import * as nodemailer from 'nodemailer';
+import { randomBytes } from 'crypto';
+import { ActivityLogService } from '../../activity-log/activity-log.service';
+
+type PasswordResetAccount = {
+  id: string;
+  email: string;
+  accountType: 'user' | 'company' | 'party' | 'driver';
+};
 
 @Injectable()
 export class AuthService {
@@ -25,9 +38,11 @@ export class AuthService {
     private usersService: UsersService,
     private companyService: CompanyService,
     private partyService: PartyService,
+    private driverService: DriverService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
+    private activityLogService: ActivityLogService,
   ) {}
 
   async signUp(registerDto: RegisterDto) {
@@ -58,6 +73,13 @@ export class AuthService {
       // Persist the session reference in Redis (no DB hit)
       await this.storeSession(newUser.id, tokens.refreshToken);
 
+      await this.activityLogService.log({
+        actorType: newUser.roles[0] || 'USER',
+        actorId: newUser.id,
+        action: 'SIGNUP',
+        description: `Registered new user account: ${newUser.name || newUser.email || newUser.phoneNumber}`,
+      });
+
       return {
         ...tokens,
         user: {
@@ -66,9 +88,16 @@ export class AuthService {
           phoneNumber: newUser.phoneNumber,
           name: newUser.name,
           roles: newUser.roles,
-          categoryId: newUser.categoryId,
-          createdAt: newUser.createdAt,
+            categoryId: newUser.categoryId,
+            businessName: null,
+            district: null,
+            upozela: null,
+            address: null,
+            bazzarArea: null,
+            createdAt: newUser.createdAt,
           updatedAt: newUser.updatedAt,
+          isVerified: newUser.roles.includes(Role.SUPER_ADMIN) || newUser.roles.includes(Role.ADMIN),
+          status: 'APPROVED',
         },
       };
     } catch (error) {
@@ -82,33 +111,181 @@ export class AuthService {
 
   async signIn(loginDto: LoginDto) {
     try {
+      // 1. Check User table
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
-      if (!user) throw new UnauthorizedException('Access Denied');
+      if (user) {
+        if (!user.isActive) {
+          throw new ForbiddenException('Access Denied: Account is inactive');
+        }
 
-      const passwordMatches = await argon2.verify(
-        user.password,
-        loginDto.password,
-      );
-      if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+        const passwordMatches = await argon2.verify(
+          user.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
-      const tokens = await this.getTokens(user.id, user.email, user.roles);
+        const tokens = await this.getTokens(user.id, user.email, user.roles);
+        await this.storeSession(user.id, tokens.refreshToken);
 
-      // Store session token in Redis (sliding expiration)
-      await this.storeSession(user.id, tokens.refreshToken);
+        await this.activityLogService.log({
+          actorType: user.roles[0] || 'USER',
+          actorId: user.id,
+          action: 'LOGIN',
+          description: `User/Admin logged in: ${user.name || user.email || user.phoneNumber}`,
+        });
 
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-          roles: user.roles,
-          categoryId: user.categoryId,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-      };
+        return {
+          ...tokens,
+          user: {
+            id: user.id,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            name: user.name,
+            roles: user.roles,
+            categoryId: user.categoryId,
+            businessName: null,
+            district: null,
+            upozela: null,
+            address: null,
+            bazzarArea: null,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
+            status: 'APPROVED',
+          },
+        };
+      }
+
+      // 2. Check Company table
+      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
+      if (company) {
+        const passwordMatches = await argon2.verify(
+          company.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        const tokens = await this.getTokens(company.companyId, company.email, [
+          Role.VENDOR,
+        ]);
+        await this.storeSession(company.companyId, tokens.refreshToken);
+
+        await this.activityLogService.log({
+          actorType: 'COMPANY',
+          actorId: company.companyId,
+          action: 'LOGIN',
+          description: `Company logged in: ${company.companyName}`,
+        });
+
+        return {
+          ...tokens,
+          user: {
+            id: company.companyId,
+            email: company.email,
+            phoneNumber: company.phoneNumber,
+            name: company.ownerName,
+            roles: [Role.VENDOR],
+            categoryId: company.categoryId,
+            businessName: company.companyName,
+            district: company.district,
+            upozela: company.upozela,
+            address: company.address,
+            bazzarArea: null,
+            createdAt: company.createdAt,
+            updatedAt: company.updatedAt,
+            isVerified: company.isVerified,
+            status: company.status,
+          },
+        };
+      }
+
+      // 3. Check Party table
+      const party = await this.partyService.findByPhone(loginDto.phoneNumber);
+      if (party) {
+        const passwordMatches = await argon2.verify(
+          party.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
+          Role.PARTY,
+        ]);
+        await this.storeSession(party.partyId, tokens.refreshToken);
+
+        await this.activityLogService.log({
+          actorType: 'PARTY',
+          actorId: party.partyId,
+          action: 'LOGIN',
+          description: `Party logged in: ${party.partyName}`,
+        });
+
+        return {
+          ...tokens,
+          user: {
+            id: party.partyId,
+            email: party.email,
+            phoneNumber: party.phoneNumber,
+            name: party.partyName,
+            roles: [Role.PARTY],
+            categoryId: party.categoryId,
+            businessName: party.businessName,
+            district: party.district,
+            upozela: party.upozela,
+            address: party.address,
+            bazzarArea: party.bazzarArea,
+            createdAt: party.createdAt,
+            updatedAt: party.updatedAt,
+            isVerified: party.isVerified,
+            status: party.status,
+          },
+        };
+      }
+
+      // 4. Check Driver table
+      const driver = await this.driverService.findByPhone(loginDto.phoneNumber);
+      if (driver) {
+        const passwordMatches = await argon2.verify(
+          driver.password,
+          loginDto.password,
+        );
+        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        const tokens = await this.getTokens(driver.driverId, driver.email, [
+          Role.DRIVER,
+        ]);
+        await this.storeSession(driver.driverId, tokens.refreshToken);
+
+        await this.activityLogService.log({
+          actorType: 'DRIVER',
+          actorId: driver.driverId,
+          action: 'LOGIN',
+          description: `Driver logged in: ${driver.driverName}`,
+        });
+
+        return {
+          ...tokens,
+          user: {
+            id: driver.driverId,
+            email: driver.email,
+            phoneNumber: driver.phoneNumber,
+            name: driver.driverName,
+            roles: [Role.DRIVER],
+            categoryId: driver.categoryId,
+            businessName: null,
+            district: driver.district,
+            upozela: driver.upozela,
+            address: driver.address,
+            bazzarArea: null,
+            createdAt: driver.createdAt,
+            updatedAt: driver.updatedAt,
+            isVerified: driver.isVerified,
+            status: 'APPROVED',
+          },
+        };
+      }
+
+      throw new UnauthorizedException('Access Denied: Invalid credentials');
     } catch (error) {
       this.logger.error(
         `Failed login attempt for phone ${loginDto.phoneNumber}: ${error.message}`,
@@ -123,12 +300,6 @@ export class AuthService {
       const company = await this.companyService.findByPhone(loginDto.phoneNumber);
       if (!company) throw new UnauthorizedException('Access Denied');
 
-      if (company.status !== 'APPROVED') {
-        throw new ForbiddenException(
-          `Access Denied: Company account is ${company.status}`,
-        );
-      }
-
       const passwordMatches = await argon2.verify(
         company.password,
         loginDto.password,
@@ -142,22 +313,31 @@ export class AuthService {
 
       await this.storeSession(company.companyId, tokens.refreshToken);
 
+      await this.activityLogService.log({
+        actorType: 'COMPANY',
+        actorId: company.companyId,
+        action: 'LOGIN',
+        description: `Company logged in: ${company.companyName}`,
+      });
+
       return {
         ...tokens,
-        company: {
-          companyId: company.companyId,
-          phoneNumber: company.phoneNumber,
-          ownerName: company.ownerName,
-          companyName: company.companyName,
+        user: {
+          id: company.companyId,
           email: company.email,
+          phoneNumber: company.phoneNumber,
+          name: company.ownerName,
+          roles: [Role.VENDOR],
+          categoryId: company.categoryId,
+          businessName: company.companyName,
           district: company.district,
           upozela: company.upozela,
           address: company.address,
-          status: company.status,
-          companyDocument: company.companyDocument,
-          categoryId: company.categoryId,
+          bazzarArea: null,
           createdAt: company.createdAt,
           updatedAt: company.updatedAt,
+          isVerified: company.isVerified,
+          status: company.status,
         },
       };
     } catch (error) {
@@ -191,25 +371,31 @@ export class AuthService {
 
       await this.storeSession(party.partyId, tokens.refreshToken);
 
+      await this.activityLogService.log({
+        actorType: 'PARTY',
+        actorId: party.partyId,
+        action: 'LOGIN',
+        description: `Party logged in: ${party.partyName}`,
+      });
+
       return {
         ...tokens,
-        party: {
-          partyId: party.partyId,
-          partyName: party.partyName,
-          businessName: party.businessName,
-          phoneNumber: party.phoneNumber,
+        user: {
+          id: party.partyId,
           email: party.email,
-          address: party.address,
+          phoneNumber: party.phoneNumber,
+          name: party.partyName,
+          roles: [Role.PARTY],
+          categoryId: party.categoryId,
+          businessName: party.businessName,
           district: party.district,
           upozela: party.upozela,
+          address: party.address,
           bazzarArea: party.bazzarArea,
-          description: party.description,
-          openingDue: party.openingDue,
-          creditLimit: party.creditLimit,
-          status: party.status,
-          partyDocument: party.partyDocument,
           createdAt: party.createdAt,
           updatedAt: party.updatedAt,
+          isVerified: party.isVerified,
+          status: party.status,
         },
       };
     } catch (error) {
@@ -221,8 +407,97 @@ export class AuthService {
     }
   }
 
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const account = await this.findPasswordResetAccount(
+      forgotPasswordDto.email,
+      forgotPasswordDto.role,
+    );
+
+    // Always return the same response to avoid email-account enumeration.
+    if (account) {
+      const token = randomBytes(32).toString('hex');
+      const ttlSeconds = 15 * 60;
+
+      await this.redisService.setJson(
+        `password-reset:${token}`,
+        account,
+        ttlSeconds,
+      );
+      await this.sendPasswordResetEmail(account.email, token);
+    }
+
+    return {
+      message:
+        'If an account exists for this email, a password-reset token has been sent.',
+    };
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const key = `password-reset:${resetPasswordDto.token}`;
+    const account = await this.redisService.getJson<PasswordResetAccount>(key);
+
+    if (!account) {
+      throw new BadRequestException('Invalid or expired password-reset token');
+    }
+
+    // Consume the token before updating the password so it cannot be reused.
+    await this.redisService.del(key);
+
+    switch (account.accountType) {
+      case 'user':
+        await this.usersService.updatePassword(account.id, resetPasswordDto.password);
+        break;
+      case 'company':
+        await this.companyService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
+        break;
+      case 'party':
+        await this.partyService.updatePassword(account.id, resetPasswordDto.password);
+        break;
+      case 'driver':
+        await this.driverService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
+        break;
+    }
+
+    await this.redisService.del(`session:${account.id}`);
+    return { message: 'Password reset successfully. Please sign in again.' };
+  }
+
   async logout(userId: string) {
     try {
+      let actorType = 'USER';
+      const u = await this.usersService.findById(userId);
+      if (u) {
+        actorType = u.roles[0] || 'USER';
+      } else {
+        const c = await this.companyService.findOne(userId).catch(() => null);
+        if (c) {
+          actorType = 'COMPANY';
+        } else {
+          const p = await this.partyService.findOne(userId).catch(() => null);
+          if (p) {
+            actorType = 'PARTY';
+          } else {
+            const d = await this.driverService.findOne(userId).catch(() => null);
+            if (d) {
+              actorType = 'DRIVER';
+            }
+          }
+        }
+      }
+
+      await this.activityLogService.log({
+        actorType,
+        actorId: userId,
+        action: 'LOGOUT',
+        description: `${actorType} logged out successfully`,
+      });
+
       // Clear transient session from memory cache instantly. Zero DB overhead.
       await this.redisService.del(`session:${userId}`);
       return { success: true };
@@ -248,6 +523,9 @@ export class AuthService {
 
       const user = await this.usersService.findById(userId);
       if (!user) throw new ForbiddenException('Access Denied');
+      if (!user.isActive) {
+        throw new ForbiddenException('Access Denied: Account is inactive');
+      }
 
       const tokens = await this.getTokens(user.id, user.email, user.roles);
 
@@ -263,8 +541,15 @@ export class AuthService {
           name: user.name,
           roles: user.roles,
           categoryId: user.categoryId,
+          businessName: null,
+          district: null,
+          upozela: null,
+          address: null,
+          bazzarArea: null,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
+          isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
+          status: 'APPROVED',
         },
       };
     } catch (error) {
@@ -296,6 +581,77 @@ export class AuthService {
       );
       throw new Error('Internal session storage service unavailable');
     }
+  }
+
+  private async findPasswordResetAccount(
+    email: string,
+    role?: Role,
+  ): Promise<PasswordResetAccount | null> {
+    if (
+      !role ||
+      role === Role.USER ||
+      role === Role.ADMIN ||
+      role === Role.SUPER_ADMIN
+    ) {
+      const user = await this.usersService.findByEmail(email);
+      if (user && (!role || user.roles.includes(role))) {
+        return { id: user.id, email, accountType: 'user' };
+      }
+    }
+
+    if (!role || role === Role.VENDOR) {
+      const company = await this.companyService.findByEmail(email);
+      if (company) {
+        return { id: company.companyId, email, accountType: 'company' };
+      }
+    }
+
+    if (!role || role === Role.PARTY) {
+      const party = await this.partyService.findByEmail(email);
+      if (party) {
+        return { id: party.partyId, email, accountType: 'party' };
+      }
+    }
+
+    if (!role || role === Role.DRIVER) {
+      const driver = await this.driverService.findByEmail(email);
+      if (driver) {
+        return { id: driver.driverId, email, accountType: 'driver' };
+      }
+    }
+
+    return null;
+  }
+
+  private async sendPasswordResetEmail(
+    email: string,
+    token: string,
+  ): Promise<void> {
+    const host = this.configService.get<string>('SMTP_HOST');
+    const port = Number(this.configService.get<number>('SMTP_PORT', 587));
+    const user = this.configService.get<string>('SMTP_USER');
+    const password = this.configService.get<string>('SMTP_PASSWORD');
+    const from = this.configService.get<string>('SMTP_FROM') || user;
+
+    if (!host || !from) {
+      throw new InternalServerErrorException(
+        'Password-reset email service is not configured',
+      );
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      ...(user && password ? { auth: { user, pass: password } } : {}),
+    });
+
+    await transporter.sendMail({
+      from,
+      to: email,
+      subject: 'Password reset token',
+      text: `Use this token to reset your password: ${token}\n\nThis token expires in 15 minutes and can be used once.`,
+    });
   }
 
   async getTokens(userId: string, email: string | null, roles: Role[]) {

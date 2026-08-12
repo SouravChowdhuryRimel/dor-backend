@@ -62,15 +62,22 @@ export class CreatePartyDto {
   @IsNotEmpty()
   description: string;
 
-  @ApiProperty({ description: 'Opening due amount', example: 0 })
-  @IsNumber()
+  @ApiProperty({
+    description: 'Category ID associated with the party',
+    example: 'uuid-string',
+  })
+  @IsString()
   @IsNotEmpty()
-  openingDue: number;
+  categoryId: string;
 
-  @ApiProperty({ description: 'Credit limit amount', example: 50000 })
-  @IsNumber()
-  @IsNotEmpty()
-  creditLimit: number;
+  @ApiPropertyOptional({
+    description: 'Trade license number or reference',
+    example: 'TL-1234567890',
+  })
+  @IsString()
+  @IsOptional()
+  treadLicense?: string;
+
 
   @ApiPropertyOptional({
     description: 'Documents of the party',
@@ -82,13 +89,8 @@ export class CreatePartyDto {
   @IsOptional()
   partyDocument?: string[];
 
-  @ApiPropertyOptional({
-    description: 'Documents of the party (alias for partyDocument)',
-    type: [String],
-    example: ['doc1.jpg', 'doc2.jpg'],
-  })
-  @IsArray()
-  @IsString({ each: true })
+  @ApiPropertyOptional({ description: 'Profile image URL/path of the party' })
+  @IsString()
   @IsOptional()
-  documents?: string[];
+  profileImage?: string;
 }

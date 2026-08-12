@@ -5,12 +5,19 @@ import { AuthController } from './controllers/auth.controller';
 import { UsersModule } from '../users/users.module';
 import { CompanyModule } from '../company/company.module';
 import { PartyModule } from '../party/party.module';
+import { DriverModule } from '../driver/driver.module';
 import { AccessTokenStrategy } from './controllers/strategies/access-token.strategy';
 import { RefreshTokenStrategy } from './controllers/strategies/refresh-token.strategy';
 
 @Global()
 @Module({
-  imports: [JwtModule.register({}), UsersModule, CompanyModule, PartyModule],
+  imports: [
+    JwtModule.register({}),
+    UsersModule,
+    CompanyModule,
+    PartyModule,
+    DriverModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, AccessTokenStrategy, RefreshTokenStrategy],
   exports: [AuthService, AccessTokenStrategy, RefreshTokenStrategy, JwtModule],

@@ -1,0 +1,17 @@
+model Notification {
+  notificationId String   @id @default(uuid()) @map("notification_id")
+  title          String
+  message        String
+  isRead         Boolean  @default(false) @map("is_read")
+  companyId      String   @map("company_id")
+  company        Company  @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  inquiryId      String?  @map("inquiry_id")
+  inquiry        Inquiry? @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([inquiryId])
+  @@map("notifications")
+}

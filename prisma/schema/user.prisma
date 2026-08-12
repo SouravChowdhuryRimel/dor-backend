@@ -4,11 +4,13 @@ model User {
   phoneNumber      String    @unique @map("phone_number")
   password         String
   name             String?
+  isActive         Boolean   @default(true) @map("is_active")
   roles            Role[]    @default([USER])
   refreshToken     String?
   managedCompanies Company[]
   categoryId       String?   @map("category_id")
   category         Category? @relation(fields: [categoryId], references: [categoryId])
+  activityLogs     ActivityLog[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

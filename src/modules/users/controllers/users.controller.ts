@@ -1,11 +1,34 @@
-import { Controller, Post, Body, Get, UseGuards, ConflictException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  ConflictException,
+  Query,
+  Param,
+  Patch,
+  Delete,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { UsersService } from '../services/users.service';
 import { CreateAdminDto } from '../dto/create-admin.dto';
+import { UpdateAdminDto } from '../dto/update-admin.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
+import {
+  AdminStatusFilter,
+  AdminStatusFilterDto,
+} from '../dto/admin-status-filter.dto';
 
 @ApiTags('Users (Admin Management)')
 @ApiBearerAuth()
@@ -43,6 +66,12 @@ export class UsersController {
 
     @Get('admins')
     @Roles(Role.SUPER_ADMIN)
+    @ApiQuery({
+        name: 'status',
+        enum: AdminStatusFilter,
+        required: false,
+        example: AdminStatusFilter.ALL,
+    })
     @ApiOperation({
         summary: 'List all Admins (SUPER_ADMIN only)',
         description: 'Retrieves a list of all users with the ADMIN role.',
@@ -55,7 +84,38 @@ export class UsersController {
         status: 403,
         description: 'Forbidden. Requires SUPER_ADMIN role.',
     })
-    async findAllAdmins() {
-        return this.usersService.findAllAdmins();
+    async findAllAdmins(@Query() filter: AdminStatusFilterDto) {
+        return this.usersService.findAllAdmins(filter.status);
+    }
+
+    @Get('admins/:id')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+    @ApiOperation({ summary: 'Get a single admin (ADMIN, SUPER_ADMIN)' })
+    @ApiResponse({ status: 200, description: 'Returns the admin.' })
+    @ApiResponse({ status: 404, description: 'Admin not found.' })
+    async findOneAdmin(@Param('id') id: string) {
+        return this.usersService.findAdminById(id);
+    }
+
+    @Patch('admins/:id')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+    @ApiOperation({ summary: 'Update an admin (ADMIN, SUPER_ADMIN)' })
+    @ApiBody({ type: UpdateAdminDto })
+    @ApiResponse({ status: 200, description: 'Admin updated successfully.' })
+    @ApiResponse({ status: 404, description: 'Admin not found.' })
+    async updateAdmin(
+        @Param('id') id: string,
+        @Body() updateAdminDto: UpdateAdminDto,
+    ) {
+        return this.usersService.updateAdmin(id, updateAdminDto);
+    }
+
+    @Delete('admins/:id')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+    @ApiOperation({ summary: 'Delete an admin (ADMIN, SUPER_ADMIN)' })
+    @ApiResponse({ status: 200, description: 'Admin deleted successfully.' })
+    @ApiResponse({ status: 404, description: 'Admin not found.' })
+    async removeAdmin(@Param('id') id: string) {
+        return this.usersService.removeAdmin(id);
     }
 }

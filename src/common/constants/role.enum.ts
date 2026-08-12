@@ -4,4 +4,5 @@ export enum Role {
   VENDOR = 'VENDOR',
   SUPER_ADMIN = 'SUPER_ADMIN',
   PARTY = 'PARTY',
+  DRIVER = 'DRIVER',
 }

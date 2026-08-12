@@ -1,0 +1,937 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/core/database/database.service';
+import { CompanyStatus, ComplaintStatus, DeliveryStatus } from '@prisma/client';
+
+
+@Injectable()
+export class DashboardService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async getSuperAdminSummary() {
+    const totalCompanies = await this.prisma.company.count();
+    const pendingVerificationCompanies = await this.prisma.company.count({
+      where: { status: CompanyStatus.PENDING },
+    });
+    const totalOrders = await this.prisma.order.count();
+    const totalComplaints = await this.prisma.complaint.count({
+      where: {
+        status: {
+          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+        },
+      },
+    });
+
+    const totalDrivers = await this.prisma.driver.count();
+    const totalParties = await this.prisma.party.count();
+
+    const totalRevenueAggregate = await this.prisma.order.aggregate({
+      _sum: { totalRate: true, bag: true },
+    });
+    const totalRevenue = totalRevenueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = totalRevenueAggregate._sum.bag || 0;
+
+    // Status breakdowns
+    const companyStatuses = await this.prisma.company.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const companyStatusBreakdown = {
+      PENDING: 0,
+      APPROVED: 0,
+      REJECTED: 0,
+      BLOCKED: 0,
+    };
+    companyStatuses.forEach((c) => {
+      companyStatusBreakdown[c.status] = c._count._all;
+    });
+
+    const complaintStatuses = await this.prisma.complaint.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const complaintStatusBreakdown = {
+      PENDING: 0,
+      UNDER_REVIEW: 0,
+      RESOLVED: 0,
+      REOPENED: 0,
+      CANCELLED: 0,
+    };
+    complaintStatuses.forEach((c) => {
+      complaintStatusBreakdown[c.status] = c._count._all;
+    });
+
+    // Weekly trend
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      last7Days.push(d);
+    }
+    const startOfTrend = new Date(last7Days[0]);
+
+    const trendOrders = await this.prisma.order.findMany({
+      where: {
+        createdAt: {
+          gte: startOfTrend,
+        },
+      },
+      select: {
+        createdAt: true,
+        totalRate: true,
+      },
+    });
+
+    const weeklyRevenueTrend = last7Days.map((date) => {
+      const dayStart = new Date(date);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const dayOrders = trendOrders.filter(
+        (o) => o.createdAt >= dayStart && o.createdAt <= dayEnd,
+      );
+
+      const count = dayOrders.length;
+      const revenue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+
+      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const dateLabel = date.toLocaleDateString('en-US', options);
+
+      return {
+        date: date.toISOString().split('T')[0],
+        label: dateLabel,
+        count,
+        revenue,
+      };
+    });
+
+    // Top performers
+    const productOrdersGroup = await this.prisma.order.groupBy({
+      by: ['productId'],
+      _count: { _all: true },
+      _sum: { bag: true, totalRate: true },
+      orderBy: {
+        _sum: {
+          totalRate: 'desc',
+        },
+      },
+      take: 5,
+    });
+    const productIds = productOrdersGroup.map((g) => g.productId);
+    const productsInfo = await this.prisma.product.findMany({
+      where: { productId: { in: productIds } },
+      select: { productId: true, productName: true },
+    });
+    const topProducts = productOrdersGroup.map((g) => {
+      const info = productsInfo.find((p) => p.productId === g.productId);
+      return {
+        productId: g.productId,
+        productName: info?.productName || 'Unknown',
+        orderCount: g._count._all,
+        totalBags: g._sum.bag || 0,
+        totalRevenue: g._sum.totalRate || 0,
+      };
+    });
+
+    const companyOrdersGroup = await this.prisma.order.groupBy({
+      by: ['companyId'],
+      _sum: { totalRate: true, bag: true },
+      _count: { _all: true },
+      orderBy: {
+        _sum: {
+          totalRate: 'desc',
+        },
+      },
+      take: 5,
+    });
+    const companyIds = companyOrdersGroup.map((g) => g.companyId);
+    const companiesInfo = await this.prisma.company.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { companyId: true, companyName: true, ownerName: true },
+    });
+    const topCompanies = companyOrdersGroup.map((g) => {
+      const info = companiesInfo.find((c) => c.companyId === g.companyId);
+      return {
+        companyId: g.companyId,
+        companyName: info?.companyName || 'Unknown',
+        ownerName: info?.ownerName || 'Unknown',
+        orderCount: g._count._all,
+        totalBags: g._sum.bag || 0,
+        totalRevenue: g._sum.totalRate || 0,
+      };
+    });
+
+    const partyOrdersGroup = await this.prisma.order.groupBy({
+      by: ['partyId'],
+      _sum: { totalRate: true, bag: true },
+      _count: { _all: true },
+      orderBy: {
+        _sum: {
+          totalRate: 'desc',
+        },
+      },
+      take: 5,
+    });
+    const filteredPartyGroups = partyOrdersGroup.filter((g) => g.partyId !== null);
+    const partyIds = filteredPartyGroups.map((g) => g.partyId as string);
+    const partiesInfo = await this.prisma.party.findMany({
+      where: { partyId: { in: partyIds } },
+      select: { partyId: true, partyName: true, businessName: true },
+    });
+    const topParties = filteredPartyGroups.map((g) => {
+      const info = partiesInfo.find((p) => p.partyId === g.partyId);
+      return {
+        partyId: g.partyId,
+        partyName: info?.partyName || 'Unknown',
+        businessName: info?.businessName || 'Unknown',
+        orderCount: g._count._all,
+        totalBags: g._sum.bag || 0,
+        totalRevenue: g._sum.totalRate || 0,
+      };
+    });
+
+    // Generate recent activities by fetching recent records
+    const recentCompanies = await this.prisma.company.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: { companyName: true, createdAt: true },
+    });
+
+    const recentComplaints = await this.prisma.complaint.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: { title: true, createdAt: true },
+    });
+
+    const recentOrders = await this.prisma.order.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: { showOrderId: true, createdAt: true },
+    });
+
+    const activities: { title: string; time: Date; type: string }[] = [];
+
+    recentCompanies.forEach((c) => {
+      activities.push({
+        title: `নতুন কোম্পানি নিবন্ধিত: ${c.companyName}`,
+        time: c.createdAt,
+        type: 'COMPANY',
+      });
+    });
+
+    recentComplaints.forEach((cmp) => {
+      activities.push({
+        title: `একটি অভিযোগ পাওয়া গেছে: ${cmp.title}`,
+        time: cmp.createdAt,
+        type: 'COMPLAINT',
+      });
+    });
+
+    recentOrders.forEach((o) => {
+      activities.push({
+        title: `নতুন অর্ডার করা হয়েছে: #${o.showOrderId}`,
+        time: o.createdAt,
+        type: 'ORDER',
+      });
+    });
+
+    activities.sort((a, b) => b.time.getTime() - a.time.getTime());
+
+    return {
+      todaySummary: {
+        totalCompanies,
+        pendingVerificationCompanies,
+        totalOrders,
+        totalComplaints,
+        totalRevenue,
+        totalDrivers,
+        totalParties,
+        totalBagsOrdered,
+      },
+      companyStatusBreakdown,
+      complaintStatusBreakdown,
+      weeklyRevenueTrend,
+      topProducts,
+      topCompanies,
+      topParties,
+      recentActivity: activities.slice(0, 10),
+    };
+  }
+  async getCompanySummary(companyId: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${companyId}" not found`);
+    }
+
+    const totalOrders = await this.prisma.order.count({
+      where: { companyId },
+    });
+
+    const totalDrivers = await this.prisma.companyDriver.count({
+      where: { companyId },
+    });
+
+    const totalParties = await this.prisma.party.count({
+      where: { companyId },
+    });
+
+    const totalComplaints = await this.prisma.complaint.count({
+      where: { companyId },
+    });
+
+    const revenueAggregate = await this.prisma.order.aggregate({
+      where: { companyId },
+      _sum: { totalRate: true, bag: true },
+    });
+    const totalRevenue = revenueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = revenueAggregate._sum.bag || 0;
+
+    // Delivery Status Breakdown
+    const deliveryStatuses = await this.prisma.delivery.groupBy({
+      where: {
+        order: { companyId },
+      },
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const deliveryStatusBreakdown = {
+      VAN_COMING: 0,
+      TRANSFER_IN_PROGRESS: 0,
+      NEAREST_TRANSFER: 0,
+      DELIVERED: 0,
+    };
+    deliveryStatuses.forEach((d) => {
+      deliveryStatusBreakdown[d.status] = d._count._all;
+    });
+
+    // Complaint Status Breakdown
+    const complaintStatuses = await this.prisma.complaint.groupBy({
+      where: { companyId },
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const complaintStatusBreakdown = {
+      PENDING: 0,
+      UNDER_REVIEW: 0,
+      RESOLVED: 0,
+      REOPENED: 0,
+      CANCELLED: 0,
+    };
+    complaintStatuses.forEach((c) => {
+      complaintStatusBreakdown[c.status] = c._count._all;
+    });
+
+    // Weekly Revenue Trend
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      last7Days.push(d);
+    }
+    const startOfTrend = new Date(last7Days[0]);
+
+    const trendOrders = await this.prisma.order.findMany({
+      where: {
+        companyId,
+        createdAt: { gte: startOfTrend },
+      },
+      select: { createdAt: true, totalRate: true },
+    });
+
+    const weeklyRevenueTrend = last7Days.map((date) => {
+      const dayStart = new Date(date);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const dayOrders = trendOrders.filter(
+        (o) => o.createdAt >= dayStart && o.createdAt <= dayEnd,
+      );
+
+      const count = dayOrders.length;
+      const revenue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+
+      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const dateLabel = date.toLocaleDateString('en-US', options);
+
+      return {
+        date: date.toISOString().split('T')[0],
+        label: dateLabel,
+        count,
+        revenue,
+      };
+    });
+
+    // Top Parties
+    const partyOrdersGroup = await this.prisma.order.groupBy({
+      where: { companyId },
+      by: ['partyId'],
+      _sum: { totalRate: true, bag: true },
+      _count: { _all: true },
+      orderBy: {
+        _sum: { totalRate: 'desc' },
+      },
+      take: 5,
+    });
+    const filteredPartyGroups = partyOrdersGroup.filter((g) => g.partyId !== null);
+    const partyIds = filteredPartyGroups.map((g) => g.partyId as string);
+    const partiesInfo = await this.prisma.party.findMany({
+      where: { partyId: { in: partyIds } },
+      select: { partyId: true, partyName: true, businessName: true },
+    });
+    const topParties = filteredPartyGroups.map((g) => {
+      const info = partiesInfo.find((p) => p.partyId === g.partyId);
+      return {
+        partyId: g.partyId,
+        partyName: info?.partyName || 'Unknown',
+        businessName: info?.businessName || 'Unknown',
+        orderCount: g._count._all,
+        totalBags: g._sum.bag || 0,
+        totalRevenue: g._sum.totalRate || 0,
+      };
+    });
+
+    // Top Products
+    const productOrdersGroup = await this.prisma.order.groupBy({
+      where: { companyId },
+      by: ['productId'],
+      _sum: { totalRate: true, bag: true },
+      _count: { _all: true },
+      orderBy: {
+        _sum: { totalRate: 'desc' },
+      },
+      take: 5,
+    });
+    const productIds = productOrdersGroup.map((g) => g.productId);
+    const productsInfo = await this.prisma.product.findMany({
+      where: { productId: { in: productIds } },
+      select: { productId: true, productName: true },
+    });
+    const topProducts = productOrdersGroup.map((g) => {
+      const info = productsInfo.find((p) => p.productId === g.productId);
+      return {
+        productId: g.productId,
+        productName: info?.productName || 'Unknown',
+        orderCount: g._count._all,
+        totalBags: g._sum.bag || 0,
+        totalRevenue: g._sum.totalRate || 0,
+      };
+    });
+
+    // Recent Orders
+    const recentOrdersRaw = await this.prisma.order.findMany({
+      where: { companyId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        party: {
+          select: {
+            partyName: true,
+            businessName: true,
+          },
+        },
+        product: {
+          select: {
+            productName: true,
+          },
+        },
+      },
+    });
+    const recentOrders = recentOrdersRaw.map((o) => ({
+      orderId: o.orderId,
+      showOrderId: o.showOrderId,
+      partyName: o.party?.partyName || null,
+      businessName: o.party?.businessName || null,
+      productName: o.product?.productName || null,
+      bag: o.bag,
+      bagSize: o.bagSize,
+      totalRate: o.totalRate,
+      createdAt: o.createdAt,
+    }));
+
+    const documents = [
+      {
+        name: 'ট্রেড লাইসেন্স',
+        description: 'কোম্পানি ট্রেড লাইসেন্স কপি',
+        file: company.incomeTax || null,
+      },
+      {
+        name: 'জাতীয় পরিচয়পত্র',
+        description: 'মালিকের NID কপি',
+        file: company.companyDocument.length > 0 ? company.companyDocument[0] : null,
+      },
+      {
+        name: 'ব্যাংক তথ্য',
+        description: 'ব্যাংক স্টেটমেন্ট বা চেক বই কপি',
+        file: company.companyDocument.length > 1 ? company.companyDocument[1] : null,
+      },
+    ];
+
+    return {
+      companyName: company.companyName,
+      metrics: {
+        totalOrders,
+        totalDrivers,
+        totalParties,
+        totalComplaints,
+        totalRevenue,
+        totalBagsOrdered,
+      },
+      deliveryStatusBreakdown,
+      complaintStatusBreakdown,
+      weeklyRevenueTrend,
+      topParties,
+      topProducts,
+      recentOrders,
+      documents,
+    };
+  }
+  async getPartySummary(partyId: string) {
+    const party = await this.prisma.party.findUnique({
+      where: { partyId },
+    });
+    if (!party) {
+      throw new NotFoundException(`Party with ID "${partyId}" not found`);
+    }
+
+    const totalOrders = await this.prisma.order.count({
+      where: { partyId },
+    });
+
+    const ongoingOrders = await this.prisma.order.count({
+      where: {
+        partyId,
+        deliveries: {
+          some: {
+            status: {
+              in: [
+                DeliveryStatus.VAN_COMING,
+                DeliveryStatus.TRANSFER_IN_PROGRESS,
+                DeliveryStatus.NEAREST_TRANSFER,
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const deliveryRemaining = await this.prisma.order.count({
+      where: {
+        partyId,
+        deliveries: {
+          none: {},
+        },
+      },
+    });
+
+    // Active companies: companies from party's orders plus party's own companyId
+    const orderedCompanies = await this.prisma.order.findMany({
+      where: { partyId },
+      select: { companyId: true },
+      distinct: ['companyId'],
+    });
+    const companyIds = new Set<string>(orderedCompanies.map((o) => o.companyId));
+    if (party.companyId) {
+      companyIds.add(party.companyId);
+    }
+    const activeCompanies = companyIds.size;
+
+    const pendingComplaints = await this.prisma.complaint.count({
+      where: {
+        partyId,
+        status: {
+          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+        },
+      },
+    });
+
+    const spendAggregate = await this.prisma.order.aggregate({
+      where: { partyId },
+      _sum: { totalRate: true, bag: true },
+    });
+    const totalSpend = spendAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = spendAggregate._sum.bag || 0;
+
+    // Weekly Spend Trend
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      last7Days.push(d);
+    }
+    const startOfTrend = new Date(last7Days[0]);
+
+    const trendOrders = await this.prisma.order.findMany({
+      where: {
+        partyId,
+        createdAt: { gte: startOfTrend },
+      },
+      select: { createdAt: true, totalRate: true },
+    });
+
+    const weeklySpendTrend = last7Days.map((date) => {
+      const dayStart = new Date(date);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const dayOrders = trendOrders.filter(
+        (o) => o.createdAt >= dayStart && o.createdAt <= dayEnd,
+      );
+
+      const count = dayOrders.length;
+      const spend = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+
+      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const dateLabel = date.toLocaleDateString('en-US', options);
+
+      return {
+        date: date.toISOString().split('T')[0],
+        label: dateLabel,
+        count,
+        spend,
+      };
+    });
+
+    // Top Products
+    const productOrdersGroup = await this.prisma.order.groupBy({
+      where: { partyId },
+      by: ['productId'],
+      _sum: { totalRate: true, bag: true },
+      _count: { _all: true },
+      orderBy: {
+        _sum: { totalRate: 'desc' },
+      },
+      take: 5,
+    });
+    const productIds = productOrdersGroup.map((g) => g.productId);
+    const productsInfo = await this.prisma.product.findMany({
+      where: { productId: { in: productIds } },
+      select: { productId: true, productName: true },
+    });
+    const topProducts = productOrdersGroup.map((g) => {
+      const info = productsInfo.find((p) => p.productId === g.productId);
+      return {
+        productId: g.productId,
+        productName: info?.productName || 'Unknown',
+        orderCount: g._count._all,
+        totalBags: g._sum.bag || 0,
+        totalSpend: g._sum.totalRate || 0,
+      };
+    });
+
+    // Recent Inquiries
+    const recentInquiriesRaw = await this.prisma.inquiry.findMany({
+      where: { partyId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        category: {
+          select: {
+            categoryName: true,
+          },
+        },
+      },
+    });
+    const recentInquiries = recentInquiriesRaw.map((inq) => ({
+      inquiryId: inq.inquiryId,
+      title: inq.title,
+      description: inq.description,
+      categoryName: inq.category?.categoryName || null,
+      createdAt: inq.createdAt,
+    }));
+
+    // Recent Offers
+    const recentOffersRaw = await this.prisma.offer.findMany({
+      where: { partyId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        product: {
+          select: {
+            productName: true,
+          },
+        },
+      },
+    });
+    const recentOffers = recentOffersRaw.map((off) => ({
+      offerId: off.offerId,
+      offerPrice: off.offerPrice,
+      discountRate: off.discountRate,
+      description: off.description,
+      status: off.status,
+      productName: off.product?.productName || null,
+      startDate: off.startDate,
+      endDate: off.endDate,
+    }));
+
+    // Fetch the 5 most recent orders with related details for the "Recent Orders" list
+    const recentOrdersRaw = await this.prisma.order.findMany({
+      where: { partyId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        company: {
+          select: {
+            companyName: true,
+          },
+        },
+        product: {
+          select: {
+            productName: true,
+          },
+        },
+        deliveries: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            driver: {
+              select: {
+                driverName: true,
+                phoneNumber: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const recentOrders = recentOrdersRaw.map((o) => {
+      const latestDelivery = o.deliveries?.[0] || null;
+      return {
+        orderId: o.orderId,
+        showOrderId: o.showOrderId,
+        companyName: o.company?.companyName || null,
+        productName: o.product?.productName || null,
+        bag: o.bag,
+        bagSize: o.bagSize,
+        totalRate: o.totalRate,
+        createdAt: o.createdAt,
+        driverName: latestDelivery?.driver?.driverName || null,
+        driverPhone: latestDelivery?.driver?.phoneNumber || null,
+        deliveryStatus: latestDelivery?.status || null,
+      };
+    });
+
+    return {
+      businessName: party.businessName,
+      metrics: {
+        totalOrders,
+        ongoingOrders,
+        deliveryRemaining,
+        activeCompanies,
+        pendingComplaints,
+        totalSpend,
+        totalBagsOrdered,
+      },
+      weeklySpendTrend,
+      topProducts,
+      recentOrders,
+      recentInquiries,
+      recentOffers,
+    };
+  }
+
+  async getDriverSummary(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId },
+    });
+    if (!driver) {
+      throw new NotFoundException(`Driver with ID "${driverId}" not found`);
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const todaysAssignments = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        deliveryTime: {
+          gte: startOfToday,
+          lte: endOfToday,
+        },
+      },
+    });
+
+    const ongoingDeliveries = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        status: {
+          in: [
+            DeliveryStatus.VAN_COMING,
+            DeliveryStatus.TRANSFER_IN_PROGRESS,
+            DeliveryStatus.NEAREST_TRANSFER,
+          ],
+        },
+      },
+    });
+
+    const completedDeliveries = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        status: DeliveryStatus.DELIVERED,
+      },
+    });
+
+    const proofUploadPending = 0; // Default or mocked to 0 as there is no proof table/column
+
+    const totalDeliveries = await this.prisma.delivery.count({
+      where: { driverId },
+    });
+
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      last7Days.push(d);
+    }
+    const startOfTrend = new Date(last7Days[0]);
+
+    const trendDeliveries = await this.prisma.delivery.findMany({
+      where: {
+        driverId,
+        createdAt: { gte: startOfTrend },
+      },
+      select: { createdAt: true },
+    });
+
+    const weeklyDeliveryTrend = last7Days.map((date) => {
+      const dayStart = new Date(date);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const count = trendDeliveries.filter(
+        (d) => d.createdAt >= dayStart && d.createdAt <= dayEnd,
+      ).length;
+
+      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const dateLabel = date.toLocaleDateString('en-US', options);
+
+      return {
+        date: date.toISOString().split('T')[0],
+        label: dateLabel,
+        count,
+      };
+    });
+
+    const currentLocation = driver.upozela && driver.district 
+      ? `${driver.upozela}, ${driver.district}` 
+      : driver.district || driver.upozela || '';
+
+    // Fetch ongoing deliveries list with order, company and party details
+    const ongoingDeliveriesRaw = await this.prisma.delivery.findMany({
+      where: {
+        driverId,
+        status: {
+          in: [
+            DeliveryStatus.VAN_COMING,
+            DeliveryStatus.TRANSFER_IN_PROGRESS,
+            DeliveryStatus.NEAREST_TRANSFER,
+          ],
+        },
+      },
+      include: {
+        order: {
+          include: {
+            company: {
+              select: {
+                companyName: true,
+                address: true,
+                upozela: true,
+                district: true,
+              },
+            },
+            party: {
+              select: {
+                businessName: true,
+                partyName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const ongoingDeliveriesList = ongoingDeliveriesRaw.map((d) => {
+      const company = d.order?.company;
+      const party = d.order?.party;
+      const pickupPoint = company 
+        ? `${company.companyName} গেট, ${company.upozela || company.district || ''}` 
+        : null;
+
+      return {
+        deliveryId: d.deliveryId,
+        status: d.status,
+        orderId: d.orderId,
+        showOrderId: d.order?.showOrderId || null,
+        companyName: company?.companyName || null,
+        partyName: party?.businessName || party?.partyName || null,
+        pickupPoint,
+        destinationAddress: d.address,
+        upozela: d.upozela,
+        district: d.district,
+        deliveryTime: d.deliveryTime,
+      };
+    });
+
+    // Recent Deliveries
+    const recentDeliveriesRaw = await this.prisma.delivery.findMany({
+      where: { driverId },
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        order: {
+          include: {
+            company: {
+              select: {
+                companyName: true,
+              },
+            },
+            party: {
+              select: {
+                businessName: true,
+                partyName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    const recentDeliveries = recentDeliveriesRaw.map((d) => ({
+      deliveryId: d.deliveryId,
+      status: d.status,
+      orderId: d.orderId,
+      showOrderId: d.order?.showOrderId || null,
+      companyName: d.order?.company?.companyName || null,
+      partyName: d.order?.party?.businessName || d.order?.party?.partyName || null,
+      destinationAddress: d.address,
+      upozela: d.upozela,
+      district: d.district,
+      deliveryTime: d.deliveryTime,
+      createdAt: d.createdAt,
+    }));
+
+    return {
+      driverName: driver.driverName,
+      metrics: {
+        todaysAssignments,
+        ongoingDeliveries,
+        completedDeliveries,
+        proofUploadPending,
+        totalDeliveries,
+      },
+      weeklyDeliveryTrend,
+      currentLocation,
+      ongoingDeliveries: ongoingDeliveriesList,
+      recentDeliveries,
+    };
+  }
+}

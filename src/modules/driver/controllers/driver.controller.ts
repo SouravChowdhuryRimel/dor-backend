@@ -10,7 +10,9 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { DriverService } from '../services/driver.service';
 import {
   ApiTags,
@@ -18,18 +20,20 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { Role } from '../../../common/constants/role.enum';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
 
 @ApiTags('Drivers')
-@ApiBearerAuth()
-@UseGuards(AccessTokenGuard)
 @Controller('drivers')
 export class DriverController {
   constructor(private readonly driverService: DriverService) {}
@@ -76,16 +80,20 @@ export class DriverController {
         driverName: { type: 'string' },
         address: { type: 'string' },
         district: { type: 'string', description: 'District of the driver' },
-        districs: { type: 'string', description: 'District of the driver (alias)' },
-        upozela: { type: 'string', description: 'Upozela of the driver' },
-        upazela: { type: 'string', description: 'Upazela of the driver (alias)' },
-        truckNumber: { type: 'string', description: 'Truck/Track Number (optional)' },
-        trackNumber: { type: 'string', description: 'Track Number (alias, optional)' },
-        truckType: { type: 'string', description: 'Truck/Track Type (optional)' },
-        trackType: { type: 'string', description: 'Track Type (alias, optional)' },
         loadCapacity: { type: 'string', description: 'Load Capacity (optional)' },
+        companyIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Companies hiring the driver (optional)',
+        },
+        partyIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Parties hiring the driver (optional)',
+        },
         drivingLicenceNumber: { type: 'string' },
         nidNumber: { type: 'string' },
+        categoryId: { type: 'string' },
         driverImage: {
           type: 'string',
           format: 'binary',
@@ -106,8 +114,10 @@ export class DriverController {
         'password',
         'driverName',
         'address',
+        'district',
         'drivingLicenceNumber',
         'nidNumber',
+        'categoryId',
       ],
     },
   })
@@ -137,18 +147,15 @@ export class DriverController {
     }
 
     // Normalize district/districs and upozela/upazela
-    const district = createDriverDto.district || createDriverDto.districs;
-    const upozela = createDriverDto.upozela || createDriverDto.upazela;
+    const district = createDriverDto.district || (createDriverDto as any).districs;
+    const upozela = (createDriverDto as any).upozela || (createDriverDto as any).upazela;
 
     if (!district) {
-      throw new BadRequestException('district or districs is required');
-    }
-    if (!upozela) {
-      throw new BadRequestException('upozela or upazela is required');
+      throw new BadRequestException('district is required');
     }
 
-    const truckNumber = createDriverDto.truckNumber || createDriverDto.trackNumber;
-    const truckType = createDriverDto.truckType || createDriverDto.trackType;
+    const truckNumber = (createDriverDto as any).truckNumber || (createDriverDto as any).trackNumber;
+    const truckType = (createDriverDto as any).truckType || (createDriverDto as any).trackType;
 
     const normalizedDto: any = {
       ...createDriverDto,
@@ -168,24 +175,51 @@ export class DriverController {
   }
 
   @Get()
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Get all drivers' })
-  findAll() {
-    return this.driverService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.driverService.findAll(query);
   }
 
   @Get(':id')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Get a driver by ID' })
   findOne(@Param('id') id: string) {
     return this.driverService.findOne(id);
   }
 
+  @Patch(':id/verify')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Verify a driver (ADMIN and SUPER_ADMIN only)' })
+  verify(@Param('id') id: string) {
+    return this.driverService.verify(id);
+  }
+
   @Patch(':id')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Update a driver' })
   update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto) {
     return this.driverService.update(id, updateDriverDto);
   }
 
+  @Get(':id/associations')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get list of companies and parties associated with a driver' })
+  @ApiResponse({ status: 200, description: 'Return associated companies and parties.' })
+  @ApiResponse({ status: 404, description: 'Driver not found.' })
+  getDriverAssociations(@Param('id') id: string) {
+    return this.driverService.getDriverAssociations(id);
+  }
+
   @Delete(':id')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Delete a driver' })
   remove(@Param('id') id: string) {
     return this.driverService.remove(id);

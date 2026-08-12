@@ -1,8 +1,16 @@
-import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnApplicationBootstrap,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../core/database/database.service';
 import { Prisma, User, Role } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { CreateAdminDto } from '../dto/create-admin.dto';
+import { AdminStatusFilter } from '../dto/admin-status-filter.dto';
+import { UpdateAdminDto } from '../dto/update-admin.dto';
 
 @Injectable()
 export class UsersService implements OnApplicationBootstrap {
@@ -75,7 +83,7 @@ export class UsersService implements OnApplicationBootstrap {
     });
   }
 
-  async createAdmin(data: Prisma.UserCreateInput): Promise<User> {
+  async createAdmin(data: CreateAdminDto): Promise<User> {
     const hashedPassword = await argon2.hash(data.password, {
       type: argon2.argon2id,
       memoryCost: 65536,
@@ -84,8 +92,12 @@ export class UsersService implements OnApplicationBootstrap {
 
     return this.prisma.user.create({
       data: {
-        ...data,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
         password: hashedPassword,
+        name: data.name,
+        categoryId: data.categoryId,
+        isActive: data.isActive ?? true,
         roles: [Role.ADMIN],
       },
       select: {
@@ -94,6 +106,7 @@ export class UsersService implements OnApplicationBootstrap {
         phoneNumber: true,
         name: true,
         roles: true,
+        isActive: true,
         categoryId: true,
         createdAt: true,
         updatedAt: true,
@@ -101,12 +114,17 @@ export class UsersService implements OnApplicationBootstrap {
     }) as unknown as Promise<User>;
   }
 
-  async findAllAdmins(): Promise<Partial<User>[]> {
+  async findAllAdmins(
+    status: AdminStatusFilter = AdminStatusFilter.ALL,
+  ): Promise<Partial<User>[]> {
     return this.prisma.user.findMany({
       where: {
         roles: {
           has: Role.ADMIN,
         },
+        ...(status === AdminStatusFilter.ALL
+          ? {}
+          : { isActive: status === AdminStatusFilter.ACTIVE }),
       },
       select: {
         id: true,
@@ -114,13 +132,100 @@ export class UsersService implements OnApplicationBootstrap {
         phoneNumber: true,
         name: true,
         roles: true,
+        isActive: true,
         categoryId: true,
         category: {
           select: {
             categoryId: true,
-            title: true,
+            categoryName: true,
           },
         },
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async findAdminById(id: string): Promise<Partial<User>> {
+    const admin = await this.prisma.user.findFirst({
+      where: {
+        id,
+        roles: { has: Role.ADMIN },
+      },
+      select: {
+        id: true,
+        email: true,
+        phoneNumber: true,
+        name: true,
+        roles: true,
+        isActive: true,
+        categoryId: true,
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return admin;
+  }
+
+  async updateAdmin(id: string, data: UpdateAdminDto): Promise<Partial<User>> {
+    await this.findAdminById(id);
+
+    const password = data.password
+      ? await argon2.hash(data.password, {
+          type: argon2.argon2id,
+          memoryCost: 65536,
+          timeCost: 3,
+        })
+      : undefined;
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        name: data.name,
+        categoryId: data.categoryId,
+        isActive: data.isActive,
+        ...(password ? { password } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        phoneNumber: true,
+        name: true,
+        roles: true,
+        isActive: true,
+        categoryId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async removeAdmin(id: string): Promise<Partial<User>> {
+    await this.findAdminById(id);
+
+    return this.prisma.user.delete({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        phoneNumber: true,
+        name: true,
+        roles: true,
+        isActive: true,
+        categoryId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -149,6 +254,19 @@ export class UsersService implements OnApplicationBootstrap {
     return this.prisma.user.update({
       where: { id },
       data,
+    });
+  }
+
+  async updatePassword(userId: string, password: string): Promise<void> {
+    const hashedPassword = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+    });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
     });
   }
 }

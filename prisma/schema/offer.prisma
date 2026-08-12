@@ -1,19 +1,19 @@
 model Offer {
-    offerId      String   @id @default(uuid()) @map("offer_id")
-    offerPrice   Float    @map("offer_price")
-    discountRate Float    @map("discount_rate")
-    startDate    DateTime @map("start_date")
-    endDate      DateTime @map("end_date")
-    status       String   @default("ACTIVE")
-    description  String
+  offerId      String   @id @default(uuid()) @map("offer_id")
+  offerPrice   Float    @map("offer_price")
+  discountRate Float    @map("discount_rate")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  status       String   @default("ACTIVE")
+  description  String
 
-    partyId   String  @map("party_id")
-    party     Party   @relation(fields: [partyId], references: [partyId])
-    productId String  @map("product_id")
-    product   Product @relation(fields: [productId], references: [productId])
+  partyId   String  @map("party_id")
+  party     Party   @relation(fields: [partyId], references: [partyId])
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [productId])
 
-    createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-    @@map("offers")
+  @@map("offers")
 }

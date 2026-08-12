@@ -10,7 +10,9 @@ import {
   Req,
   UseInterceptors,
   UploadedFiles,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { CompanyService } from '../services/company.service';
 import {
   ApiTags,
@@ -26,6 +28,7 @@ import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
+import { CompanyStatus } from '@prisma/client';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -74,6 +77,7 @@ export class CompanyController {
         upozela: { type: 'string' },
         address: { type: 'string' },
         categoryId: { type: 'string' },
+        incomeTax: { type: 'string' },
         companyDocument: {
           type: 'array',
           items: {
@@ -117,21 +121,28 @@ export class CompanyController {
   @Get('pending')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Get all pending company registrations (ADMIN only)',
+    summary: 'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
   })
-  getPending() {
-    return this.companyService.findPending();
+  getPending(@Query() query: PaginationQueryDto) {
+    return this.companyService.findPending(query);
+  }
+
+  @Get('verified')
+  @ApiOperation({ summary: 'Get all verified companies' })
+  @ApiResponse({ status: 200, description: 'Returns all verified companies.' })
+  getVerified(@Query() query: PaginationQueryDto) {
+    return this.companyService.findVerified(query);
   }
 
   @Patch(':id/approve')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary:
-      'Approve a company registration and assign it to the Admin (ADMIN only)',
+      'Approve a company registration and assign it to the approver (ADMIN and SUPER_ADMIN only)',
   })
   approve(@Param('id') id: string, @Req() req: any) {
     const adminId = req.user['sub'];
@@ -140,8 +151,8 @@ export class CompanyController {
 
   @Get()
   @ApiOperation({ summary: 'Get all companies' })
-  findAll() {
-    return this.companyService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.companyService.findAll(query);
   }
 
   @Get(':id')
@@ -155,9 +166,77 @@ export class CompanyController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
+  @UseInterceptors(
+    FilesInterceptor('companyDocument', 10, {
+      storage: diskStorage({
+        destination: (req, file, callback) => {
+          const path = './uploads/documents';
+          try {
+            if (!fs.existsSync(path)) {
+              fs.mkdirSync(path, { recursive: true });
+            }
+            callback(null, path);
+          } catch (error) {
+            callback(error as Error, path);
+          }
+        },
+        filename: (req, file, callback) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `doc-${uniqueSuffix}${ext}`);
+        },
+      }),
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        phoneNumber: { type: 'string' },
+        password: { type: 'string' },
+        companyName: { type: 'string' },
+        ownerName: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        district: { type: 'string' },
+        upozela: { type: 'string' },
+        address: { type: 'string' },
+        categoryId: { type: 'string' },
+        incomeTax: { type: 'string' },
+        status: { type: 'string', enum: Object.values(CompanyStatus) },
+        companyDocument: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+    },
+  })
   @ApiOperation({ summary: 'Update a company' })
-  update(@Param('id') id: string, @Body() updateCompanyDto: UpdateCompanyDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateCompanyDto: UpdateCompanyDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    if (files && files.length > 0) {
+      updateCompanyDto.companyDocument = files.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
+    }
     return this.companyService.update(id, updateCompanyDto);
+  }
+
+  @Get(':id/drivers')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get list of drivers hired by a company and their associated parties' })
+  @ApiResponse({ status: 200, description: 'Return driver list with party details.' })
+  @ApiResponse({ status: 404, description: 'Company not found.' })
+  getCompanyDrivers(@Param('id') id: string) {
+    return this.companyService.getCompanyDrivers(id);
   }
 
   @Delete(':id')

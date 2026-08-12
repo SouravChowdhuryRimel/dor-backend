@@ -7,6 +7,7 @@ import {
   IsOptional,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateProductDto {
   @ApiPropertyOptional({
@@ -49,6 +50,7 @@ export class CreateProductDto {
   })
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   defaultPrice: number;
 
   @ApiProperty({
@@ -57,6 +59,7 @@ export class CreateProductDto {
   })
   @IsNumber()
   @Min(1)
+  @Type(() => Number)
   minimumOrder: number;
 
   @ApiProperty({
@@ -73,6 +76,7 @@ export class CreateProductDto {
   })
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   stockSize: number;
 
   @ApiProperty({
@@ -82,4 +86,12 @@ export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   subCategoryId: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the associated company/vendor',
+    example: 'company-uuid-string',
+  })
+  @IsString()
+  @IsOptional()
+  companyId?: string;
 }

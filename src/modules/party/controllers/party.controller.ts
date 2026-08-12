@@ -10,12 +10,17 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { PartyService } from '../services/party.service';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { Role } from '../../../common/constants/role.enum';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -31,7 +36,7 @@ export class PartyController {
     FileFieldsInterceptor(
       [
         { name: 'partyDocument', maxCount: 10 },
-        { name: 'documents', maxCount: 10 },
+        { name: 'profileImage', maxCount: 1 },
       ],
       {
         storage: diskStorage({
@@ -50,7 +55,8 @@ export class PartyController {
             const uniqueSuffix =
               Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = extname(file.originalname);
-            callback(null, `party-doc-${uniqueSuffix}${ext}`);
+            const prefix = file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
           },
         }),
       },
@@ -73,8 +79,8 @@ export class PartyController {
         bazzar: { type: 'string', description: 'Bazzar (alias)' },
         area: { type: 'string', description: 'Area (alias)' },
         description: { type: 'string' },
-        openingDue: { type: 'number' },
-        creditLimit: { type: 'number' },
+        categoryId: { type: 'string' },
+        treadLicense: { type: 'string' },
         partyDocument: {
           type: 'array',
           items: {
@@ -82,13 +88,10 @@ export class PartyController {
             format: 'binary',
           },
         },
-        documents: {
-          type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
-          description: 'documents (alias)',
+        profileImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'profile image of the party',
         },
       },
       required: [
@@ -101,8 +104,7 @@ export class PartyController {
         'district',
         'upozela',
         'description',
-        'openingDue',
-        'creditLimit',
+        'categoryId',
       ],
     },
   })
@@ -112,20 +114,16 @@ export class PartyController {
     @UploadedFiles()
     files: {
       partyDocument?: Express.Multer.File[];
-      documents?: Express.Multer.File[];
+      profileImage?: Express.Multer.File[];
     },
   ) {
     let uploadedDocs: string[] = [];
     if (files) {
       if (files.partyDocument && files.partyDocument.length > 0) {
-        uploadedDocs = uploadedDocs.concat(
-          files.partyDocument.map((file) => `/uploads/documents/${file.filename}`),
-        );
+        uploadedDocs = files.partyDocument.map((file) => `/uploads/documents/${file.filename}`);
       }
-      if (files.documents && files.documents.length > 0) {
-        uploadedDocs = uploadedDocs.concat(
-          files.documents.map((file) => `/uploads/documents/${file.filename}`),
-        );
+      if (files.profileImage && files.profileImage.length > 0) {
+        createPartyDto.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
       }
     }
     createPartyDto.partyDocument = uploadedDocs;
@@ -137,8 +135,8 @@ export class PartyController {
     }
 
     // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
-    const openingDue = Number(createPartyDto.openingDue);
-    const creditLimit = Number(createPartyDto.creditLimit);
+    const openingDue = Number((createPartyDto as any).openingDue);
+    const creditLimit = Number((createPartyDto as any).creditLimit);
 
     const normalizedDto: any = {
       ...createPartyDto,
@@ -150,7 +148,6 @@ export class PartyController {
     // Remove alias properties
     delete normalizedDto.bazzar;
     delete normalizedDto.area;
-    delete normalizedDto.documents;
 
     return this.partyService.create(normalizedDto);
   }
@@ -158,8 +155,8 @@ export class PartyController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  findAll() {
-    return this.partyService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.partyService.findAll(query);
   }
 
   @Get(':id')
@@ -168,10 +165,138 @@ export class PartyController {
     return this.partyService.findOne(id);
   }
 
+  @Patch(':id/verify')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Verify a party (ADMIN and SUPER_ADMIN only)' })
+  verify(@Param('id') id: string) {
+    return this.partyService.verify(id);
+  }
+
   @Patch(':id')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'partyDocument', maxCount: 10 },
+        { name: 'profileImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req, file, callback) => {
+            const path = './uploads/documents';
+            try {
+              if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+              }
+              callback(null, path);
+            } catch (error) {
+              callback(error as Error, path);
+            }
+          },
+          filename: (req, file, callback) => {
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            const prefix = file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
+          },
+        }),
+      },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        partyName: { type: 'string' },
+        businessName: { type: 'string' },
+        phoneNumber: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        password: { type: 'string' },
+        address: { type: 'string' },
+        district: { type: 'string' },
+        upozela: { type: 'string' },
+        bazzarArea: { type: 'string', description: 'Bazzar/Area' },
+        bazzar: { type: 'string', description: 'Bazzar (alias)' },
+        area: { type: 'string', description: 'Area (alias)' },
+        description: { type: 'string' },
+        companyId: { type: 'string' },
+        categoryId: { type: 'string' },
+        treadLicense: { type: 'string' },
+        openingDue: { type: 'number' },
+        creditLimit: { type: 'number' },
+        status: { type: 'string', description: 'Status of the party (ACTIVE/INACTIVE)' },
+        partyDocument: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+        profileImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'profile image of the party',
+        },
+      },
+    },
+  })
   @ApiOperation({ summary: 'Update a party' })
-  update(@Param('id') id: string, @Body() updatePartyDto: UpdatePartyDto) {
-    return this.partyService.update(id, updatePartyDto);
+  update(
+    @Param('id') id: string,
+    @Body() updatePartyDto: UpdatePartyDto,
+    @UploadedFiles()
+    files: {
+      partyDocument?: Express.Multer.File[];
+      profileImage?: Express.Multer.File[];
+    },
+  ) {
+    const dataToUpdate: any = { ...updatePartyDto };
+
+    if (files) {
+      if (files.partyDocument && files.partyDocument.length > 0) {
+        dataToUpdate.partyDocument = files.partyDocument.map(
+          (file) => `/uploads/documents/${file.filename}`,
+        );
+      }
+      if (files.profileImage && files.profileImage.length > 0) {
+        dataToUpdate.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
+      }
+    }
+
+    // Normalize bazzarArea
+    const bazzarAreaValue = updatePartyDto.bazzarArea || updatePartyDto.bazzar || updatePartyDto.area;
+    if (bazzarAreaValue) {
+      dataToUpdate.bazzarArea = bazzarAreaValue;
+    }
+
+    // Remove alias properties
+    delete dataToUpdate.bazzar;
+    delete dataToUpdate.area;
+
+    // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
+    if (dataToUpdate.openingDue !== undefined) {
+      const openingDue = Number(dataToUpdate.openingDue);
+      dataToUpdate.openingDue = isNaN(openingDue) ? 0 : openingDue;
+    }
+    if (dataToUpdate.creditLimit !== undefined) {
+      const creditLimit = Number(dataToUpdate.creditLimit);
+      dataToUpdate.creditLimit = isNaN(creditLimit) ? 0 : creditLimit;
+    }
+
+    return this.partyService.update(id, dataToUpdate);
+  }
+
+  @Get(':id/drivers')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get list of drivers hired by a party and their associated companies' })
+  @ApiResponse({ status: 200, description: 'Return driver list with company details.' })
+  @ApiResponse({ status: 404, description: 'Party not found.' })
+  getPartyDrivers(@Param('id') id: string) {
+    return this.partyService.getPartyDrivers(id);
   }
 
   @Delete(':id')

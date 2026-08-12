@@ -10,6 +10,8 @@ import { AuthService } from '../services/auth.service';
 import { LoginDto } from '../dto/login.dto';
 import { PartyLoginDto } from '../dto/party-login.dto';
 import { RegisterDto } from '../dto/register.dto';
+import { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RefreshTokenGuard } from '../../../common/guards/refresh-token.guard';
 import {
@@ -112,6 +114,25 @@ export class AuthController {
   })
   partyLogin(@Body() partyLoginDto: PartyLoginDto) {
     return this.authService.signInParty(partyLoginDto);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Email a password-reset token' })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiResponse({
+    status: 201,
+    description: 'A reset email is sent when the account exists.',
+  })
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset a password using an emailed token' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({ status: 201, description: 'Password reset successfully.' })
+  resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
   }
 
   @ApiBearerAuth()

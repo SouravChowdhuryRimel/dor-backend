@@ -4,6 +4,7 @@ enum Role {
   VENDOR
   SUPER_ADMIN
   PARTY
+  DRIVER
 }
 
 enum CompanyStatus {
@@ -13,9 +14,31 @@ enum CompanyStatus {
   BLOCKED
 }
 
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum DeliveryStatus {
   VAN_COMING
   TRANSFER_IN_PROGRESS
   NEAREST_TRANSFER
   DELIVERED
+}
+
+enum ComplaintStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  REOPENED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PROCESSING
+  DISPATCHED
+  DELIVERED
+  CANCELLED
 }

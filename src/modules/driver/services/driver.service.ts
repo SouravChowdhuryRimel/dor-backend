@@ -3,28 +3,122 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import * as argon2 from 'argon2';
+import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 
 @Injectable()
 export class DriverService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createDriverDto: CreateDriverDto) {
-    const hashedPassword = await argon2.hash(createDriverDto.password);
+    const { companyIds = [], partyIds = [], ...driverData } = createDriverDto;
+
+    if (companyIds.length > 0) {
+      const companyCount = await this.prisma.company.count({
+        where: { companyId: { in: companyIds } },
+      });
+      if (companyCount !== new Set(companyIds).size) {
+        throw new NotFoundException('One or more companies were not found');
+      }
+    }
+
+    if (partyIds.length > 0) {
+      const partyCount = await this.prisma.party.count({
+        where: { partyId: { in: partyIds } },
+      });
+      if (partyCount !== new Set(partyIds).size) {
+        throw new NotFoundException('One or more parties were not found');
+      }
+    }
+
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId: driverData.categoryId },
+    });
+    if (!category) {
+      throw new NotFoundException(`Category with ID "${driverData.categoryId}" not found`);
+    }
+
+    const hashedPassword = await argon2.hash(driverData.password);
     return this.prisma.driver.create({
       data: {
-        ...createDriverDto,
+        ...driverData,
         password: hashedPassword,
+        companyDrivers: {
+          create: [...new Set(companyIds)].map((companyId) => ({ companyId })),
+        },
+        partyDrivers: {
+          create: [...new Set(partyIds)].map((partyId) => ({ partyId })),
+        },
       } as any,
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+      },
     });
   }
 
-  async findAll() {
-    return this.prisma.driver.findMany();
+  async findByPhone(phoneNumber: string) {
+    return this.prisma.driver.findFirst({
+      where: { phoneNumber },
+    });
+  }
+
+  async findByEmail(email: string) {
+    return this.prisma.driver.findUnique({ where: { email } });
+  }
+
+  async updatePassword(driverId: string, password: string): Promise<void> {
+    const hashedPassword = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+    });
+
+    await this.prisma.driver.update({
+      where: { driverId },
+      data: { password: hashedPassword },
+    });
+  }
+
+
+  async findAll(query?: PaginationQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.driver.count(),
+      this.prisma.driver.findMany({
+        skip,
+        take: limit,
+        include: {
+          category: {
+            select: {
+              categoryId: true,
+              categoryName: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+      },
     });
     if (!driver) throw new NotFoundException('Driver not found');
     return driver;
@@ -45,6 +139,76 @@ export class DriverService {
       where: { driverId: id },
       data: dataToUpdate as any,
     });
+  }
+
+  async verify(id: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: id },
+    });
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    return this.prisma.driver.update({
+      where: { driverId: id },
+      data: { isVerified: true },
+      select: {
+        driverId: true,
+        driverName: true,
+        email: true,
+        phoneNumber: true,
+        isVerified: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async getDriverAssociations(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId },
+      include: {
+        companyDrivers: {
+          include: {
+            company: {
+              select: {
+                companyId: true,
+                companyName: true,
+                ownerName: true,
+                phoneNumber: true,
+                email: true,
+                district: true,
+                upozela: true,
+                address: true,
+              },
+            },
+          },
+        },
+        partyDrivers: {
+          include: {
+            party: {
+              select: {
+                partyId: true,
+                partyName: true,
+                businessName: true,
+                phoneNumber: true,
+                email: true,
+                district: true,
+                upozela: true,
+                address: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    const companies = driver.companyDrivers.map((cd) => cd.company);
+    const parties = driver.partyDrivers.map((pd) => pd.party);
+
+    return {
+      companies,
+      parties,
+    };
   }
 
   async remove(id: string) {

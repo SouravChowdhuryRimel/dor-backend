@@ -1,23 +1,38 @@
 model Party {
-    partyId        String   @id @default(uuid()) @map("party_id")
-    partyName      String   @map("party_name")
-    businessName   String   @map("business_name")
-    phoneNumber    String   @unique @map("phone_number")
-    email          String   @unique
-    password       String
-    address        String
-    district       String
-    upozela        String
-    bazzarArea     String   @map("bazzar_area")
-    description    String
-    openingDue     Float    @map("opening_due")
-    creditLimit    Float    @map("credit_limit")
-    status         String   @default("ACTIVE")
-    partyDocument  String[] @map("party_document")
-    offers         Offer[]
+  partyId       String        @id @default(uuid()) @map("party_id")
+  partyName     String        @map("party_name")
+  businessName  String        @map("business_name")
+  phoneNumber   String        @unique @map("phone_number")
+  email         String        @unique
+  password      String
+  address       String
+  district      String
+  upozela       String
+  bazzarArea    String        @map("bazzar_area")
+  description   String
+  openingDue    Float         @map("opening_due")
+  creditLimit   Float         @map("credit_limit")
+  status        String        @default("ACTIVE")
+  isVerified    Boolean       @default(false) @map("is_verified")
+  treadLicense  String?       @map("tread_license")
+  partyDocument String[]      @map("party_document")
+  profileImage  String?       @map("profile_image")
+  companyId     String?       @map("company_id")
+  company       Company?      @relation(fields: [companyId], references: [companyId], onDelete: SetNull)
+  categoryId    String        @map("category_id")
+  category      Category      @relation(fields: [categoryId], references: [categoryId])
+  offers        Offer[]
+  partyDrivers  PartyDriver[]
+  orders        Order[]
+  complaints    Complaint[]
+  inquiries     Inquiry[]
+  activityLogs  ActivityLog[]
+  productRates  PartyProductRate[]
 
-    createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-    @@map("parties")
+  @@index([companyId])
+  @@index([categoryId])
+  @@map("parties")
 }

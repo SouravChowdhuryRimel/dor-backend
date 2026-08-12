@@ -1,7 +1,7 @@
 model SubCategory {
-    subCategoryId String    @id @default(uuid()) @map("sub_category_id")
-    title         String
-    products      Product[]
+  subCategoryId String    @id @default(uuid()) @map("sub_category_id")
+  title         String
+  products      Product[]
 
-    @@map("sub_categories")
+  @@map("sub_categories")
 }
