@@ -3,6 +3,7 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import * as argon2 from 'argon2';
+import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 
 @Injectable()
 export class PartyService {
@@ -45,23 +46,34 @@ export class PartyService {
     });
   }
 
-  async findAll() {
-    return this.prisma.party.findMany({
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
+  async findAll(query?: PaginationQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.party.count(),
+      this.prisma.party.findMany({
+        skip,
+        take: limit,
+        include: {
+          category: {
+            select: {
+              categoryId: true,
+              categoryName: true,
+            },
+          },
+          company: {
+            select: {
+              companyId: true,
+              companyName: true,
+            },
           },
         },
-        company: {
-          select: {
-            companyId: true,
-            companyName: true,
-          },
-        },
-      },
-    });
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: string) {
@@ -139,6 +151,52 @@ export class PartyService {
         isVerified: true,
         updatedAt: true,
       },
+    });
+  }
+
+  async getPartyDrivers(partyId: string) {
+    const party = await this.prisma.party.findUnique({
+      where: { partyId },
+    });
+    if (!party) throw new NotFoundException('Party not found');
+
+    const partyDrivers = await this.prisma.partyDriver.findMany({
+      where: { partyId },
+      include: {
+        driver: {
+          include: {
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
+            companyDrivers: {
+              include: {
+                company: {
+                  select: {
+                    companyId: true,
+                    companyName: true,
+                    ownerName: true,
+                    phoneNumber: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return partyDrivers.map((pd) => {
+      const driver = pd.driver;
+      const companies = driver.companyDrivers.map((cd) => cd.company);
+      const { companyDrivers, partyDrivers, password, ...driverInfo } = driver as any;
+      return {
+        ...driverInfo,
+        companies,
+      };
     });
   }
 

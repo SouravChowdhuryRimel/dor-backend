@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, Patch, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Patch, Delete, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CategoryService } from '../services/category.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
@@ -7,6 +7,7 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -26,8 +27,8 @@ export class CategoryController {
   @Get()
   @ApiOperation({ summary: 'Get all categories' })
   @ApiResponse({ status: 200, description: 'Return all categories.' })
-  findAll() {
-    return this.categoryService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.categoryService.findAll(query);
   }
 
   @Get(':id/companies')

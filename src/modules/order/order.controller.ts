@@ -8,10 +8,13 @@ import {
   Delete,
   Query,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
+import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 
@@ -25,20 +28,35 @@ export class OrderController {
   @Post()
   @ApiOperation({ summary: 'Create a new order' })
   @ApiResponse({ status: 201, description: 'Order successfully created.' })
-  create(@Body() createOrderDto: CreateOrderDto) {
-    return this.orderService.create(createOrderDto);
+  create(@Body() createOrderDto: CreateOrderDto, @Req() req: any) {
+    return this.orderService.create(createOrderDto, req.user);
+  }
+
+  @Get('driver/:driverId')
+  @ApiOperation({ summary: 'Get assigned orders for a driver filtered by status type (pending, ongoing, completed)' })
+  @ApiResponse({ status: 200, description: 'Return driver assigned orders.' })
+  @ApiQuery({ name: 'type', required: false, enum: ['pending', 'ongoing', 'completed'] })
+  findDriverAssignedOrders(
+    @Param('driverId') driverId: string,
+    @Query('type') type?: string,
+    @Query() query?: PaginationQueryDto,
+  ) {
+    return this.orderService.findDriverAssignedOrders(driverId, type, query);
+  }
+
+  @Get(':id/invoice')
+  @ApiOperation({ summary: 'Generate detailed JSON invoice/receipt for an order' })
+  @ApiResponse({ status: 200, description: 'Return detailed invoice object.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  generateInvoice(@Param('id') id: string) {
+    return this.orderService.generateInvoice(id);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all orders' })
-  @ApiQuery({ name: 'companyId', required: false, type: String })
-  @ApiQuery({ name: 'partyId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Return all orders.' })
-  findAll(
-    @Query('companyId') companyId?: string,
-    @Query('partyId') partyId?: string,
-  ) {
-    return this.orderService.findAll({ companyId, partyId });
+  findAll(@Query() query: GetOrdersQueryDto) {
+    return this.orderService.findAll(query);
   }
 
   @Get(':id')
@@ -53,15 +71,15 @@ export class OrderController {
   @ApiOperation({ summary: 'Update an order' })
   @ApiResponse({ status: 200, description: 'Order successfully updated.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
-  update(@Param('id') id: string, @Body() updateOrderDto: UpdateOrderDto) {
-    return this.orderService.update(id, updateOrderDto);
+  update(@Param('id') id: string, @Body() updateOrderDto: UpdateOrderDto, @Req() req: any) {
+    return this.orderService.update(id, updateOrderDto, req.user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete an order' })
   @ApiResponse({ status: 200, description: 'Order successfully deleted.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
-  remove(@Param('id') id: string) {
-    return this.orderService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.remove(id, req.user);
   }
 }

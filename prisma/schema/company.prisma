@@ -21,6 +21,8 @@ model Company {
   companyDrivers  CompanyDriver[]
   complaints      Complaint[]
   notifications   Notification[]
+  activityLogs    ActivityLog[]
+  products        Product[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

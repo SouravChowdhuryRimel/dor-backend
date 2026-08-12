@@ -2,13 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateComplaintDto } from './dto/create-complaint.dto';
 import { CreateComplaintReplyDto } from './dto/create-complaint-reply.dto';
+import { GetComplaintsQueryDto } from './dto/get-complaints-query.dto';
+import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { ComplaintStatus } from '@prisma/client';
+import { ActivityLogService } from '../activity-log/activity-log.service';
 
 @Injectable()
 export class ComplaintService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogService: ActivityLogService,
+  ) {}
 
-  async create(createComplaintDto: CreateComplaintDto) {
+  async create(createComplaintDto: CreateComplaintDto, reqUser?: any) {
     // Verify party exists
     const partyExists = await this.prisma.party.findUnique({
       where: { partyId: createComplaintDto.partyId },
@@ -45,17 +51,38 @@ export class ComplaintService {
       }
     }
 
+    // Verify product exists if productId is provided
+    if (createComplaintDto.productId) {
+      const productExists = await this.prisma.product.findUnique({
+        where: { productId: createComplaintDto.productId },
+      });
+      if (!productExists) {
+        throw new NotFoundException(`Product with ID "${createComplaintDto.productId}" not found`);
+      }
+    }
+
     const showComplaintId = createComplaintDto.showComplaintId || `CMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    return this.prisma.complaint.create({
+    const complaint = await this.prisma.complaint.create({
       data: {
         ...createComplaintDto,
         showComplaintId,
       },
     });
+
+    const actorId = reqUser?.sub || createComplaintDto.partyId;
+    const actorType = reqUser?.roles[0] || 'PARTY';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'CREATE_COMPLAINT',
+      description: `Filed complaint ${showComplaintId}: ${createComplaintDto.title}`,
+    });
+
+    return complaint;
   }
 
-  async addReply(complaintId: string, createComplaintReplyDto: CreateComplaintReplyDto) {
+  async addReply(complaintId: string, createComplaintReplyDto: CreateComplaintReplyDto, reqUser?: any) {
     // Verify complaint exists
     const complaint = await this.prisma.complaint.findUnique({
       where: { complaintId },
@@ -64,15 +91,26 @@ export class ComplaintService {
       throw new NotFoundException(`Complaint with ID "${complaintId}" not found`);
     }
 
-    return this.prisma.complaintMessage.create({
+    const reply = await this.prisma.complaintMessage.create({
       data: {
         ...createComplaintReplyDto,
         complaintId,
       },
     });
+
+    const actorId = reqUser?.sub || createComplaintReplyDto.senderId;
+    const actorType = reqUser?.roles[0] || createComplaintReplyDto.senderRole || 'USER';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'REPLY_COMPLAINT',
+      description: `Posted reply to complaint ${complaint.showComplaintId}`,
+    });
+
+    return reply;
   }
 
-  async findAll(query?: { status?: ComplaintStatus; partyId?: string; companyId?: string }) {
+  async findAll(query?: GetComplaintsQueryDto) {
     const where: any = {};
     if (query?.status) {
       where.status = query.status;
@@ -83,19 +121,37 @@ export class ComplaintService {
     if (query?.companyId) {
       where.companyId = query.companyId;
     }
+    if (query?.driverId) {
+      where.driverId = query.driverId;
+    }
+    if (query?.productId) {
+      where.productId = query.productId;
+    }
 
-    return this.prisma.complaint.findMany({
-      where,
-      include: {
-        party: true,
-        company: true,
-        order: true,
-        driver: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.complaint.count({ where }),
+      this.prisma.complaint.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          party: true,
+          company: true,
+          order: true,
+          driver: true,
+          product: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(complaintId: string) {
@@ -125,7 +181,7 @@ export class ComplaintService {
     return complaint;
   }
 
-  async updateStatus(complaintId: string, status: ComplaintStatus) {
+  async updateStatus(complaintId: string, status: ComplaintStatus, reqUser?: any) {
     const complaint = await this.prisma.complaint.findUnique({
       where: { complaintId },
     });
@@ -133,10 +189,21 @@ export class ComplaintService {
       throw new NotFoundException(`Complaint with ID "${complaintId}" not found`);
     }
 
-    return this.prisma.complaint.update({
+    const updated = await this.prisma.complaint.update({
       where: { complaintId },
       data: { status },
     });
+
+    const actorId = reqUser?.sub || updated.partyId;
+    const actorType = reqUser?.roles[0] || 'ADMIN';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'UPDATE_COMPLAINT_STATUS',
+      description: `Updated complaint ${complaint.showComplaintId} status to ${status}`,
+    });
+
+    return updated;
   }
 
   async getCounts() {

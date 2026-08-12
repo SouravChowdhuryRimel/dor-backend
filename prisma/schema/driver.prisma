@@ -21,6 +21,7 @@ model Driver {
   partyDrivers         PartyDriver[]
   deliveries           Delivery[]
   complaints           Complaint[]
+  activityLogs         ActivityLog[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

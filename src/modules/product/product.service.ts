@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { SetPartyProductRateDto } from './dto/set-party-rate.dto';
+import { GetProductsQueryDto } from './dto/get-products-query.dto';
+import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
 
 @Injectable()
 export class ProductService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto, reqUser?: any) {
     const subCategory = await this.prisma.subCategory.findUnique({
       where: { subCategoryId: createProductDto.subCategoryId },
     });
@@ -17,20 +20,86 @@ export class ProductService {
       );
     }
 
+    let companyId = createProductDto.companyId;
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      companyId = reqUser.sub;
+    }
+
+    if (companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId },
+      });
+      if (!company) {
+        throw new NotFoundException(`Company with ID "${companyId}" not found`);
+      }
+    }
+
     return this.prisma.product.create({
-      data: createProductDto,
+      data: {
+        ...createProductDto,
+        companyId,
+      },
     });
   }
 
-  async findAll() {
-    return this.prisma.product.findMany({
-      include: {
-        subCategory: true,
-      },
-      orderBy: {
-        defaultPrice: 'asc',
-      },
-    });
+  async findAll(query?: GetProductsQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (query?.search) {
+      where.productName = {
+        contains: query.search,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query?.subCategoryId) {
+      where.subCategoryId = query.subCategoryId;
+    }
+
+    if (query?.companyId) {
+      where.companyId = query.companyId;
+    }
+
+    if (query?.minPrice !== undefined || query?.maxPrice !== undefined) {
+      where.defaultPrice = {};
+      if (query.minPrice !== undefined) {
+        where.defaultPrice.gte = query.minPrice;
+      }
+      if (query.maxPrice !== undefined) {
+        where.defaultPrice.lte = query.maxPrice;
+      }
+    }
+
+    const orderBy: any = {};
+    const allowedSortFields = ['defaultPrice', 'productName', 'createdAt', 'stockSize'];
+    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'defaultPrice';
+    const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
+    orderBy[sortBy] = sortOrder;
+
+    const [total, data] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          subCategory: true,
+          company: {
+            select: {
+              companyName: true,
+              ownerName: true,
+            },
+          },
+        },
+        orderBy,
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: string) {
@@ -38,6 +107,12 @@ export class ProductService {
       where: { productId: id },
       include: {
         subCategory: true,
+        company: {
+          select: {
+            companyName: true,
+            ownerName: true,
+          },
+        },
       },
     });
     if (!product) {
@@ -65,6 +140,15 @@ export class ProductService {
       }
     }
 
+    if (updateProductDto.companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: updateProductDto.companyId },
+      });
+      if (!company) {
+        throw new NotFoundException(`Company with ID "${updateProductDto.companyId}" not found`);
+      }
+    }
+
     return this.prisma.product.update({
       where: { productId: id },
       data: updateProductDto,
@@ -82,5 +166,170 @@ export class ProductService {
     return this.prisma.product.delete({
       where: { productId: id },
     });
+  }
+
+  async findLowStock(query?: PaginationQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    // Out of stock or stock size less than minimumOrder
+    const where = {
+      OR: [
+        { stockSize: { lte: 0 } },
+        {
+          stockSize: {
+            lt: this.prisma.product.fields.minimumOrder,
+          },
+        },
+      ],
+    };
+
+    const [total, data] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          subCategory: true,
+          company: {
+            select: {
+              companyName: true,
+            },
+          },
+        },
+        orderBy: {
+          stockSize: 'asc',
+        },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
+  }
+
+  async setPartyRate(dto: SetPartyProductRateDto) {
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: dto.partyId },
+    });
+    if (!party) {
+      throw new NotFoundException(`Party with ID "${dto.partyId}" not found`);
+    }
+
+    const product = await this.prisma.product.findUnique({
+      where: { productId: dto.productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID "${dto.productId}" not found`);
+    }
+
+    return this.prisma.partyProductRate.upsert({
+      where: {
+        partyId_productId: {
+          partyId: dto.partyId,
+          productId: dto.productId,
+        },
+      },
+      create: {
+        partyId: dto.partyId,
+        productId: dto.productId,
+        rate: dto.rate,
+      },
+      update: {
+        rate: dto.rate,
+      },
+    });
+  }
+
+  async getPartyRates(partyId: string) {
+    const party = await this.prisma.party.findUnique({
+      where: { partyId },
+    });
+    if (!party) {
+      throw new NotFoundException(`Party with ID "${partyId}" not found`);
+    }
+
+    const products = await this.prisma.product.findMany({
+      include: {
+        partyRates: {
+          where: { partyId },
+        },
+      },
+    });
+
+    return products.map((product) => {
+      const customRateObj = product.partyRates[0];
+      return {
+        productId: product.productId,
+        productName: product.productName,
+        productImage: product.productImage,
+        unit: product.unit,
+        bagSize: product.bagSize,
+        defaultPrice: product.defaultPrice,
+        customPrice: customRateObj ? customRateObj.rate : null,
+        activePrice: customRateObj ? customRateObj.rate : product.defaultPrice,
+        minimumOrder: product.minimumOrder,
+        description: product.description,
+        stockSize: product.stockSize,
+        subCategoryId: product.subCategoryId,
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
+      };
+    });
+  }
+
+  async findSubCategoryProducts(subCategoryId: string, query?: PaginationQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const where = { subCategoryId };
+
+    const [total, data] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          subCategory: true,
+          company: {
+            select: {
+              companyName: true,
+            },
+          },
+        },
+        orderBy: {
+          defaultPrice: 'asc',
+        },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
+  }
+
+  async findCompanyProducts(companyId: string, query?: PaginationQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const where = { companyId };
+
+    const [total, data] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          subCategory: true,
+        },
+        orderBy: {
+          defaultPrice: 'asc',
+        },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 }

@@ -12,6 +12,7 @@ import {
 import { OfferService } from './offer.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
+import { GetOffersQueryDto } from './dto/get-offers-query.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 
@@ -31,14 +32,9 @@ export class OfferController {
 
   @Get()
   @ApiOperation({ summary: 'Get all offers' })
-  @ApiQuery({ name: 'partyId', required: false, type: String })
-  @ApiQuery({ name: 'status', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Return all offers.' })
-  findAll(
-    @Query('partyId') partyId?: string,
-    @Query('status') status?: string,
-  ) {
-    return this.offerService.findAll({ partyId, status });
+  findAll(@Query() query: GetOffersQueryDto) {
+    return this.offerService.findAll(query);
   }
 
   @Get(':id')

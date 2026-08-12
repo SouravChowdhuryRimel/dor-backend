@@ -9,11 +9,13 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  Req,
 } from '@nestjs/common';
 import { ComplaintService } from './complaint.service';
 import { CreateComplaintDto } from './dto/create-complaint.dto';
 import { CreateComplaintReplyDto } from './dto/create-complaint-reply.dto';
 import { UpdateComplaintStatusDto } from './dto/update-complaint-status.dto';
+import { GetComplaintsQueryDto } from './dto/get-complaints-query.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -72,6 +74,7 @@ export class ComplaintController {
         companyId: { type: 'string' },
         orderId: { type: 'string' },
         driverId: { type: 'string' },
+        productId: { type: 'string' },
         attachments: {
           type: 'array',
           items: { type: 'string', format: 'binary' },
@@ -83,27 +86,21 @@ export class ComplaintController {
   create(
     @Body() createComplaintDto: CreateComplaintDto,
     @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: any,
   ) {
     if (files && files.length > 0) {
       createComplaintDto.attachments = files.map((file) => `/uploads/documents/${file.filename}`);
     } else {
       createComplaintDto.attachments = [];
     }
-    return this.complaintService.create(createComplaintDto);
+    return this.complaintService.create(createComplaintDto, req.user);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all complaints' })
-  @ApiQuery({ name: 'status', required: false, enum: ComplaintStatus })
-  @ApiQuery({ name: 'partyId', required: false, type: String })
-  @ApiQuery({ name: 'companyId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Return all complaints.' })
-  findAll(
-    @Query('status') status?: ComplaintStatus,
-    @Query('partyId') partyId?: string,
-    @Query('companyId') companyId?: string,
-  ) {
-    return this.complaintService.findAll({ status, partyId, companyId });
+  findAll(@Query() query: GetComplaintsQueryDto) {
+    return this.complaintService.findAll(query);
   }
 
   @Get('summary')
@@ -145,13 +142,14 @@ export class ComplaintController {
     @Param('id') id: string,
     @Body() createComplaintReplyDto: CreateComplaintReplyDto,
     @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: any,
   ) {
     if (files && files.length > 0) {
       createComplaintReplyDto.attachments = files.map((file) => `/uploads/documents/${file.filename}`);
     } else {
       createComplaintReplyDto.attachments = [];
     }
-    return this.complaintService.addReply(id, createComplaintReplyDto);
+    return this.complaintService.addReply(id, createComplaintReplyDto, req.user);
   }
 
   @Patch(':id/status')
@@ -161,7 +159,8 @@ export class ComplaintController {
   updateStatus(
     @Param('id') id: string,
     @Body() updateComplaintStatusDto: UpdateComplaintStatusDto,
+    @Req() req: any,
   ) {
-    return this.complaintService.updateStatus(id, updateComplaintStatusDto.status);
+    return this.complaintService.updateStatus(id, updateComplaintStatusDto.status, req.user);
   }
 }

@@ -10,9 +10,11 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { PartyService } from '../services/party.service';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
@@ -153,8 +155,8 @@ export class PartyController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  findAll() {
-    return this.partyService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.partyService.findAll(query);
   }
 
   @Get(':id')
@@ -285,6 +287,16 @@ export class PartyController {
     }
 
     return this.partyService.update(id, dataToUpdate);
+  }
+
+  @Get(':id/drivers')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get list of drivers hired by a party and their associated companies' })
+  @ApiResponse({ status: 200, description: 'Return driver list with company details.' })
+  @ApiResponse({ status: 404, description: 'Party not found.' })
+  getPartyDrivers(@Param('id') id: string) {
+    return this.partyService.getPartyDrivers(id);
   }
 
   @Delete(':id')

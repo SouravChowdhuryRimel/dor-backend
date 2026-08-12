@@ -86,4 +86,12 @@ export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   subCategoryId: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the associated company/vendor',
+    example: 'company-uuid-string',
+  })
+  @IsString()
+  @IsOptional()
+  companyId?: string;
 }

@@ -69,4 +69,12 @@ export class CreateComplaintDto {
   @IsString()
   @IsOptional()
   driverId?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the product related to this complaint',
+    example: 'product-uuid-string',
+  })
+  @IsString()
+  @IsOptional()
+  productId?: string;
 }

@@ -10,7 +10,9 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { DriverService } from '../services/driver.service';
 import {
   ApiTags,
@@ -18,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
@@ -175,8 +178,8 @@ export class DriverController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Get all drivers' })
-  findAll() {
-    return this.driverService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.driverService.findAll(query);
   }
 
   @Get(':id')
@@ -202,6 +205,16 @@ export class DriverController {
   @ApiOperation({ summary: 'Update a driver' })
   update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto) {
     return this.driverService.update(id, updateDriverDto);
+  }
+
+  @Get(':id/associations')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get list of companies and parties associated with a driver' })
+  @ApiResponse({ status: 200, description: 'Return associated companies and parties.' })
+  @ApiResponse({ status: 404, description: 'Driver not found.' })
+  getDriverAssociations(@Param('id') id: string) {
+    return this.driverService.getDriverAssociations(id);
   }
 
   @Delete(':id')

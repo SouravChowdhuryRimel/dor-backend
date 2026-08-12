@@ -3,6 +3,7 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import * as argon2 from 'argon2';
+import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 
 @Injectable()
 export class DriverService {
@@ -83,17 +84,28 @@ export class DriverService {
   }
 
 
-  async findAll() {
-    return this.prisma.driver.findMany({
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
+  async findAll(query?: PaginationQueryDto) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.driver.count(),
+      this.prisma.driver.findMany({
+        skip,
+        take: limit,
+        include: {
+          category: {
+            select: {
+              categoryId: true,
+              categoryName: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: string) {
@@ -147,6 +159,56 @@ export class DriverService {
         updatedAt: true,
       },
     });
+  }
+
+  async getDriverAssociations(driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId },
+      include: {
+        companyDrivers: {
+          include: {
+            company: {
+              select: {
+                companyId: true,
+                companyName: true,
+                ownerName: true,
+                phoneNumber: true,
+                email: true,
+                district: true,
+                upozela: true,
+                address: true,
+              },
+            },
+          },
+        },
+        partyDrivers: {
+          include: {
+            party: {
+              select: {
+                partyId: true,
+                partyName: true,
+                businessName: true,
+                phoneNumber: true,
+                email: true,
+                district: true,
+                upozela: true,
+                address: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!driver) throw new NotFoundException('Driver not found');
+
+    const companies = driver.companyDrivers.map((cd) => cd.company);
+    const parties = driver.partyDrivers.map((pd) => pd.party);
+
+    return {
+      companies,
+      parties,
+    };
   }
 
   async remove(id: string) {

@@ -15,6 +15,7 @@ import {
 import { InquiryService } from './inquiry.service';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { UpdateInquiryDto } from './dto/update-inquiry.dto';
+import { GetInquiriesQueryDto } from './dto/get-inquiries-query.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -94,14 +95,9 @@ export class InquiryController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Get all inquiries (Authenticated)' })
-  @ApiQuery({ name: 'categoryId', required: false, type: String })
-  @ApiQuery({ name: 'partyId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Return all inquiries.' })
-  findAll(
-    @Query('categoryId') categoryId?: string,
-    @Query('partyId') partyId?: string,
-  ) {
-    return this.inquiryService.findAll({ categoryId, partyId });
+  findAll(@Query() query: GetInquiriesQueryDto) {
+    return this.inquiryService.findAll(query);
   }
 
   @Get(':id')

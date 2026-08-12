@@ -22,6 +22,7 @@ import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import * as nodemailer from 'nodemailer';
 import { randomBytes } from 'crypto';
+import { ActivityLogService } from '../../activity-log/activity-log.service';
 
 type PasswordResetAccount = {
   id: string;
@@ -41,6 +42,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
+    private activityLogService: ActivityLogService,
   ) {}
 
   async signUp(registerDto: RegisterDto) {
@@ -70,6 +72,13 @@ export class AuthService {
 
       // Persist the session reference in Redis (no DB hit)
       await this.storeSession(newUser.id, tokens.refreshToken);
+
+      await this.activityLogService.log({
+        actorType: newUser.roles[0] || 'USER',
+        actorId: newUser.id,
+        action: 'SIGNUP',
+        description: `Registered new user account: ${newUser.name || newUser.email || newUser.phoneNumber}`,
+      });
 
       return {
         ...tokens,
@@ -118,6 +127,13 @@ export class AuthService {
         const tokens = await this.getTokens(user.id, user.email, user.roles);
         await this.storeSession(user.id, tokens.refreshToken);
 
+        await this.activityLogService.log({
+          actorType: user.roles[0] || 'USER',
+          actorId: user.id,
+          action: 'LOGIN',
+          description: `User/Admin logged in: ${user.name || user.email || user.phoneNumber}`,
+        });
+
         return {
           ...tokens,
           user: {
@@ -153,6 +169,13 @@ export class AuthService {
           Role.VENDOR,
         ]);
         await this.storeSession(company.companyId, tokens.refreshToken);
+
+        await this.activityLogService.log({
+          actorType: 'COMPANY',
+          actorId: company.companyId,
+          action: 'LOGIN',
+          description: `Company logged in: ${company.companyName}`,
+        });
 
         return {
           ...tokens,
@@ -190,6 +213,13 @@ export class AuthService {
         ]);
         await this.storeSession(party.partyId, tokens.refreshToken);
 
+        await this.activityLogService.log({
+          actorType: 'PARTY',
+          actorId: party.partyId,
+          action: 'LOGIN',
+          description: `Party logged in: ${party.partyName}`,
+        });
+
         return {
           ...tokens,
           user: {
@@ -225,6 +255,13 @@ export class AuthService {
           Role.DRIVER,
         ]);
         await this.storeSession(driver.driverId, tokens.refreshToken);
+
+        await this.activityLogService.log({
+          actorType: 'DRIVER',
+          actorId: driver.driverId,
+          action: 'LOGIN',
+          description: `Driver logged in: ${driver.driverName}`,
+        });
 
         return {
           ...tokens,
@@ -276,6 +313,13 @@ export class AuthService {
 
       await this.storeSession(company.companyId, tokens.refreshToken);
 
+      await this.activityLogService.log({
+        actorType: 'COMPANY',
+        actorId: company.companyId,
+        action: 'LOGIN',
+        description: `Company logged in: ${company.companyName}`,
+      });
+
       return {
         ...tokens,
         user: {
@@ -326,6 +370,13 @@ export class AuthService {
       ]);
 
       await this.storeSession(party.partyId, tokens.refreshToken);
+
+      await this.activityLogService.log({
+        actorType: 'PARTY',
+        actorId: party.partyId,
+        action: 'LOGIN',
+        description: `Party logged in: ${party.partyName}`,
+      });
 
       return {
         ...tokens,
@@ -419,6 +470,34 @@ export class AuthService {
 
   async logout(userId: string) {
     try {
+      let actorType = 'USER';
+      const u = await this.usersService.findById(userId);
+      if (u) {
+        actorType = u.roles[0] || 'USER';
+      } else {
+        const c = await this.companyService.findOne(userId).catch(() => null);
+        if (c) {
+          actorType = 'COMPANY';
+        } else {
+          const p = await this.partyService.findOne(userId).catch(() => null);
+          if (p) {
+            actorType = 'PARTY';
+          } else {
+            const d = await this.driverService.findOne(userId).catch(() => null);
+            if (d) {
+              actorType = 'DRIVER';
+            }
+          }
+        }
+      }
+
+      await this.activityLogService.log({
+        actorType,
+        actorId: userId,
+        action: 'LOGOUT',
+        description: `${actorType} logged out successfully`,
+      });
+
       // Clear transient session from memory cache instantly. Zero DB overhead.
       await this.redisService.del(`session:${userId}`);
       return { success: true };

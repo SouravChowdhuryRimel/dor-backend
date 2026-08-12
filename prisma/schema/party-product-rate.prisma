@@ -1,0 +1,14 @@
+model PartyProductRate {
+  partyId   String  @map("party_id")
+  productId String  @map("product_id")
+  rate      Float
+
+  party   Party   @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [productId], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([partyId, productId])
+  @@map("party_product_rates")
+}

@@ -1,0 +1,24 @@
+model ActivityLog {
+  id          String   @id @default(uuid()) @map("id")
+  actorType   String   @map("actor_type") // ADMIN, COMPANY, PARTY, DRIVER, VENDOR, USER
+  actorId     String   @map("actor_id")
+  action      String   @map("action")
+  description String   @map("description")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+
+  userId      String?  @map("user_id")
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  companyId   String?  @map("company_id")
+  company     Company? @relation(fields: [companyId], references: [companyId], onDelete: SetNull)
+  partyId     String?  @map("party_id")
+  party       Party?   @relation(fields: [partyId], references: [partyId], onDelete: SetNull)
+  driverId    String?  @map("driver_id")
+  driver      Driver?  @relation(fields: [driverId], references: [driverId], onDelete: SetNull)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorId])
+  @@index([actorType])
+  @@map("activity_logs")
+}

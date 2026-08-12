@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { UpdateInquiryDto } from './dto/update-inquiry.dto';
+import { GetInquiriesQueryDto } from './dto/get-inquiries-query.dto';
+import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { NotificationGateway } from '../notification/notification.gateway';
 
 @Injectable()
@@ -86,41 +88,52 @@ export class InquiryService {
     return inquiry;
   }
 
-  async findAll(filters: { categoryId?: string; partyId?: string }) {
+  async findAll(query?: GetInquiriesQueryDto) {
     const where: any = {};
-    if (filters.categoryId) {
-      where.categoryId = filters.categoryId;
+    if (query?.categoryId) {
+      where.categoryId = query.categoryId;
     }
-    if (filters.partyId) {
-      where.partyId = filters.partyId;
+    if (query?.partyId) {
+      where.partyId = query.partyId;
     }
 
-    return this.prisma.inquiry.findMany({
-      where,
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.inquiry.count({ where }),
+      this.prisma.inquiry.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          category: {
+            select: {
+              categoryId: true,
+              categoryName: true,
+            },
+          },
+          party: {
+            select: {
+              partyId: true,
+              partyName: true,
+              businessName: true,
+              phoneNumber: true,
+              email: true,
+              district: true,
+              upozela: true,
+              address: true,
+            },
           },
         },
-        party: {
-          select: {
-            partyId: true,
-            partyName: true,
-            businessName: true,
-            phoneNumber: true,
-            email: true,
-            district: true,
-            upozela: true,
-            address: true,
-          },
+        orderBy: {
+          createdAt: 'desc',
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: string) {

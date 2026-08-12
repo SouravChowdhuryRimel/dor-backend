@@ -12,6 +12,7 @@ model Order {
   party       Party?      @relation(fields: [partyId], references: [partyId])
   deliveries  Delivery[]
   complaints  Complaint[]
+  status      OrderStatus @default(PENDING)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
+import { GetOffersQueryDto } from './dto/get-offers-query.dto';
+import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 
 @Injectable()
 export class OfferService {
@@ -33,7 +35,7 @@ export class OfferService {
     });
   }
 
-  async findAll(query?: { partyId?: string; status?: string }) {
+  async findAll(query?: GetOffersQueryDto) {
     const where: any = {};
     if (query?.partyId) {
       where.partyId = query.partyId;
@@ -42,13 +44,24 @@ export class OfferService {
       where.status = query.status;
     }
 
-    return this.prisma.offer.findMany({
-      where,
-      include: {
-        party: true,
-        product: true,
-      },
-    });
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      this.prisma.offer.count({ where }),
+      this.prisma.offer.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          party: true,
+          product: true,
+        },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: string) {

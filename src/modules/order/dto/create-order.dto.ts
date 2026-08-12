@@ -66,4 +66,13 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   partyId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Status of the order',
+    enum: ['PENDING', 'ACCEPTED', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'CANCELLED'],
+    example: 'PENDING',
+  })
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

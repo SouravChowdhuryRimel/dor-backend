@@ -8,10 +8,12 @@ import {
   Delete,
   Query,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { DeliveryService } from './delivery.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
+import { GetDeliveriesQueryDto } from './dto/get-deliveries-query.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 import { DeliveryStatus } from '@prisma/client';
@@ -26,20 +28,15 @@ export class DeliveryController {
   @Post()
   @ApiOperation({ summary: 'Create a new delivery assignment' })
   @ApiResponse({ status: 201, description: 'Delivery assignment successfully created.' })
-  create(@Body() createDeliveryDto: CreateDeliveryDto) {
-    return this.deliveryService.create(createDeliveryDto);
+  create(@Body() createDeliveryDto: CreateDeliveryDto, @Req() req: any) {
+    return this.deliveryService.create(createDeliveryDto, req.user);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all deliveries' })
-  @ApiQuery({ name: 'driverId', required: false, type: String })
-  @ApiQuery({ name: 'status', required: false, enum: DeliveryStatus })
   @ApiResponse({ status: 200, description: 'Return all deliveries.' })
-  findAll(
-    @Query('driverId') driverId?: string,
-    @Query('status') status?: DeliveryStatus,
-  ) {
-    return this.deliveryService.findAll({ driverId, status });
+  findAll(@Query() query: GetDeliveriesQueryDto) {
+    return this.deliveryService.findAll(query);
   }
 
   @Get(':id')
@@ -57,15 +54,16 @@ export class DeliveryController {
   update(
     @Param('id') id: string,
     @Body() updateDeliveryDto: UpdateDeliveryDto,
+    @Req() req: any,
   ) {
-    return this.deliveryService.update(id, updateDeliveryDto);
+    return this.deliveryService.update(id, updateDeliveryDto, req.user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a delivery assignment' })
   @ApiResponse({ status: 200, description: 'Delivery assignment successfully deleted.' })
   @ApiResponse({ status: 404, description: 'Delivery assignment not found.' })
-  remove(@Param('id') id: string) {
-    return this.deliveryService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.deliveryService.remove(id, req.user);
   }
 }

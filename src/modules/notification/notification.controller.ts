@@ -5,7 +5,9 @@ import {
   Param,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import { NotificationService } from './notification.service';
 import {
   ApiTags,
@@ -29,9 +31,9 @@ export class NotificationController {
   @Roles(Role.VENDOR)
   @ApiOperation({ summary: 'Get all notifications for logged-in company (VENDOR only)' })
   @ApiResponse({ status: 200, description: 'Return all notifications for the company.' })
-  findAll(@Req() req: any) {
+  findAll(@Req() req: any, @Query() query: PaginationQueryDto) {
     const companyId = req.user.sub;
-    return this.notificationService.findAllForCompany(companyId);
+    return this.notificationService.findAllForCompany(companyId, query);
   }
 
   @Patch(':id/read')

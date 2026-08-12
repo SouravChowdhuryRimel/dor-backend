@@ -33,3 +33,12 @@ enum ComplaintStatus {
   REOPENED
   CANCELLED
 }
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PROCESSING
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}

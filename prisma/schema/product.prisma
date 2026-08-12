@@ -10,8 +10,12 @@ model Product {
   stockSize     Int         @map("stock_size")
   subCategoryId String      @map("sub_category_id")
   subCategory   SubCategory @relation(fields: [subCategoryId], references: [subCategoryId])
+  companyId     String?     @map("company_id")
+  company       Company?    @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
   offers        Offer[]
   orders        Order[]
+  partyRates    PartyProductRate[]
+  complaints    Complaint[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

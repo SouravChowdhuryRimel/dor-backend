@@ -10,7 +10,9 @@ import {
   Req,
   UseInterceptors,
   UploadedFiles,
+  Query,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { CompanyService } from '../services/company.service';
 import {
   ApiTags,
@@ -123,15 +125,15 @@ export class CompanyController {
   @ApiOperation({
     summary: 'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
   })
-  getPending() {
-    return this.companyService.findPending();
+  getPending(@Query() query: PaginationQueryDto) {
+    return this.companyService.findPending(query);
   }
 
   @Get('verified')
   @ApiOperation({ summary: 'Get all verified companies' })
   @ApiResponse({ status: 200, description: 'Returns all verified companies.' })
-  getVerified() {
-    return this.companyService.findVerified();
+  getVerified(@Query() query: PaginationQueryDto) {
+    return this.companyService.findVerified(query);
   }
 
   @Patch(':id/approve')
@@ -149,8 +151,8 @@ export class CompanyController {
 
   @Get()
   @ApiOperation({ summary: 'Get all companies' })
-  findAll() {
-    return this.companyService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.companyService.findAll(query);
   }
 
   @Get(':id')
@@ -225,6 +227,16 @@ export class CompanyController {
       );
     }
     return this.companyService.update(id, updateCompanyDto);
+  }
+
+  @Get(':id/drivers')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get list of drivers hired by a company and their associated parties' })
+  @ApiResponse({ status: 200, description: 'Return driver list with party details.' })
+  @ApiResponse({ status: 404, description: 'Company not found.' })
+  getCompanyDrivers(@Param('id') id: string) {
+    return this.companyService.getCompanyDrivers(id);
   }
 
   @Delete(':id')

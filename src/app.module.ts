@@ -28,6 +28,7 @@ import { ComplaintModule } from './modules/complaint/complaint.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InquiryModule } from './modules/inquiry/inquiry.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { ActivityLogModule } from './modules/activity-log/activity-log.module';
 
 
 @Module({
@@ -57,6 +58,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     DashboardModule,
     InquiryModule,
     NotificationModule,
+    ActivityLogModule,
   ],
   providers: [
     {

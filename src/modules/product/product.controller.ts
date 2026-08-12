@@ -9,10 +9,15 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  Query,
+  Req,
 } from '@nestjs/common';
+import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { SetPartyProductRateDto } from './dto/set-party-rate.dto';
+import { GetProductsQueryDto } from './dto/get-products-query.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -53,7 +58,7 @@ const productImageUpload = {
 @ApiTags('Products')
 @Controller('products')
 export class ProductController {
-  constructor(private readonly productService: ProductService) { }
+  constructor(private readonly productService: ProductService) {}
 
   @Post()
   @ApiBearerAuth()
@@ -61,34 +66,98 @@ export class ProductController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @UseInterceptors(FilesInterceptor('productImage', 10, productImageUpload))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Create a new product (SUPER_ADMIN, ADMIN)' })
+  @ApiOperation({ summary: 'Create a new product (SUPER_ADMIN, ADMIN, VENDOR)' })
   @ApiResponse({ status: 201, description: 'Product successfully created.' })
   @ApiBody({
     schema: {
       type: 'object',
       required: [
-        'productName', 'unit', 'bagSize', 'defaultPrice', 'minimumOrder',
-        'description', 'stockSize', 'subCategoryId',
+        'productName',
+        'unit',
+        'bagSize',
+        'defaultPrice',
+        'minimumOrder',
+        'description',
+        'stockSize',
+        'subCategoryId',
       ],
       properties: {
         productImage: { type: 'array', items: { type: 'string', format: 'binary' } },
-        productName: { type: 'string' }, unit: { type: 'string' },
-        bagSize: { type: 'string' }, defaultPrice: { type: 'number' },
-        minimumOrder: { type: 'number' }, description: { type: 'string' },
-        stockSize: { type: 'number' }, subCategoryId: { type: 'string' },
+        productName: { type: 'string' },
+        unit: { type: 'string' },
+        bagSize: { type: 'string' },
+        defaultPrice: { type: 'number' },
+        minimumOrder: { type: 'number' },
+        description: { type: 'string' },
+        stockSize: { type: 'number' },
+        subCategoryId: { type: 'string' },
+        companyId: { type: 'string', description: 'Associated company ID (optional for Admin)' },
       },
     },
   })
-  create(@Body() data: CreateProductDto, @UploadedFiles() files: Express.Multer.File[]) {
+  create(
+    @Body() data: CreateProductDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: any,
+  ) {
     data.productImage = files?.map((file) => `/uploads/products/${file.filename}`) ?? [];
-    return this.productService.create(data);
+    return this.productService.create(data, req.user);
+  }
+
+  @Post('party-rates')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
+  @ApiOperation({ summary: 'Set or update customized rate for a product and party' })
+  @ApiResponse({ status: 200, description: 'Product party rate successfully set.' })
+  setPartyRate(@Body() dto: SetPartyProductRateDto) {
+    return this.productService.setPartyRate(dto);
+  }
+
+  @Get('party-rates/:partyId')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Get customized rates list of all products for a specific party' })
+  @ApiResponse({ status: 200, description: 'Return rates list.' })
+  getPartyRates(@Param('partyId') partyId: string) {
+    return this.productService.getPartyRates(partyId);
+  }
+
+  @Get('low-stock')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
+  @ApiOperation({ summary: 'Get list of products with low stock (out of stock or below min order)' })
+  @ApiResponse({ status: 200, description: 'Return low stock products.' })
+  findLowStock(@Query() query: PaginationQueryDto) {
+    return this.productService.findLowStock(query);
+  }
+
+  @Get('sub-category/:subCategoryId')
+  @ApiOperation({ summary: 'Get all public products by subcategory ID' })
+  @ApiResponse({ status: 200, description: 'Return subcategory products.' })
+  findSubCategoryProducts(
+    @Param('subCategoryId') subCategoryId: string,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.productService.findSubCategoryProducts(subCategoryId, query);
+  }
+
+  @Get('company/:companyId')
+  @ApiOperation({ summary: 'Get products belonging to a company' })
+  @ApiResponse({ status: 200, description: 'Return company products.' })
+  findCompanyProducts(
+    @Param('companyId') companyId: string,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.productService.findCompanyProducts(companyId, query);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all products (Public)' })
+  @ApiOperation({ summary: 'Get all products with fuzzy search, subcategory, price filtering, and sorting' })
   @ApiResponse({ status: 200, description: 'Return all products.' })
-  findAll() {
-    return this.productService.findAll();
+  findAll(@Query() query: GetProductsQueryDto) {
+    return this.productService.findAll(query);
   }
 
   @Get(':id')
@@ -104,17 +173,22 @@ export class ProductController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @UseInterceptors(FilesInterceptor('productImage', 10, productImageUpload))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Update a product (SUPER_ADMIN, ADMIN)' })
+  @ApiOperation({ summary: 'Update a product (SUPER_ADMIN, ADMIN, VENDOR)' })
   @ApiResponse({ status: 200, description: 'Product successfully updated.' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         productImage: { type: 'array', items: { type: 'string', format: 'binary' } },
-        productName: { type: 'string' }, unit: { type: 'string' },
-        bagSize: { type: 'string' }, defaultPrice: { type: 'number' },
-        minimumOrder: { type: 'number' }, description: { type: 'string' },
-        stockSize: { type: 'number' }, subCategoryId: { type: 'string' },
+        productName: { type: 'string' },
+        unit: { type: 'string' },
+        bagSize: { type: 'string' },
+        defaultPrice: { type: 'number' },
+        minimumOrder: { type: 'number' },
+        description: { type: 'string' },
+        stockSize: { type: 'number' },
+        subCategoryId: { type: 'string' },
+        companyId: { type: 'string' },
       },
     },
   })
@@ -133,7 +207,7 @@ export class ProductController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
-  @ApiOperation({ summary: 'Delete a product (SUPER_ADMIN, ADMIN)' })
+  @ApiOperation({ summary: 'Delete a product (SUPER_ADMIN, ADMIN, VENDOR)' })
   @ApiResponse({ status: 200, description: 'Product successfully deleted.' })
   remove(@Param('id') id: string) {
     return this.productService.remove(id);
