@@ -22,6 +22,7 @@ model Driver {
   deliveries           Delivery[]
   complaints           Complaint[]
   activityLogs         ActivityLog[]
+  notifications        Notification[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

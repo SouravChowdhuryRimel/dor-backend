@@ -5,10 +5,14 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { SetPartyProductRateDto } from './dto/set-party-rate.dto';
 import { GetProductsQueryDto } from './dto/get-products-query.dto';
 import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import { NotificationGateway } from '../notification/notification.gateway';
 
 @Injectable()
 export class ProductService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationGateway: NotificationGateway,
+  ) {}
 
   async create(createProductDto: CreateProductDto, reqUser?: any) {
     const subCategory = await this.prisma.subCategory.findUnique({
@@ -34,10 +38,17 @@ export class ProductService {
       }
     }
 
+    const offerPrice = createProductDto.offerPrice ?? createProductDto.defaultPrice ?? 0;
+    const regularPrice = createProductDto.regularPrice ?? createProductDto.defaultPrice ?? offerPrice;
+    const defaultPrice = offerPrice;
+
     return this.prisma.product.create({
       data: {
         ...createProductDto,
         companyId,
+        offerPrice,
+        regularPrice,
+        defaultPrice,
       },
     });
   }
@@ -92,6 +103,11 @@ export class ProductService {
             select: {
               companyName: true,
               ownerName: true,
+              category: {
+                select: {
+                  categoryName: true,
+                },
+              },
             },
           },
         },
@@ -99,7 +115,20 @@ export class ProductService {
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mappedData = data.map((p) => ({
+      ...p,
+      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+      companyCategoryName: (p.company as any)?.category?.categoryName || null,
+      subCategoryName: p.subCategory?.title || null,
+      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+    }));
+
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   async findOne(id: string) {
@@ -111,6 +140,11 @@ export class ProductService {
           select: {
             companyName: true,
             ownerName: true,
+            category: {
+              select: {
+                categoryName: true,
+              },
+            },
           },
         },
       },
@@ -118,7 +152,18 @@ export class ProductService {
     if (!product) {
       throw new NotFoundException(`Product not found`);
     }
-    return product;
+    return {
+      ...product,
+      stockStatus: product.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      stockStatusText: product.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+      companyCategoryName: (product.company as any)?.category?.categoryName || null,
+      subCategoryName: product.subCategory?.title || null,
+      status: product.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+      statusText: product.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+      unitText: product.unit ? 'প্রতি ' + product.unit : 'প্রতি ব্যাগ',
+      stockText: `${product.stockSize} ${product.unit || 'ব্যাগ'}`,
+      minOrderText: `সর্বনিম্ন অর্ডার: ${product.minimumOrder}`,
+    };
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
@@ -149,9 +194,22 @@ export class ProductService {
       }
     }
 
+    const updateData: any = { ...updateProductDto };
+    if (
+      updateProductDto.offerPrice !== undefined ||
+      updateProductDto.defaultPrice !== undefined ||
+      updateProductDto.regularPrice !== undefined
+    ) {
+      const newOfferPrice = updateProductDto.offerPrice ?? updateProductDto.defaultPrice ?? product.offerPrice;
+      const newRegularPrice = updateProductDto.regularPrice ?? product.regularPrice;
+      updateData.offerPrice = newOfferPrice;
+      updateData.regularPrice = newRegularPrice;
+      updateData.defaultPrice = newOfferPrice;
+    }
+
     return this.prisma.product.update({
       where: { productId: id },
-      data: updateProductDto,
+      data: updateData,
     });
   }
 
@@ -223,7 +281,7 @@ export class ProductService {
       throw new NotFoundException(`Product with ID "${dto.productId}" not found`);
     }
 
-    return this.prisma.partyProductRate.upsert({
+    const rate = await this.prisma.partyProductRate.upsert({
       where: {
         partyId_productId: {
           partyId: dto.partyId,
@@ -239,6 +297,27 @@ export class ProductService {
         rate: dto.rate,
       },
     });
+
+    const notifTitle = 'বিশেষ মূল্য অফার (Special Price Offer)';
+    const notifMessage = `আপনাকে "${product.productName}" পণ্যের জন্য একটি বিশেষ কাস্টম মূল্য (${dto.rate} টাকা) অফার করা হয়েছে।`;
+
+    await this.prisma.notification.create({
+      data: {
+        title: notifTitle,
+        message: notifMessage,
+        partyId: dto.partyId,
+      },
+    });
+
+    this.notificationGateway.sendNotificationToParty(dto.partyId, {
+      title: notifTitle,
+      message: notifMessage,
+      productId: dto.productId,
+      rate: dto.rate,
+      createdAt: new Date(),
+    });
+
+    return rate;
   }
 
   async getPartyRates(partyId: string) {
@@ -308,12 +387,39 @@ export class ProductService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async findCompanyProducts(companyId: string, query?: PaginationQueryDto) {
+  async findCompanyProducts(companyId: string, query?: GetProductsQueryDto) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
 
-    const where = { companyId };
+    const where: any = { companyId };
+
+    if (query?.search) {
+      where.productName = {
+        contains: query.search,
+        mode: 'insensitive',
+      };
+    }
+
+    if (query?.subCategoryId) {
+      where.subCategoryId = query.subCategoryId;
+    }
+
+    if (query?.minPrice !== undefined || query?.maxPrice !== undefined) {
+      where.defaultPrice = {};
+      if (query.minPrice !== undefined) {
+        where.defaultPrice.gte = query.minPrice;
+      }
+      if (query.maxPrice !== undefined) {
+        where.defaultPrice.lte = query.maxPrice;
+      }
+    }
+
+    const orderBy: any = {};
+    const allowedSortFields = ['defaultPrice', 'productName', 'createdAt', 'stockSize'];
+    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'defaultPrice';
+    const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
+    orderBy[sortBy] = sortOrder;
 
     const [total, data] = await Promise.all([
       this.prisma.product.count({ where }),
@@ -323,13 +429,35 @@ export class ProductService {
         take: limit,
         include: {
           subCategory: true,
+          company: {
+            select: {
+              companyName: true,
+              ownerName: true,
+              category: {
+                select: {
+                  categoryName: true,
+                },
+              },
+            },
+          },
         },
-        orderBy: {
-          defaultPrice: 'asc',
-        },
+        orderBy,
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mappedData = data.map((p) => ({
+      ...p,
+      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+      companyCategoryName: (p.company as any)?.category?.categoryName || null,
+      subCategoryName: p.subCategory?.title || null,
+      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+    }));
+
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 }

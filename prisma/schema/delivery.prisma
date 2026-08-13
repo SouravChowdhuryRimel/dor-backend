@@ -5,11 +5,13 @@ model Delivery {
   district          String
   description       String
   deliveryTime      DateTime       @map("delivery_time")
-  status            DeliveryStatus @default(VAN_COMING)
+  status            DeliveryStatus @default(PENDING)
+  pickupProof       String?        @map("pickup_proof")
+  deliveryProof     String?        @map("delivery_proof")
   startDeliveryTime DateTime?      @map("start_delivery_time")
   endDeliveryTime   DateTime?      @map("end_delivery_time")
-  driverId          String         @map("driver_id")
-  driver            Driver         @relation(fields: [driverId], references: [driverId])
+  driverId          String?        @map("driver_id")
+  driver            Driver?        @relation(fields: [driverId], references: [driverId])
   orderId           String?        @map("order_id")
   order             Order?         @relation(fields: [orderId], references: [orderId])
 

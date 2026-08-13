@@ -144,11 +144,11 @@ export class ProductController {
   }
 
   @Get('company/:companyId')
-  @ApiOperation({ summary: 'Get products belonging to a company' })
+  @ApiOperation({ summary: 'Get products belonging to a company with filters and search' })
   @ApiResponse({ status: 200, description: 'Return company products.' })
   findCompanyProducts(
     @Param('companyId') companyId: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: GetProductsQueryDto,
   ) {
     return this.productService.findCompanyProducts(companyId, query);
   }

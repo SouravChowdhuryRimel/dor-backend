@@ -75,4 +75,53 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional({
+    description: 'Discount amount for the order',
+    example: 6000,
+  })
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  discount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Full delivery address',
+    example: 'Road 5, Holding 24, Savar',
+  })
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @ApiPropertyOptional({
+    description: 'Upazila/Upozela for delivery',
+    example: 'Savar',
+  })
+  @IsString()
+  @IsOptional()
+  upozela?: string;
+
+  @ApiPropertyOptional({
+    description: 'District for delivery',
+    example: 'Dhaka',
+  })
+  @IsString()
+  @IsOptional()
+  district?: string;
+
+  @ApiPropertyOptional({
+    description: 'Scheduled delivery date/time (ISO string)',
+    example: '2026-08-15T12:00:00.000Z',
+  })
+  @IsString()
+  @IsOptional()
+  deliveryTime?: string;
+
+  @ApiPropertyOptional({
+    description: 'Special note for delivery',
+    example: 'Deliver urgently',
+  })
+  @IsString()
+  @IsOptional()
+  specialNote?: string;
 }

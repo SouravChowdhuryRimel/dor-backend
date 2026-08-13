@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
-import { CompanyStatus, ComplaintStatus, DeliveryStatus } from '@prisma/client';
+import { CompanyStatus, ComplaintStatus, DeliveryStatus, OrderStatus } from '@prisma/client';
 
 
 @Injectable()
@@ -297,9 +297,11 @@ export class DashboardService {
       _count: { _all: true },
     });
     const deliveryStatusBreakdown = {
-      VAN_COMING: 0,
-      TRANSFER_IN_PROGRESS: 0,
-      NEAREST_TRANSFER: 0,
+      PENDING: 0,
+      ACCEPTED: 0,
+      REJECTED: 0,
+      IN_TRANSIT: 0,
+      REACHED: 0,
       DELIVERED: 0,
     };
     deliveryStatuses.forEach((d) => {
@@ -469,8 +471,152 @@ export class DashboardService {
       },
     ];
 
+    // Today's orders count
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayOrdersCount = await this.prisma.order.count({
+      where: {
+        companyId,
+        createdAt: { gte: startOfToday },
+      },
+    });
+
+    // Stock alert count
+    const companyProducts = await this.prisma.product.findMany({
+      where: { companyId },
+      select: { stockSize: true, minimumOrder: true },
+    });
+    const stockAlertCount = companyProducts.filter(
+      (p) => p.stockSize <= 0 || p.stockSize < p.minimumOrder,
+    ).length;
+
+    // Completed deliveries count (total completed deliveries)
+    const completedDeliveriesCount = await this.prisma.delivery.count({
+      where: {
+        order: { companyId },
+        status: DeliveryStatus.DELIVERED,
+      },
+    });
+
+    // Active complaints count
+    const activeComplaintsCount = await this.prisma.complaint.count({
+      where: {
+        companyId,
+        status: {
+          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+        },
+      },
+    });
+
+    // Active parties count
+    const activePartiesCount = await this.prisma.party.count({
+      where: { companyId },
+    });
+
+    // Sales growth percentage
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const thisMonthOrders = await this.prisma.order.aggregate({
+      where: {
+        companyId,
+        createdAt: { gte: startOfThisMonth },
+      },
+      _sum: { totalRate: true },
+    });
+    const thisMonthSales = thisMonthOrders._sum.totalRate || 0;
+
+    const lastMonthOrders = await this.prisma.order.aggregate({
+      where: {
+        companyId,
+        createdAt: {
+          gte: startOfLastMonth,
+          lte: endOfLastMonth,
+        },
+      },
+      _sum: { totalRate: true },
+    });
+    const lastMonthSales = lastMonthOrders._sum.totalRate || 0;
+
+    let salesGrowth = 0;
+    if (lastMonthSales > 0) {
+      salesGrowth = parseFloat((((thisMonthSales - lastMonthSales) / lastMonthSales) * 100).toFixed(1));
+    } else if (thisMonthSales > 0) {
+      salesGrowth = 100.0;
+    }
+
+    // Pending Deliveries: Orders that are not delivered or cancelled yet
+    const pendingOrdersRaw = await this.prisma.order.findMany({
+      where: {
+        companyId,
+        status: {
+          in: [OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.PROCESSING, OrderStatus.DISPATCHED],
+        },
+      },
+      include: {
+        party: {
+          select: {
+            partyName: true,
+            businessName: true,
+          },
+        },
+        product: {
+          select: {
+            productName: true,
+            unit: true,
+          },
+        },
+        deliveries: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pendingDeliveries = pendingOrdersRaw.map((o) => {
+      const latestDelivery = o.deliveries?.[0] || null;
+      let deliveryStatus = 'Pending';
+      if (latestDelivery) {
+        if (latestDelivery.status === DeliveryStatus.IN_TRANSIT) {
+          deliveryStatus = 'In Transit';
+        } else if (latestDelivery.status === DeliveryStatus.REACHED) {
+          deliveryStatus = 'Reached';
+        } else if (latestDelivery.status === DeliveryStatus.ACCEPTED) {
+          deliveryStatus = 'Accepted';
+        } else if (latestDelivery.status === DeliveryStatus.REJECTED) {
+          deliveryStatus = 'Rejected';
+        }
+      }
+      return {
+        orderId: o.orderId,
+        showOrderId: o.showOrderId,
+        partyName: o.party?.businessName || o.party?.partyName || 'Unknown Party',
+        productName: o.product?.productName || 'Unknown Product',
+        quantity: o.bag,
+        unit: o.product?.unit || o.bagSize || 'Bag',
+        totalAmount: o.totalRate,
+        deliveryStatus,
+        paymentStatus: 'Unpaid',
+        createdAt: o.createdAt,
+      };
+    });
+
     return {
+      ownerName: company.ownerName,
       companyName: company.companyName,
+      totalSales: totalRevenue,
+      salesGrowth,
+      todayOrdersCount,
+      stockAlertCount,
+      completedDeliveriesCount,
+      activeComplaintsCount,
+      activePartiesCount,
+      pendingDeliveries,
+
+      // original response fields to preserve compatibility
       metrics: {
         totalOrders,
         totalDrivers,
@@ -507,9 +653,10 @@ export class DashboardService {
           some: {
             status: {
               in: [
-                DeliveryStatus.VAN_COMING,
-                DeliveryStatus.TRANSFER_IN_PROGRESS,
-                DeliveryStatus.NEAREST_TRANSFER,
+                DeliveryStatus.PENDING,
+                DeliveryStatus.ACCEPTED,
+                DeliveryStatus.IN_TRANSIT,
+                DeliveryStatus.REACHED,
               ],
             },
           },
@@ -762,9 +909,10 @@ export class DashboardService {
         driverId,
         status: {
           in: [
-            DeliveryStatus.VAN_COMING,
-            DeliveryStatus.TRANSFER_IN_PROGRESS,
-            DeliveryStatus.NEAREST_TRANSFER,
+            DeliveryStatus.PENDING,
+            DeliveryStatus.ACCEPTED,
+            DeliveryStatus.IN_TRANSIT,
+            DeliveryStatus.REACHED,
           ],
         },
       },
@@ -777,7 +925,15 @@ export class DashboardService {
       },
     });
 
-    const proofUploadPending = 0; // Default or mocked to 0 as there is no proof table/column
+    const proofUploadPending = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        OR: [
+          { status: DeliveryStatus.IN_TRANSIT, pickupProof: null },
+          { status: DeliveryStatus.DELIVERED, deliveryProof: null },
+        ],
+      },
+    });
 
     const totalDeliveries = await this.prisma.delivery.count({
       where: { driverId },
@@ -829,9 +985,10 @@ export class DashboardService {
         driverId,
         status: {
           in: [
-            DeliveryStatus.VAN_COMING,
-            DeliveryStatus.TRANSFER_IN_PROGRESS,
-            DeliveryStatus.NEAREST_TRANSFER,
+            DeliveryStatus.PENDING,
+            DeliveryStatus.ACCEPTED,
+            DeliveryStatus.IN_TRANSIT,
+            DeliveryStatus.REACHED,
           ],
         },
       },

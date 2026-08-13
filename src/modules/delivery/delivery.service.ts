@@ -175,4 +175,100 @@ export class DeliveryService {
 
     return deletedDelivery;
   }
+
+  async acceptDelivery(id: string, reqUser?: any) {
+    const delivery = await this.findOne(id);
+    const updated = await this.prisma.delivery.update({
+      where: { deliveryId: id },
+      data: { status: DeliveryStatus.ACCEPTED },
+    });
+    
+    await this.activityLogService.log({
+      actorType: reqUser?.roles[0] || 'DRIVER',
+      actorId: reqUser?.sub || updated.driverId,
+      action: 'ACCEPT_DELIVERY',
+      description: `Driver accepted delivery ${id}`,
+    });
+    return updated;
+  }
+
+  async rejectDelivery(id: string, reqUser?: any) {
+    const delivery = await this.findOne(id);
+    const updated = await this.prisma.delivery.update({
+      where: { deliveryId: id },
+      data: { status: DeliveryStatus.REJECTED },
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles[0] || 'DRIVER',
+      actorId: reqUser?.sub || updated.driverId,
+      action: 'REJECT_DELIVERY',
+      description: `Driver rejected delivery ${id}`,
+    });
+    return updated;
+  }
+
+  async pickupDelivery(id: string, pickupProof: string, reqUser?: any) {
+    const delivery = await this.findOne(id);
+    const updated = await this.prisma.delivery.update({
+      where: { deliveryId: id },
+      data: {
+        status: DeliveryStatus.IN_TRANSIT,
+        pickupProof,
+        startDeliveryTime: new Date(),
+      },
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles[0] || 'DRIVER',
+      actorId: reqUser?.sub || updated.driverId,
+      action: 'PICKUP_DELIVERY',
+      description: `Driver picked up delivery ${id} and uploaded proof`,
+    });
+    return updated;
+  }
+
+  async reachedDelivery(id: string, reqUser?: any) {
+    const delivery = await this.findOne(id);
+    const updated = await this.prisma.delivery.update({
+      where: { deliveryId: id },
+      data: { status: DeliveryStatus.REACHED },
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles[0] || 'DRIVER',
+      actorId: reqUser?.sub || updated.driverId,
+      action: 'REACHED_DELIVERY',
+      description: `Driver reached delivery location ${id}`,
+    });
+    return updated;
+  }
+
+  async completeDelivery(id: string, deliveryProof: string, reqUser?: any) {
+    const delivery = await this.findOne(id);
+    const updated = await this.prisma.delivery.update({
+      where: { deliveryId: id },
+      data: {
+        status: DeliveryStatus.DELIVERED,
+        deliveryProof,
+        endDeliveryTime: new Date(),
+      },
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles[0] || 'DRIVER',
+      actorId: reqUser?.sub || updated.driverId,
+      action: 'COMPLETE_DELIVERY',
+      description: `Driver completed delivery ${id} and uploaded proof`,
+    });
+
+    if (updated.orderId) {
+      await this.prisma.order.update({
+        where: { orderId: updated.orderId },
+        data: { status: 'DELIVERED' },
+      });
+    }
+
+    return updated;
+  }
 }

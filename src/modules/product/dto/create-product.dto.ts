@@ -44,14 +44,35 @@ export class CreateProductDto {
   @IsNotEmpty()
   bagSize: string;
 
-  @ApiProperty({
-    description: 'Default price of the product',
+  @ApiPropertyOptional({
+    description: 'Default price of the product (Legacy, falls back to offerPrice)',
     example: 450.5,
   })
   @IsNumber()
   @Min(0)
+  @IsOptional()
   @Type(() => Number)
-  defaultPrice: number;
+  defaultPrice?: number;
+
+  @ApiPropertyOptional({
+    description: 'Regular price of the product',
+    example: 500.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  regularPrice?: number;
+
+  @ApiPropertyOptional({
+    description: 'Offer price of the product (discounted)',
+    example: 450.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  offerPrice?: number;
 
   @ApiProperty({
     description: 'Minimum order quantity',

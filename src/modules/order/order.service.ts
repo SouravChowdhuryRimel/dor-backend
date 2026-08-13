@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -6,12 +6,15 @@ import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
 import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { OrderStatus } from '@prisma/client';
+import { NotificationGateway } from '../notification/notification.gateway';
+import { Role } from '../../common/constants/role.enum';
 
 @Injectable()
 export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(createOrderDto: CreateOrderDto, reqUser?: any) {
@@ -41,15 +44,46 @@ export class OrderService {
       }
     }
 
+    const {
+      address,
+      upozela,
+      district,
+      deliveryTime,
+      specialNote,
+      discount,
+      ...orderData
+    } = createOrderDto;
+
     const showOrderId = createOrderDto.showOrderId || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const order = await this.prisma.order.create({
       data: {
-        ...createOrderDto,
         showOrderId,
+        companyId: orderData.companyId,
+        productId: orderData.productId,
+        bag: orderData.bag,
+        bagSize: orderData.bagSize,
+        totalRate: orderData.totalRate,
+        partyId: orderData.partyId || null,
+        discount: discount || 0,
         status: (createOrderDto.status as OrderStatus) || OrderStatus.PENDING,
       },
     });
+
+    if (address || district || upozela) {
+      await this.prisma.delivery.create({
+        data: {
+          address: address || '',
+          upozela: upozela || '',
+          district: district || '',
+          description: specialNote || '',
+          deliveryTime: deliveryTime ? new Date(deliveryTime) : new Date(),
+          orderId: order.orderId,
+          status: 'PENDING',
+          driverId: null,
+        },
+      });
+    }
 
     const actorId = reqUser?.sub || createOrderDto.partyId || createOrderDto.companyId;
     const actorType = reqUser?.roles[0] || (createOrderDto.partyId ? 'PARTY' : 'COMPANY');
@@ -75,10 +109,30 @@ export class OrderService {
       where.status = query.status as OrderStatus;
     }
     if (query?.search) {
-      where.showOrderId = {
-        contains: query.search,
-        mode: 'insensitive',
-      };
+      where.OR = [
+        {
+          showOrderId: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          party: {
+            partyName: {
+              contains: query.search,
+              mode: 'insensitive',
+            },
+          },
+        },
+        {
+          party: {
+            businessName: {
+              contains: query.search,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ];
     }
 
     const page = query?.page || 1;
@@ -106,7 +160,38 @@ export class OrderService {
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mapOrderStatusText = (status: OrderStatus): string => {
+      switch (status) {
+        case 'PENDING':
+          return 'Pending';
+        case 'ACCEPTED':
+          return 'Accepted';
+        case 'PROCESSING':
+          return 'Driver Assigned';
+        case 'DISPATCHED':
+          return 'Dispatched';
+        case 'DELIVERED':
+          return 'Delivered';
+        case 'CANCELLED':
+          return 'Cancelled';
+        default:
+          return status;
+      }
+    };
+
+    const mappedData = data.map((order) => {
+      const isPaid = order.status === 'ACCEPTED' || order.status === 'DELIVERED';
+      return {
+        ...order,
+        statusText: mapOrderStatusText(order.status),
+        paymentStatus: isPaid ? 'PAID' : 'UNPAID',
+        paymentStatusText: isPaid ? 'Paid' : 'Unpaid',
+        quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
+        partyName: order.party?.businessName || order.party?.partyName || 'N/A',
+      };
+    });
+
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   async findOne(id: string) {
@@ -123,7 +208,35 @@ export class OrderService {
     if (!order) {
       throw new NotFoundException(`Order with ID "${id}" not found`);
     }
-    return order;
+
+    const mapOrderStatusText = (status: OrderStatus): string => {
+      switch (status) {
+        case 'PENDING':
+          return 'Pending';
+        case 'ACCEPTED':
+          return 'Accepted';
+        case 'PROCESSING':
+          return 'Driver Assigned';
+        case 'DISPATCHED':
+          return 'Dispatched';
+        case 'DELIVERED':
+          return 'Delivered';
+        case 'CANCELLED':
+          return 'Cancelled';
+        default:
+          return status;
+      }
+    };
+
+    const isPaid = order.status === 'ACCEPTED' || order.status === 'DELIVERED';
+    return {
+      ...order,
+      statusText: mapOrderStatusText(order.status),
+      paymentStatus: isPaid ? 'PAID' : 'UNPAID',
+      paymentStatusText: isPaid ? 'Paid' : 'Unpaid',
+      quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
+      partyName: order.party?.businessName || order.party?.partyName || 'N/A',
+    };
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto, reqUser?: any) {
@@ -305,5 +418,107 @@ export class OrderService {
     ]);
 
     return createPaginatedResponse(data, total, page, limit);
+  }
+
+  async acceptOrder(id: string, reqUser: any) {
+    const order = await this.findOne(id);
+
+    // If requester is a VENDOR, ensure they own the order
+    if (reqUser?.roles?.includes(Role.VENDOR)) {
+      if (order.companyId !== reqUser.sub) {
+        throw new ForbiddenException('You do not have permission to accept this order');
+      }
+    }
+
+    // Verify order status is PENDING
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException(`Only pending orders can be accepted. Current status is ${order.status}`);
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { orderId: id },
+      data: { status: OrderStatus.ACCEPTED },
+    });
+
+    const actorId = reqUser?.sub || updatedOrder.companyId;
+    const actorType = reqUser?.roles[0] || 'VENDOR';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'ACCEPT_ORDER',
+      description: `Accepted order ${updatedOrder.showOrderId}`,
+    });
+
+    // Create notification and send via WebSockets if party is associated
+    if (updatedOrder.partyId) {
+      const notification = await this.prisma.notification.create({
+        data: {
+          title: 'অর্ডার গৃহীত (Order Accepted)',
+          message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) কোম্পানি দ্বারা গৃহীত হয়েছে।`,
+          partyId: updatedOrder.partyId,
+        },
+      });
+
+      this.notificationGateway.sendNotificationToParty(updatedOrder.partyId, {
+        notificationId: notification.notificationId,
+        title: notification.title,
+        message: notification.message,
+        createdAt: notification.createdAt,
+        isRead: false,
+      });
+    }
+
+    return updatedOrder;
+  }
+
+  async cancelOrder(id: string, reqUser: any) {
+    const order = await this.findOne(id);
+
+    // If requester is a VENDOR, ensure they own the order
+    if (reqUser?.roles?.includes(Role.VENDOR)) {
+      if (order.companyId !== reqUser.sub) {
+        throw new ForbiddenException('You do not have permission to cancel this order');
+      }
+    }
+
+    // Verify order is not already DELIVERED or CANCELLED
+    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException(`Cannot cancel order in ${order.status} status`);
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { orderId: id },
+      data: { status: OrderStatus.CANCELLED },
+    });
+
+    const actorId = reqUser?.sub || updatedOrder.companyId;
+    const actorType = reqUser?.roles[0] || 'VENDOR';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'CANCEL_ORDER',
+      description: `Cancelled order ${updatedOrder.showOrderId}`,
+    });
+
+    // Create notification and send via WebSockets if party is associated
+    if (updatedOrder.partyId) {
+      const notification = await this.prisma.notification.create({
+        data: {
+          title: 'অর্ডার বাতিল (Order Cancelled)',
+          message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) বাতিল করা হয়েছে।`,
+          partyId: updatedOrder.partyId,
+        },
+      });
+
+      this.notificationGateway.sendNotificationToParty(updatedOrder.partyId, {
+        notificationId: notification.notificationId,
+        title: notification.title,
+        message: notification.message,
+        createdAt: notification.createdAt,
+        isRead: false,
+      });
+    }
+
+    return updatedOrder;
   }
 }

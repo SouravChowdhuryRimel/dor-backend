@@ -20,9 +20,11 @@ enum CategoryStatus {
 }
 
 enum DeliveryStatus {
-  VAN_COMING
-  TRANSFER_IN_PROGRESS
-  NEAREST_TRANSFER
+  PENDING
+  ACCEPTED
+  REJECTED
+  IN_TRANSIT
+  REACHED
   DELIVERED
 }
 
@@ -41,4 +43,10 @@ enum OrderStatus {
   DISPATCHED
   DELIVERED
   CANCELLED
+}
+
+enum ComplaintType {
+  COMPANY
+  DRIVER
+  BOTH
 }

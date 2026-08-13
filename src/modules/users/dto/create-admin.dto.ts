@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  IsArray,
 } from 'class-validator';
 
 export class CreateAdminDto {
@@ -44,13 +45,23 @@ export class CreateAdminDto {
   @IsOptional()
   name?: string;
 
-  @ApiProperty({
-    description: 'Category ID to associate this admin with',
+  @ApiPropertyOptional({
+    description: 'Category ID to associate this admin with (single)',
     example: 'uuid-string',
   })
   @IsString()
-  @IsNotEmpty()
-  categoryId: string;
+  @IsOptional()
+  categoryId?: string;
+
+  @ApiPropertyOptional({
+    description: 'List of Category IDs to associate this admin with (multiple)',
+    example: ['uuid-string'],
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  categoryIds?: string[];
 
   @ApiPropertyOptional({
     description: 'Whether the admin account can sign in',

@@ -29,6 +29,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InquiryModule } from './modules/inquiry/inquiry.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
+import { SupportModule } from './modules/support/support.module';
 
 
 @Module({
@@ -59,6 +60,7 @@ import { ActivityLogModule } from './modules/activity-log/activity-log.module';
     InquiryModule,
     NotificationModule,
     ActivityLogModule,
+    SupportModule,
   ],
   providers: [
     {

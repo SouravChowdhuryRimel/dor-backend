@@ -23,6 +23,7 @@ import { ResetPasswordDto } from '../dto/reset-password.dto';
 import * as nodemailer from 'nodemailer';
 import { randomBytes } from 'crypto';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
+import { PrismaService } from 'src/core/database/database.service';
 
 type PasswordResetAccount = {
   id: string;
@@ -43,7 +44,19 @@ export class AuthService {
     private configService: ConfigService,
     private redisService: RedisService,
     private activityLogService: ActivityLogService,
+    private prisma: PrismaService,
   ) {}
+
+  private async getAdminCategoryInfo(userId: string) {
+    const adminCategories = await this.prisma.adminCategory.findMany({
+      where: { userId },
+    });
+    const categoryIds = adminCategories.map((ac) => ac.categoryId);
+    return {
+      categoryId: categoryIds[0] || null,
+      categoryIds,
+    };
+  }
 
   async signUp(registerDto: RegisterDto) {
     try {
@@ -80,6 +93,8 @@ export class AuthService {
         description: `Registered new user account: ${newUser.name || newUser.email || newUser.phoneNumber}`,
       });
 
+      const catInfo = await this.getAdminCategoryInfo(newUser.id);
+
       return {
         ...tokens,
         user: {
@@ -88,13 +103,14 @@ export class AuthService {
           phoneNumber: newUser.phoneNumber,
           name: newUser.name,
           roles: newUser.roles,
-            categoryId: newUser.categoryId,
-            businessName: null,
-            district: null,
-            upozela: null,
-            address: null,
-            bazzarArea: null,
-            createdAt: newUser.createdAt,
+          categoryId: catInfo.categoryId,
+          categoryIds: catInfo.categoryIds,
+          businessName: null,
+          district: null,
+          upozela: null,
+          address: null,
+          bazzarArea: null,
+          createdAt: newUser.createdAt,
           updatedAt: newUser.updatedAt,
           isVerified: newUser.roles.includes(Role.SUPER_ADMIN) || newUser.roles.includes(Role.ADMIN),
           status: 'APPROVED',
@@ -134,6 +150,8 @@ export class AuthService {
           description: `User/Admin logged in: ${user.name || user.email || user.phoneNumber}`,
         });
 
+        const catInfo = await this.getAdminCategoryInfo(user.id);
+
         return {
           ...tokens,
           user: {
@@ -142,7 +160,8 @@ export class AuthService {
             phoneNumber: user.phoneNumber,
             name: user.name,
             roles: user.roles,
-            categoryId: user.categoryId,
+            categoryId: catInfo.categoryId,
+            categoryIds: catInfo.categoryIds,
             businessName: null,
             district: null,
             upozela: null,
@@ -532,6 +551,8 @@ export class AuthService {
       // Rotate refresh tokens dynamically to prevent token replay hijacking
       await this.storeSession(user.id, tokens.refreshToken);
 
+      const catInfo = await this.getAdminCategoryInfo(user.id);
+
       return {
         ...tokens,
         user: {
@@ -540,7 +561,8 @@ export class AuthService {
           phoneNumber: user.phoneNumber,
           name: user.name,
           roles: user.roles,
-          categoryId: user.categoryId,
+          categoryId: catInfo.categoryId,
+          categoryIds: catInfo.categoryIds,
           businessName: null,
           district: null,
           upozela: null,

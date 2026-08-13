@@ -5,6 +5,8 @@ model Product {
   unit          String
   bagSize       String      @map("bag_size")
   defaultPrice  Float       @map("default_price")
+  regularPrice  Float       @map("regular_price")
+  offerPrice    Float       @map("offer_price")
   minimumOrder  Int         @map("minimum_order")
   description   String
   stockSize     Int         @map("stock_size")

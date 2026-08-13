@@ -5,6 +5,7 @@ model Complaint {
   description     String
   attachments     String[]
   status          ComplaintStatus    @default(PENDING)
+  type            ComplaintType      @default(COMPANY)
   partyId         String             @map("party_id")
   party           Party              @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
   companyId       String             @map("company_id")

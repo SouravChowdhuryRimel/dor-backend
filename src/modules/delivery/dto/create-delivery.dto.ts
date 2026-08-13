@@ -51,7 +51,7 @@ export class CreateDeliveryDto {
   @ApiPropertyOptional({
     description: 'Current status of the delivery',
     enum: DeliveryStatus,
-    default: DeliveryStatus.VAN_COMING,
+    default: DeliveryStatus.PENDING,
   })
   @IsEnum(DeliveryStatus)
   @IsOptional()
@@ -73,13 +73,13 @@ export class CreateDeliveryDto {
   @IsOptional()
   endDeliveryTime?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID of the driver assigned to this delivery',
     example: 'driver-uuid-string',
   })
   @IsString()
-  @IsNotEmpty()
-  driverId: string;
+  @IsOptional()
+  driverId?: string;
 
   @ApiPropertyOptional({
     description: 'ID of the associated order',

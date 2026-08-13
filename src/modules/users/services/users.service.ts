@@ -83,6 +83,20 @@ export class UsersService implements OnApplicationBootstrap {
     });
   }
 
+  private mapAdminCategories(user: any) {
+    if (!user) return user;
+    const categoryIds = user.adminCategories?.map((ac: any) => ac.category?.categoryId || ac.categoryId) || [];
+    const category = user.adminCategories?.[0]?.category || null;
+    const categoryId = categoryIds[0] || null;
+    const { adminCategories, ...rest } = user;
+    return {
+      ...rest,
+      categoryId,
+      categoryIds,
+      category,
+    };
+  }
+
   async createAdmin(data: CreateAdminDto): Promise<User> {
     const hashedPassword = await argon2.hash(data.password, {
       type: argon2.argon2id,
@@ -90,15 +104,24 @@ export class UsersService implements OnApplicationBootstrap {
       timeCost: 3,
     });
 
-    return this.prisma.user.create({
+    let catIds: string[] = [];
+    if (data.categoryIds && data.categoryIds.length > 0) {
+      catIds = data.categoryIds;
+    } else if (data.categoryId) {
+      catIds = [data.categoryId];
+    }
+
+    const user = await this.prisma.user.create({
       data: {
         email: data.email,
         phoneNumber: data.phoneNumber,
         password: hashedPassword,
         name: data.name,
-        categoryId: data.categoryId,
         isActive: data.isActive ?? true,
         roles: [Role.ADMIN],
+        adminCategories: {
+          create: catIds.map((cid) => ({ categoryId: cid })),
+        },
       },
       select: {
         id: true,
@@ -107,17 +130,29 @@ export class UsersService implements OnApplicationBootstrap {
         name: true,
         roles: true,
         isActive: true,
-        categoryId: true,
+        adminCategories: {
+          select: {
+            categoryId: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       } as Prisma.UserSelect,
-    }) as unknown as Promise<User>;
+    });
+
+    return this.mapAdminCategories(user) as unknown as User;
   }
 
   async findAllAdmins(
     status: AdminStatusFilter = AdminStatusFilter.ALL,
   ): Promise<Partial<User>[]> {
-    return this.prisma.user.findMany({
+    const admins = await this.prisma.user.findMany({
       where: {
         roles: {
           has: Role.ADMIN,
@@ -133,17 +168,23 @@ export class UsersService implements OnApplicationBootstrap {
         name: true,
         roles: true,
         isActive: true,
-        categoryId: true,
-        category: {
+        adminCategories: {
           select: {
             categoryId: true,
-            categoryName: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
           },
         },
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return admins.map((admin) => this.mapAdminCategories(admin));
   }
 
   async findAdminById(id: string): Promise<Partial<User>> {
@@ -159,11 +200,15 @@ export class UsersService implements OnApplicationBootstrap {
         name: true,
         roles: true,
         isActive: true,
-        categoryId: true,
-        category: {
+        adminCategories: {
           select: {
             categoryId: true,
-            categoryName: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
           },
         },
         createdAt: true,
@@ -175,7 +220,7 @@ export class UsersService implements OnApplicationBootstrap {
       throw new NotFoundException('Admin not found');
     }
 
-    return admin;
+    return this.mapAdminCategories(admin);
   }
 
   async updateAdmin(id: string, data: UpdateAdminDto): Promise<Partial<User>> {
@@ -189,15 +234,35 @@ export class UsersService implements OnApplicationBootstrap {
         })
       : undefined;
 
-    return this.prisma.user.update({
+    let catIds: string[] | undefined = undefined;
+    if (data.categoryIds && data.categoryIds.length > 0) {
+      catIds = data.categoryIds;
+    } else if (data.categoryId) {
+      catIds = [data.categoryId];
+    }
+
+    // Update categories by deleting existing ones and inserting new ones if provided
+    if (catIds !== undefined) {
+      await this.prisma.adminCategory.deleteMany({
+        where: { userId: id },
+      });
+    }
+
+    const user = await this.prisma.user.update({
       where: { id },
       data: {
         email: data.email,
         phoneNumber: data.phoneNumber,
         name: data.name,
-        categoryId: data.categoryId,
         isActive: data.isActive,
         ...(password ? { password } : {}),
+        ...(catIds !== undefined
+          ? {
+              adminCategories: {
+                create: catIds.map((cid) => ({ categoryId: cid })),
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -206,17 +271,34 @@ export class UsersService implements OnApplicationBootstrap {
         name: true,
         roles: true,
         isActive: true,
-        categoryId: true,
+        adminCategories: {
+          select: {
+            categoryId: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return this.mapAdminCategories(user);
   }
 
   async removeAdmin(id: string): Promise<Partial<User>> {
     await this.findAdminById(id);
 
-    return this.prisma.user.delete({
+    // Delete relation records manually before deleting user due to foreign key cascade
+    await this.prisma.adminCategory.deleteMany({
+      where: { userId: id },
+    });
+
+    const user = await this.prisma.user.delete({
       where: { id },
       select: {
         id: true,
@@ -225,29 +307,54 @@ export class UsersService implements OnApplicationBootstrap {
         name: true,
         roles: true,
         isActive: true,
-        categoryId: true,
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return user;
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { email },
+      include: {
+        adminCategories: {
+          select: {
+            categoryId: true,
+          },
+        },
+      },
     });
+    return this.mapAdminCategories(user);
   }
 
   async findByPhone(phoneNumber: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { phoneNumber },
+      include: {
+        adminCategories: {
+          select: {
+            categoryId: true,
+          },
+        },
+      },
     });
+    return this.mapAdminCategories(user);
   }
 
   async findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id },
+      include: {
+        adminCategories: {
+          select: {
+            categoryId: true,
+          },
+        },
+      },
     });
+    return this.mapAdminCategories(user);
   }
 
   async update(id: string, data: Prisma.UserUpdateInput): Promise<User> {

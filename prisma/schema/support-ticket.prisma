@@ -1,0 +1,28 @@
+model SupportTicket {
+  ticketId     String           @id @default(uuid()) @map("ticket_id")
+  showTicketId String           @unique @map("show_ticket_id")
+  title        String
+  description  String
+  status       String           @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  creatorId    String           @map("creator_id")
+  creatorRole  Role             @map("creator_role")
+  messages     SupportMessage[]
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  messageId   String        @id @default(uuid()) @map("message_id")
+  ticketId    String        @map("ticket_id")
+  ticket      SupportTicket @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
+  senderId    String        @map("sender_id")
+  senderRole  Role          @map("sender_role")
+  senderName  String        @map("sender_name")
+  message     String
+  attachments String[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@map("support_messages")
+}

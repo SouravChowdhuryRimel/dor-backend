@@ -17,6 +17,9 @@ import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Role } from '../../common/constants/role.enum';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -73,6 +76,28 @@ export class OrderController {
   @ApiResponse({ status: 404, description: 'Order not found.' })
   update(@Param('id') id: string, @Body() updateOrderDto: UpdateOrderDto, @Req() req: any) {
     return this.orderService.update(id, updateOrderDto, req.user);
+  }
+
+  @Patch(':id/accept')
+  @UseGuards(RolesGuard)
+  @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Accept an order (Company/Admin only)' })
+  @ApiResponse({ status: 200, description: 'Order successfully accepted.' })
+  @ApiResponse({ status: 400, description: 'Invalid order status or transition.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  accept(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.acceptOrder(id, req.user);
+  }
+
+  @Patch(':id/cancel')
+  @UseGuards(RolesGuard)
+  @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Cancel an order (Company/Admin only)' })
+  @ApiResponse({ status: 200, description: 'Order successfully cancelled.' })
+  @ApiResponse({ status: 400, description: 'Invalid order status or transition.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  cancel(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.cancelOrder(id, req.user);
   }
 
   @Delete(':id')

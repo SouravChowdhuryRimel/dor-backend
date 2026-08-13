@@ -28,6 +28,7 @@ model Party {
   inquiries     Inquiry[]
   activityLogs  ActivityLog[]
   productRates  PartyProductRate[]
+  notifications Notification[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

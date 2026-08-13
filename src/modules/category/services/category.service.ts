@@ -8,19 +8,35 @@ import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pag
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
+  private mapCategoryAdmins(category: any) {
+    if (!category) return null;
+    const admins = category.adminCategories?.map((ac: any) => ac.user) || [];
+    const { adminCategories, ...rest } = category;
+    return {
+      ...rest,
+      admins,
+    };
+  }
+
   async create(createCategoryDto: CreateCategoryDto) {
     const { adminIds = [], ...categoryData } = createCategoryDto;
     await this.ensureAdminsExist(adminIds);
 
-    return this.prisma.category.create({
+    const category = await this.prisma.category.create({
       data: {
         ...categoryData,
-        admins: {
-          connect: [...new Set(adminIds)].map((id) => ({ id })),
+        adminCategories: {
+          create: [...new Set(adminIds)].map((userId) => ({ userId })),
         },
       },
-      include: { admins: true },
+      include: {
+        adminCategories: {
+          include: { user: true },
+        },
+      },
     });
+
+    return this.mapCategoryAdmins(category);
   }
 
   async findAll(query?: PaginationQueryDto) {
@@ -31,22 +47,31 @@ export class CategoryService {
     const [total, data] = await Promise.all([
       this.prisma.category.count(),
       this.prisma.category.findMany({
-        include: { admins: true },
+        include: {
+          adminCategories: {
+            include: { user: true },
+          },
+        },
         skip,
         take: limit,
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mappedData = data.map((category) => this.mapCategoryAdmins(category));
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: id },
-      include: { admins: true },
+      include: {
+        adminCategories: {
+          include: { user: true },
+        },
+      },
     });
     if (!category) throw new NotFoundException('Category not found');
-    return category;
+    return this.mapCategoryAdmins(category);
   }
 
   async findCompaniesByCategoryId(categoryId: string) {
@@ -172,16 +197,30 @@ export class CategoryService {
     const { adminIds, ...categoryData } = updateCategoryDto;
     if (adminIds !== undefined) await this.ensureAdminsExist(adminIds);
 
-    return this.prisma.category.update({
+    if (adminIds !== undefined) {
+      await this.prisma.adminCategory.deleteMany({
+        where: { categoryId: id },
+      });
+    }
+
+    const updated = await this.prisma.category.update({
       where: { categoryId: id },
       data: {
         ...categoryData,
         ...(adminIds !== undefined && {
-          admins: { set: [...new Set(adminIds)].map((id) => ({ id })) },
+          adminCategories: {
+            create: [...new Set(adminIds)].map((userId) => ({ userId })),
+          },
         }),
       },
-      include: { admins: true },
+      include: {
+        adminCategories: {
+          include: { user: true },
+        },
+      },
     });
+
+    return this.mapCategoryAdmins(updated);
   }
 
   private async ensureAdminsExist(adminIds: string[]) {

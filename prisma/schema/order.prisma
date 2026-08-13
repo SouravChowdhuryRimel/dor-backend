@@ -8,6 +8,7 @@ model Order {
   bag         Int
   bagSize     String      @map("bag_size")
   totalRate   Float       @map("total_rate")
+  discount    Float       @default(0)
   partyId     String?     @map("party_id")
   party       Party?      @relation(fields: [partyId], references: [partyId])
   deliveries  Delivery[]

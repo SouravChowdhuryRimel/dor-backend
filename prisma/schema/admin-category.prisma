@@ -1,0 +1,10 @@
+model AdminCategory {
+  userId     String   @map("user_id")
+  categoryId String   @map("category_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([userId, categoryId])
+  @@map("admin_categories")
+}
