@@ -9,4 +9,12 @@ export class CreateSubCategoryDto {
   @IsString()
   @IsNotEmpty()
   title: string;
+
+  @ApiProperty({
+    description: 'The category ID that the sub-category belongs to',
+    example: 'category-uuid',
+  })
+  @IsString()
+  @IsNotEmpty()
+  categoryId: string;
 }

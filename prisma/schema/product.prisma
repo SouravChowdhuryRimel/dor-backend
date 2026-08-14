@@ -12,8 +12,10 @@ model Product {
   stockSize     Int         @map("stock_size")
   subCategoryId String      @map("sub_category_id")
   subCategory   SubCategory @relation(fields: [subCategoryId], references: [subCategoryId])
-  companyId     String?     @map("company_id")
-  company       Company?    @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  companyId     String      @map("company_id")
+  company       Company     @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  categoryId    String      @map("category_id")
+  category      Category    @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   offers        Offer[]
   orders        Order[]
   partyRates    PartyProductRate[]

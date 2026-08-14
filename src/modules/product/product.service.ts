@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -29,23 +29,28 @@ export class ProductService {
       companyId = reqUser.sub;
     }
 
-    if (companyId) {
-      const company = await this.prisma.company.findUnique({
-        where: { companyId },
-      });
-      if (!company) {
-        throw new NotFoundException(`Company with ID "${companyId}" not found`);
-      }
+    if (!companyId) {
+      throw new BadRequestException('Company ID is required to create a product');
     }
 
-    const offerPrice = createProductDto.offerPrice ?? createProductDto.defaultPrice ?? 0;
-    const regularPrice = createProductDto.regularPrice ?? createProductDto.defaultPrice ?? offerPrice;
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${companyId}" not found`);
+    }
+
+    const productData = { ...createProductDto };
+
+    const offerPrice = productData.offerPrice ?? productData.defaultPrice ?? 0;
+    const regularPrice = productData.regularPrice ?? productData.defaultPrice ?? offerPrice;
     const defaultPrice = offerPrice;
 
     return this.prisma.product.create({
       data: {
-        ...createProductDto,
+        ...productData,
         companyId,
+        categoryId: subCategory.categoryId,
         offerPrice,
         regularPrice,
         defaultPrice,
@@ -53,7 +58,7 @@ export class ProductService {
     });
   }
 
-  async findAll(query?: GetProductsQueryDto) {
+  async findAll(query?: GetProductsQueryDto, reqUser?: any) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
@@ -71,7 +76,9 @@ export class ProductService {
       where.subCategoryId = query.subCategoryId;
     }
 
-    if (query?.companyId) {
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      where.companyId = reqUser.sub;
+    } else if (query?.companyId) {
       where.companyId = query.companyId;
     }
 
@@ -98,6 +105,7 @@ export class ProductService {
         skip,
         take: limit,
         include: {
+          category: true,
           subCategory: true,
           company: {
             select: {
@@ -120,6 +128,8 @@ export class ProductService {
       stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
       stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
       companyCategoryName: (p.company as any)?.category?.categoryName || null,
+      companyName: p.company?.companyName || null,
+      categoryName: p.category?.categoryName || null,
       subCategoryName: p.subCategory?.title || null,
       status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
       statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
@@ -131,10 +141,11 @@ export class ProductService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, reqUser?: any) {
     const product = await this.prisma.product.findUnique({
       where: { productId: id },
       include: {
+        category: true,
         subCategory: true,
         company: {
           select: {
@@ -152,11 +163,20 @@ export class ProductService {
     if (!product) {
       throw new NotFoundException(`Product not found`);
     }
+
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      if (product.companyId !== reqUser.sub) {
+        throw new NotFoundException(`Product not found`);
+      }
+    }
+
     return {
       ...product,
       stockStatus: product.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
       stockStatusText: product.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
       companyCategoryName: (product.company as any)?.category?.categoryName || null,
+      companyName: product.company?.companyName || null,
+      categoryName: product.category?.categoryName || null,
       subCategoryName: product.subCategory?.title || null,
       status: product.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
       statusText: product.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
@@ -174,6 +194,8 @@ export class ProductService {
       throw new NotFoundException(`Product not found`);
     }
 
+    const updateData: any = { ...updateProductDto };
+
     if (updateProductDto.subCategoryId) {
       const subCategory = await this.prisma.subCategory.findUnique({
         where: { subCategoryId: updateProductDto.subCategoryId },
@@ -183,6 +205,7 @@ export class ProductService {
           `SubCategory with ID "${updateProductDto.subCategoryId}" not found.`,
         );
       }
+      updateData.categoryId = subCategory.categoryId;
     }
 
     if (updateProductDto.companyId) {
@@ -194,7 +217,6 @@ export class ProductService {
       }
     }
 
-    const updateData: any = { ...updateProductDto };
     if (
       updateProductDto.offerPrice !== undefined ||
       updateProductDto.defaultPrice !== undefined ||
@@ -250,10 +272,12 @@ export class ProductService {
         skip,
         take: limit,
         include: {
+          category: true,
           subCategory: true,
           company: {
             select: {
               companyName: true,
+              ownerName: true,
             },
           },
         },
@@ -263,7 +287,21 @@ export class ProductService {
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mappedData = data.map((p) => ({
+      ...p,
+      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+      companyName: p.company?.companyName || null,
+      categoryName: p.category?.categoryName || null,
+      subCategoryName: p.subCategory?.title || null,
+      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+    }));
+
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   async setPartyRate(dto: SetPartyProductRateDto) {
@@ -371,10 +409,12 @@ export class ProductService {
         skip,
         take: limit,
         include: {
+          category: true,
           subCategory: true,
           company: {
             select: {
               companyName: true,
+              ownerName: true,
             },
           },
         },
@@ -384,7 +424,21 @@ export class ProductService {
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mappedData = data.map((p) => ({
+      ...p,
+      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+      companyName: p.company?.companyName || null,
+      categoryName: p.category?.categoryName || null,
+      subCategoryName: p.subCategory?.title || null,
+      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+    }));
+
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   async findCompanyProducts(companyId: string, query?: GetProductsQueryDto) {
@@ -428,6 +482,7 @@ export class ProductService {
         skip,
         take: limit,
         include: {
+          category: true,
           subCategory: true,
           company: {
             select: {
@@ -450,6 +505,8 @@ export class ProductService {
       stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
       stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
       companyCategoryName: (p.company as any)?.category?.categoryName || null,
+      companyName: p.company?.companyName || null,
+      categoryName: p.category?.categoryName || null,
       subCategoryName: p.subCategory?.title || null,
       status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
       statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',

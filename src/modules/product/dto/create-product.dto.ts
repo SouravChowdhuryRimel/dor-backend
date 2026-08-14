@@ -54,25 +54,25 @@ export class CreateProductDto {
   @Type(() => Number)
   defaultPrice?: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Regular price of the product',
     example: 500.0,
   })
   @IsNumber()
   @Min(0)
-  @IsOptional()
+  @IsNotEmpty()
   @Type(() => Number)
-  regularPrice?: number;
+  regularPrice: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Offer price of the product (discounted)',
     example: 450.0,
   })
   @IsNumber()
   @Min(0)
-  @IsOptional()
+  @IsNotEmpty()
   @Type(() => Number)
-  offerPrice?: number;
+  offerPrice: number;
 
   @ApiProperty({
     description: 'Minimum order quantity',

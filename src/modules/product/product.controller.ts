@@ -27,6 +27,7 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { AccessTokenGuard } from 'src/common/guards/access-token.guard';
+import { OptionalAccessTokenGuard } from 'src/common/guards/optional-access-token.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/constants/role.enum';
@@ -63,10 +64,10 @@ export class ProductController {
   @Post()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
+  @Roles(Role.VENDOR)
   @UseInterceptors(FilesInterceptor('productImage', 10, productImageUpload))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Create a new product (SUPER_ADMIN, ADMIN, VENDOR)' })
+  @ApiOperation({ summary: 'Create a new product (VENDOR)' })
   @ApiResponse({ status: 201, description: 'Product successfully created.' })
   @ApiBody({
     schema: {
@@ -75,7 +76,8 @@ export class ProductController {
         'productName',
         'unit',
         'bagSize',
-        'defaultPrice',
+        'regularPrice',
+        'offerPrice',
         'minimumOrder',
         'description',
         'stockSize',
@@ -86,12 +88,14 @@ export class ProductController {
         productName: { type: 'string' },
         unit: { type: 'string' },
         bagSize: { type: 'string' },
-        defaultPrice: { type: 'number' },
+        defaultPrice: { type: 'number', description: 'Legacy, falls back to offerPrice' },
+        regularPrice: { type: 'number' },
+        offerPrice: { type: 'number' },
         minimumOrder: { type: 'number' },
         description: { type: 'string' },
         stockSize: { type: 'number' },
         subCategoryId: { type: 'string' },
-        companyId: { type: 'string', description: 'Associated company ID (optional for Admin)' },
+        companyId: { type: 'string', description: 'Associated company ID' },
       },
     },
   })
@@ -100,7 +104,15 @@ export class ProductController {
     @UploadedFiles() files: Express.Multer.File[],
     @Req() req: any,
   ) {
-    data.productImage = files?.map((file) => `/uploads/products/${file.filename}`) ?? [];
+    if (files && files.length > 0) {
+      data.productImage = files.map((file) => `/uploads/products/${file.filename}`);
+    } else if (data.productImage) {
+      if (typeof data.productImage === 'string') {
+        data.productImage = [data.productImage];
+      }
+    } else {
+      data.productImage = [];
+    }
     return this.productService.create(data, req.user);
   }
 
@@ -153,18 +165,34 @@ export class ProductController {
     return this.productService.findCompanyProducts(companyId, query);
   }
 
+  @Get('my-products')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.VENDOR)
+  @ApiOperation({ summary: 'Get products belonging to the logged-in vendor\'s company' })
+  @ApiResponse({ status: 200, description: 'Return vendor\'s company products.' })
+  findMyProducts(
+    @Req() req: any,
+    @Query() query: GetProductsQueryDto,
+  ) {
+    const companyId = req.user.sub;
+    return this.productService.findCompanyProducts(companyId, query);
+  }
+
   @Get()
+  @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({ summary: 'Get all products with fuzzy search, subcategory, price filtering, and sorting' })
   @ApiResponse({ status: 200, description: 'Return all products.' })
-  findAll(@Query() query: GetProductsQueryDto) {
-    return this.productService.findAll(query);
+  findAll(@Query() query: GetProductsQueryDto, @Req() req: any) {
+    return this.productService.findAll(query, req.user);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get product by ID (Public)' })
+  @UseGuards(OptionalAccessTokenGuard)
+  @ApiOperation({ summary: 'Get product by ID (Public / Restricted for Vendor)' })
   @ApiResponse({ status: 200, description: 'Return a product by ID.' })
-  findOne(@Param('id') id: string) {
-    return this.productService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.productService.findOne(id, req.user);
   }
 
   @Patch(':id')
@@ -184,6 +212,8 @@ export class ProductController {
         unit: { type: 'string' },
         bagSize: { type: 'string' },
         defaultPrice: { type: 'number' },
+        regularPrice: { type: 'number' },
+        offerPrice: { type: 'number' },
         minimumOrder: { type: 'number' },
         description: { type: 'string' },
         stockSize: { type: 'number' },

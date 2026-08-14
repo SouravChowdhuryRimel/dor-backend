@@ -42,6 +42,13 @@ export class DeliveryService {
       },
     });
 
+    if (delivery.orderId && delivery.driverId) {
+      await this.prisma.order.update({
+        where: { orderId: delivery.orderId },
+        data: { status: 'PROCESSING' },
+      });
+    }
+
     const actorId = reqUser?.sub || createDeliveryDto.driverId;
     const actorType = reqUser?.roles[0] || 'DRIVER';
     await this.activityLogService.log({
@@ -146,6 +153,13 @@ export class DeliveryService {
       data: updateData,
     });
 
+    if (updatedDelivery.orderId && updatedDelivery.driverId) {
+      await this.prisma.order.update({
+        where: { orderId: updatedDelivery.orderId },
+        data: { status: 'PROCESSING' },
+      });
+    }
+
     const actorId = reqUser?.sub || updatedDelivery.driverId;
     const actorType = reqUser?.roles[0] || 'DRIVER';
     await this.activityLogService.log({
@@ -218,6 +232,13 @@ export class DeliveryService {
         startDeliveryTime: new Date(),
       },
     });
+
+    if (updated.orderId) {
+      await this.prisma.order.update({
+        where: { orderId: updated.orderId },
+        data: { status: 'DISPATCHED' },
+      });
+    }
 
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',

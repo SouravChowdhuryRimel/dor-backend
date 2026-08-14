@@ -1,5 +1,5 @@
-import { Controller, Post, Body, Get, Param, Patch, Delete, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Body, Get, Param, Patch, Delete, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { CategoryService } from '../services/category.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
@@ -8,6 +8,30 @@ import { Role } from '../../../common/constants/role.enum';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as fs from 'fs';
+
+const categoryImageUpload = {
+  storage: diskStorage({
+    destination: (req, file, callback) => {
+      const path = './uploads/categories';
+      try {
+        if (!fs.existsSync(path)) {
+          fs.mkdirSync(path, { recursive: true });
+        }
+        callback(null, path);
+      } catch (error) {
+        callback(error as Error, path);
+      }
+    },
+    filename: (req, file, callback) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      callback(null, `category-${uniqueSuffix}${extname(file.originalname)}`);
+    },
+  }),
+};
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -18,9 +42,42 @@ export class CategoryController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Post()
+  @UseInterceptors(FileInterceptor('categoryThumbnail', categoryImageUpload))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a new category (SUPER_ADMIN only)' })
   @ApiResponse({ status: 201, description: 'Category created successfully.' })
-  create(@Body() createCategoryDto: CreateCategoryDto) {
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['categoryName'],
+      properties: {
+        categoryName: { type: 'string', description: 'The name of the category' },
+        adminIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of admins assigned to this category (optional)',
+        },
+        status: {
+          type: 'string',
+          enum: ['ACTIVE', 'INACTIVE'],
+          default: 'ACTIVE',
+          description: 'Status of the category (optional)',
+        },
+        categoryThumbnail: {
+          type: 'string',
+          format: 'binary',
+          description: 'Category Thumbnail Image (optional)',
+        },
+      },
+    },
+  })
+  create(
+    @Body() createCategoryDto: CreateCategoryDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (file) {
+      createCategoryDto.categoryThumbnail = `/uploads/categories/${file.filename}`;
+    }
     return this.categoryService.create(createCategoryDto);
   }
 
@@ -75,9 +132,41 @@ export class CategoryController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Patch(':id')
+  @UseInterceptors(FileInterceptor('categoryThumbnail', categoryImageUpload))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Update a category (SUPER_ADMIN only)' })
   @ApiResponse({ status: 200, description: 'Category updated successfully.' })
-  update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        categoryName: { type: 'string', description: 'The name of the category' },
+        adminIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of admins assigned to this category (optional)',
+        },
+        status: {
+          type: 'string',
+          enum: ['ACTIVE', 'INACTIVE'],
+          description: 'Status of the category (optional)',
+        },
+        categoryThumbnail: {
+          type: 'string',
+          format: 'binary',
+          description: 'Category Thumbnail Image (optional)',
+        },
+      },
+    },
+  })
+  update(
+    @Param('id') id: string,
+    @Body() updateCategoryDto: UpdateCategoryDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (file) {
+      updateCategoryDto.categoryThumbnail = `/uploads/categories/${file.filename}`;
+    }
     return this.categoryService.update(id, updateCategoryDto);
   }
 

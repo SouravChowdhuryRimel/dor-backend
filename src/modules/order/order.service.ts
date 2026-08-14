@@ -201,7 +201,11 @@ export class OrderService {
         company: true,
         product: true,
         party: true,
-        deliveries: true,
+        deliveries: {
+          include: {
+            driver: true,
+          },
+        },
         complaints: true,
       },
     });

@@ -8,6 +8,8 @@ model Category {
   drivers           Driver[]
   adminCategories   AdminCategory[]
   inquiries         Inquiry[]
+  subCategories     SubCategory[]
+  products          Product[]
 
   @@map("categories")
 }
