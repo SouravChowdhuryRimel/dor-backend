@@ -1,17 +1,27 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { SetPartyProductRateDto } from './dto/set-party-rate.dto';
 import { GetProductsQueryDto } from './dto/get-products-query.dto';
-import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../shared/pagination/pagination.util';
 import { NotificationGateway } from '../notification/notification.gateway';
+import { ActivityLogService } from '../activity-log/activity-log.service';
 
 @Injectable()
 export class ProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationGateway: NotificationGateway,
+    private readonly activityLogService: ActivityLogService,
   ) {}
 
   async create(createProductDto: CreateProductDto, reqUser?: any) {
@@ -30,7 +40,9 @@ export class ProductService {
     }
 
     if (!companyId) {
-      throw new BadRequestException('Company ID is required to create a product');
+      throw new BadRequestException(
+        'Company ID is required to create a product',
+      );
     }
 
     const company = await this.prisma.company.findUnique({
@@ -43,10 +55,11 @@ export class ProductService {
     const productData = { ...createProductDto };
 
     const offerPrice = productData.offerPrice ?? productData.defaultPrice ?? 0;
-    const regularPrice = productData.regularPrice ?? productData.defaultPrice ?? offerPrice;
+    const regularPrice =
+      productData.regularPrice ?? productData.defaultPrice ?? offerPrice;
     const defaultPrice = offerPrice;
 
-    return this.prisma.product.create({
+    const product = await this.prisma.product.create({
       data: {
         ...productData,
         companyId,
@@ -56,6 +69,16 @@ export class ProductService {
         defaultPrice,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'VENDOR',
+      actorId: reqUser?.sub || companyId,
+      action: 'CREATE_PRODUCT',
+      description: `Created product: ${product.productName} for company ${companyId}`,
+      companyId,
+    });
+
+    return product;
   }
 
   async findAll(query?: GetProductsQueryDto, reqUser?: any) {
@@ -93,10 +116,43 @@ export class ProductService {
     }
 
     const orderBy: any = {};
-    const allowedSortFields = ['defaultPrice', 'productName', 'createdAt', 'stockSize'];
-    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'defaultPrice';
+    const allowedSortFields = [
+      'defaultPrice',
+      'productName',
+      'createdAt',
+      'stockSize',
+    ];
+    const sortBy =
+      query?.sortBy && allowedSortFields.includes(query.sortBy)
+        ? query.sortBy
+        : 'defaultPrice';
     const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
     orderBy[sortBy] = sortOrder;
+
+    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const partyId = hasPartyRole ? reqUser.sub : null;
+
+    const includeQuery: any = {
+      category: true,
+      subCategory: true,
+      company: {
+        select: {
+          companyName: true,
+          ownerName: true,
+          category: {
+            select: {
+              categoryName: true,
+            },
+          },
+        },
+      },
+    };
+
+    if (partyId) {
+      includeQuery.partyRates = {
+        where: { partyId },
+      };
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.product.count({ where }),
@@ -104,61 +160,78 @@ export class ProductService {
         where,
         skip,
         take: limit,
-        include: {
-          category: true,
-          subCategory: true,
-          company: {
-            select: {
-              companyName: true,
-              ownerName: true,
-              category: {
-                select: {
-                  categoryName: true,
-                },
-              },
-            },
-          },
-        },
+        include: includeQuery,
         orderBy,
       }),
     ]);
 
-    const mappedData = data.map((p) => ({
-      ...p,
-      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyCategoryName: (p.company as any)?.category?.categoryName || null,
-      companyName: p.company?.companyName || null,
-      categoryName: p.category?.categoryName || null,
-      subCategoryName: p.subCategory?.title || null,
-      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
-      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
-      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
-      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
-      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
-    }));
+    const mappedData = data.map((p: any) => {
+      let effectivePrice = p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let hasSpecialPrice = false;
+      let specialPrice = null;
+
+      if (p.partyRates && p.partyRates.length > 0) {
+        effectivePrice = p.partyRates[0].rate;
+        hasSpecialPrice = true;
+        specialPrice = p.partyRates[0].rate;
+      } else if (p.offerPrice !== undefined && p.offerPrice !== null && p.offerPrice > 0) {
+        effectivePrice = p.offerPrice;
+      } else {
+        effectivePrice = p.regularPrice;
+      }
+
+      return {
+        ...p,
+        effectivePrice,
+        hasSpecialPrice,
+        specialPrice,
+        activePrice: effectivePrice,
+        stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+        companyCategoryName: (p.company as any)?.category?.categoryName || null,
+        companyName: p.company?.companyName || null,
+        categoryName: p.category?.categoryName || null,
+        subCategoryName: p.subCategory?.title || null,
+        status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+        statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+        unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+        stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+        minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+      };
+    });
 
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   async findOne(id: string, reqUser?: any) {
-    const product = await this.prisma.product.findUnique({
-      where: { productId: id },
-      include: {
-        category: true,
-        subCategory: true,
-        company: {
-          select: {
-            companyName: true,
-            ownerName: true,
-            category: {
-              select: {
-                categoryName: true,
-              },
+    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const partyId = hasPartyRole ? reqUser.sub : null;
+
+    const includeQuery: any = {
+      category: true,
+      subCategory: true,
+      company: {
+        select: {
+          companyName: true,
+          ownerName: true,
+          category: {
+            select: {
+              categoryName: true,
             },
           },
         },
       },
+    };
+
+    if (partyId) {
+      includeQuery.partyRates = {
+        where: { partyId },
+      };
+    }
+
+    const product = await this.prisma.product.findUnique({
+      where: { productId: id },
+      include: includeQuery,
     });
     if (!product) {
       throw new NotFoundException(`Product not found`);
@@ -170,14 +243,34 @@ export class ProductService {
       }
     }
 
+    let effectivePrice = product.offerPrice || product.regularPrice || product.defaultPrice || 0;
+    let hasSpecialPrice = false;
+    let specialPrice = null;
+
+    const pAny = product as any;
+    if (pAny.partyRates && pAny.partyRates.length > 0) {
+      effectivePrice = pAny.partyRates[0].rate;
+      hasSpecialPrice = true;
+      specialPrice = pAny.partyRates[0].rate;
+    } else if (product.offerPrice !== undefined && product.offerPrice !== null && product.offerPrice > 0) {
+      effectivePrice = product.offerPrice;
+    } else {
+      effectivePrice = product.regularPrice;
+    }
+
     return {
       ...product,
+      effectivePrice,
+      hasSpecialPrice,
+      specialPrice,
+      activePrice: effectivePrice,
       stockStatus: product.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
       stockStatusText: product.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyCategoryName: (product.company as any)?.category?.categoryName || null,
-      companyName: product.company?.companyName || null,
-      categoryName: product.category?.categoryName || null,
-      subCategoryName: product.subCategory?.title || null,
+      companyCategoryName:
+        (pAny.company as any)?.category?.categoryName || null,
+      companyName: pAny.company?.companyName || null,
+      categoryName: pAny.category?.categoryName || null,
+      subCategoryName: pAny.subCategory?.title || null,
       status: product.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
       statusText: product.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
       unitText: product.unit ? 'প্রতি ' + product.unit : 'প্রতি ব্যাগ',
@@ -186,7 +279,7 @@ export class ProductService {
     };
   }
 
-  async update(id: string, updateProductDto: UpdateProductDto) {
+  async update(id: string, updateProductDto: UpdateProductDto, reqUser?: any) {
     const product = await this.prisma.product.findUnique({
       where: { productId: id },
     });
@@ -195,6 +288,15 @@ export class ProductService {
     }
 
     const updateData: any = { ...updateProductDto };
+
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      if (product.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          `You do not have permission to update this product`,
+        );
+      }
+      delete updateData.companyId;
+    }
 
     if (updateProductDto.subCategoryId) {
       const subCategory = await this.prisma.subCategory.findUnique({
@@ -208,12 +310,14 @@ export class ProductService {
       updateData.categoryId = subCategory.categoryId;
     }
 
-    if (updateProductDto.companyId) {
+    if (updateData.companyId) {
       const company = await this.prisma.company.findUnique({
-        where: { companyId: updateProductDto.companyId },
+        where: { companyId: updateData.companyId },
       });
       if (!company) {
-        throw new NotFoundException(`Company with ID "${updateProductDto.companyId}" not found`);
+        throw new NotFoundException(
+          `Company with ID "${updateData.companyId}" not found`,
+        );
       }
     }
 
@@ -222,20 +326,34 @@ export class ProductService {
       updateProductDto.defaultPrice !== undefined ||
       updateProductDto.regularPrice !== undefined
     ) {
-      const newOfferPrice = updateProductDto.offerPrice ?? updateProductDto.defaultPrice ?? product.offerPrice;
-      const newRegularPrice = updateProductDto.regularPrice ?? product.regularPrice;
+      const newOfferPrice =
+        updateProductDto.offerPrice ??
+        updateProductDto.defaultPrice ??
+        product.offerPrice;
+      const newRegularPrice =
+        updateProductDto.regularPrice ?? product.regularPrice;
       updateData.offerPrice = newOfferPrice;
       updateData.regularPrice = newRegularPrice;
       updateData.defaultPrice = newOfferPrice;
     }
 
-    return this.prisma.product.update({
+    const updatedProduct = await this.prisma.product.update({
       where: { productId: id },
       data: updateData,
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'VENDOR',
+      actorId: reqUser?.sub || updatedProduct.companyId,
+      action: 'UPDATE_PRODUCT',
+      description: `Updated product: ${updatedProduct.productName}`,
+      companyId: updatedProduct.companyId,
+    });
+
+    return updatedProduct;
   }
 
-  async remove(id: string) {
+  async remove(id: string, reqUser?: any) {
     const product = await this.prisma.product.findUnique({
       where: { productId: id },
     });
@@ -243,9 +361,27 @@ export class ProductService {
       throw new NotFoundException(`Product not found`);
     }
 
-    return this.prisma.product.delete({
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      if (product.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          `You do not have permission to delete this product`,
+        );
+      }
+    }
+
+    const deletedProduct = await this.prisma.product.delete({
       where: { productId: id },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'VENDOR',
+      actorId: reqUser?.sub || deletedProduct.companyId,
+      action: 'DELETE_PRODUCT',
+      description: `Deleted product: ${deletedProduct.productName}`,
+      companyId: deletedProduct.companyId,
+    });
+
+    return deletedProduct;
   }
 
   async findLowStock(query?: PaginationQueryDto) {
@@ -304,7 +440,7 @@ export class ProductService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async setPartyRate(dto: SetPartyProductRateDto) {
+  async setPartyRate(dto: SetPartyProductRateDto, reqUser?: any) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: dto.partyId },
     });
@@ -316,7 +452,9 @@ export class ProductService {
       where: { productId: dto.productId },
     });
     if (!product) {
-      throw new NotFoundException(`Product with ID "${dto.productId}" not found`);
+      throw new NotFoundException(
+        `Product with ID "${dto.productId}" not found`,
+      );
     }
 
     const rate = await this.prisma.partyProductRate.upsert({
@@ -353,6 +491,15 @@ export class ProductService {
       productId: dto.productId,
       rate: dto.rate,
       createdAt: new Date(),
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'VENDOR',
+      actorId: reqUser?.sub || product.companyId,
+      action: 'SET_PARTY_PRODUCT_RATE',
+      description: `Set customized rate of ${dto.rate} for party ${party.partyName} on product ${product.productName}`,
+      partyId: dto.partyId,
+      companyId: product.companyId,
     });
 
     return rate;
@@ -395,12 +542,36 @@ export class ProductService {
     });
   }
 
-  async findSubCategoryProducts(subCategoryId: string, query?: PaginationQueryDto) {
+  async findSubCategoryProducts(
+    subCategoryId: string,
+    query?: PaginationQueryDto,
+    reqUser?: any,
+  ) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
 
     const where = { subCategoryId };
+
+    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const partyId = hasPartyRole ? reqUser.sub : null;
+
+    const includeQuery: any = {
+      category: true,
+      subCategory: true,
+      company: {
+        select: {
+          companyName: true,
+          ownerName: true,
+        },
+      },
+    };
+
+    if (partyId) {
+      includeQuery.partyRates = {
+        where: { partyId },
+      };
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.product.count({ where }),
@@ -408,40 +579,51 @@ export class ProductService {
         where,
         skip,
         take: limit,
-        include: {
-          category: true,
-          subCategory: true,
-          company: {
-            select: {
-              companyName: true,
-              ownerName: true,
-            },
-          },
-        },
+        include: includeQuery,
         orderBy: {
           defaultPrice: 'asc',
         },
       }),
     ]);
 
-    const mappedData = data.map((p) => ({
-      ...p,
-      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyName: p.company?.companyName || null,
-      categoryName: p.category?.categoryName || null,
-      subCategoryName: p.subCategory?.title || null,
-      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
-      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
-      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
-      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
-      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
-    }));
+    const mappedData = data.map((p: any) => {
+      let effectivePrice = p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let hasSpecialPrice = false;
+      let specialPrice = null;
+
+      if (p.partyRates && p.partyRates.length > 0) {
+        effectivePrice = p.partyRates[0].rate;
+        hasSpecialPrice = true;
+        specialPrice = p.partyRates[0].rate;
+      } else if (p.offerPrice !== undefined && p.offerPrice !== null && p.offerPrice > 0) {
+        effectivePrice = p.offerPrice;
+      } else {
+        effectivePrice = p.regularPrice;
+      }
+
+      return {
+        ...p,
+        effectivePrice,
+        hasSpecialPrice,
+        specialPrice,
+        activePrice: effectivePrice,
+        stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+        companyName: p.company?.companyName || null,
+        categoryName: p.category?.categoryName || null,
+        subCategoryName: p.subCategory?.title || null,
+        status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+        statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+        unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+        stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+        minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+      };
+    });
 
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async findCompanyProducts(companyId: string, query?: GetProductsQueryDto) {
+  async findCompanyProducts(companyId: string, query?: GetProductsQueryDto, reqUser?: any) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
@@ -470,10 +652,43 @@ export class ProductService {
     }
 
     const orderBy: any = {};
-    const allowedSortFields = ['defaultPrice', 'productName', 'createdAt', 'stockSize'];
-    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'defaultPrice';
+    const allowedSortFields = [
+      'defaultPrice',
+      'productName',
+      'createdAt',
+      'stockSize',
+    ];
+    const sortBy =
+      query?.sortBy && allowedSortFields.includes(query.sortBy)
+        ? query.sortBy
+        : 'defaultPrice';
     const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
     orderBy[sortBy] = sortOrder;
+
+    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const partyId = hasPartyRole ? reqUser.sub : null;
+
+    const includeQuery: any = {
+      category: true,
+      subCategory: true,
+      company: {
+        select: {
+          companyName: true,
+          ownerName: true,
+          category: {
+            select: {
+              categoryName: true,
+            },
+          },
+        },
+      },
+    };
+
+    if (partyId) {
+      includeQuery.partyRates = {
+        where: { partyId },
+      };
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.product.count({ where }),
@@ -481,39 +696,45 @@ export class ProductService {
         where,
         skip,
         take: limit,
-        include: {
-          category: true,
-          subCategory: true,
-          company: {
-            select: {
-              companyName: true,
-              ownerName: true,
-              category: {
-                select: {
-                  categoryName: true,
-                },
-              },
-            },
-          },
-        },
+        include: includeQuery,
         orderBy,
       }),
     ]);
 
-    const mappedData = data.map((p) => ({
-      ...p,
-      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyCategoryName: (p.company as any)?.category?.categoryName || null,
-      companyName: p.company?.companyName || null,
-      categoryName: p.category?.categoryName || null,
-      subCategoryName: p.subCategory?.title || null,
-      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
-      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
-      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
-      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
-      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
-    }));
+    const mappedData = data.map((p: any) => {
+      let effectivePrice = p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let hasSpecialPrice = false;
+      let specialPrice = null;
+
+      if (p.partyRates && p.partyRates.length > 0) {
+        effectivePrice = p.partyRates[0].rate;
+        hasSpecialPrice = true;
+        specialPrice = p.partyRates[0].rate;
+      } else if (p.offerPrice !== undefined && p.offerPrice !== null && p.offerPrice > 0) {
+        effectivePrice = p.offerPrice;
+      } else {
+        effectivePrice = p.regularPrice;
+      }
+
+      return {
+        ...p,
+        effectivePrice,
+        hasSpecialPrice,
+        specialPrice,
+        activePrice: effectivePrice,
+        stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+        companyCategoryName: (p.company as any)?.category?.categoryName || null,
+        companyName: p.company?.companyName || null,
+        categoryName: p.category?.categoryName || null,
+        subCategoryName: p.subCategory?.title || null,
+        status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+        statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+        unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+        stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+        minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+      };
+    });
 
     return createPaginatedResponse(mappedData, total, page, limit);
   }

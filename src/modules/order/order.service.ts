@@ -1,9 +1,17 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
-import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../shared/pagination/pagination.util';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { OrderStatus } from '@prisma/client';
 import { NotificationGateway } from '../notification/notification.gateway';
@@ -23,7 +31,9 @@ export class OrderService {
       where: { companyId: createOrderDto.companyId },
     });
     if (!companyExists) {
-      throw new NotFoundException(`Company with ID "${createOrderDto.companyId}" not found`);
+      throw new NotFoundException(
+        `Company with ID "${createOrderDto.companyId}" not found`,
+      );
     }
 
     // Verify product exists
@@ -31,7 +41,9 @@ export class OrderService {
       where: { productId: createOrderDto.productId },
     });
     if (!productExists) {
-      throw new NotFoundException(`Product with ID "${createOrderDto.productId}" not found`);
+      throw new NotFoundException(
+        `Product with ID "${createOrderDto.productId}" not found`,
+      );
     }
 
     // Verify party exists if provided
@@ -40,7 +52,9 @@ export class OrderService {
         where: { partyId: createOrderDto.partyId },
       });
       if (!partyExists) {
-        throw new NotFoundException(`Party/Customer with ID "${createOrderDto.partyId}" not found`);
+        throw new NotFoundException(
+          `Party/Customer with ID "${createOrderDto.partyId}" not found`,
+        );
       }
     }
 
@@ -54,7 +68,9 @@ export class OrderService {
       ...orderData
     } = createOrderDto;
 
-    const showOrderId = createOrderDto.showOrderId || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const showOrderId =
+      createOrderDto.showOrderId ||
+      `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const order = await this.prisma.order.create({
       data: {
@@ -85,13 +101,17 @@ export class OrderService {
       });
     }
 
-    const actorId = reqUser?.sub || createOrderDto.partyId || createOrderDto.companyId;
-    const actorType = reqUser?.roles[0] || (createOrderDto.partyId ? 'PARTY' : 'COMPANY');
+    const actorId =
+      reqUser?.sub || createOrderDto.partyId || createOrderDto.companyId;
+    const actorType =
+      reqUser?.roles[0] || (createOrderDto.partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'CREATE_ORDER',
       description: `Created order ${showOrderId} for party ${createOrderDto.partyId || 'N/A'} and company ${createOrderDto.companyId}`,
+      companyId: createOrderDto.companyId,
+      partyId: createOrderDto.partyId,
     });
 
     return order;
@@ -141,7 +161,10 @@ export class OrderService {
 
     const orderBy: any = {};
     const allowedSortFields = ['createdAt', 'totalRate', 'bag', 'status'];
-    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'createdAt';
+    const sortBy =
+      query?.sortBy && allowedSortFields.includes(query.sortBy)
+        ? query.sortBy
+        : 'createdAt';
     const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc';
     orderBy[sortBy] = sortOrder;
 
@@ -163,13 +186,13 @@ export class OrderService {
     const mapOrderStatusText = (status: OrderStatus): string => {
       switch (status) {
         case 'PENDING':
-          return 'Pending';
+          return 'পেন্ডিং';
         case 'ACCEPTED':
           return 'Accepted';
         case 'PROCESSING':
           return 'Driver Assigned';
         case 'DISPATCHED':
-          return 'Dispatched';
+          return 'ইন-ট্রানজিট';
         case 'DELIVERED':
           return 'Delivered';
         case 'CANCELLED':
@@ -180,12 +203,9 @@ export class OrderService {
     };
 
     const mappedData = data.map((order) => {
-      const isPaid = order.status === 'ACCEPTED' || order.status === 'DELIVERED';
       return {
         ...order,
         statusText: mapOrderStatusText(order.status),
-        paymentStatus: isPaid ? 'PAID' : 'UNPAID',
-        paymentStatusText: isPaid ? 'Paid' : 'Unpaid',
         quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
         partyName: order.party?.businessName || order.party?.partyName || 'N/A',
       };
@@ -216,13 +236,13 @@ export class OrderService {
     const mapOrderStatusText = (status: OrderStatus): string => {
       switch (status) {
         case 'PENDING':
-          return 'Pending';
+          return 'পেন্ডিং';
         case 'ACCEPTED':
           return 'Accepted';
         case 'PROCESSING':
           return 'Driver Assigned';
         case 'DISPATCHED':
-          return 'Dispatched';
+          return 'ইন-ট্রানজিট';
         case 'DELIVERED':
           return 'Delivered';
         case 'CANCELLED':
@@ -232,14 +252,141 @@ export class OrderService {
       }
     };
 
-    const isPaid = order.status === 'ACCEPTED' || order.status === 'DELIVERED';
+    const mapDeliveryStatusText = (status: string): string => {
+      switch (status) {
+        case 'PENDING':
+          return 'পেন্ডিং (Pending)';
+        case 'ACCEPTED':
+          return 'গৃহীত (Accepted)';
+        case 'REJECTED':
+          return 'বাতিল (Rejected)';
+        case 'IN_TRANSIT':
+          return 'ইন-ট্রানজিট (In-Transit)';
+        case 'REACHED':
+          return 'পৌঁছেছে (Reached)';
+        case 'DELIVERED':
+          return 'ডেলিভারি সম্পন্ন (Delivered)';
+        default:
+          return status;
+      }
+    };
+
+    const quantity = order.bag;
+    const unitPrice = quantity > 0 ? order.totalRate / quantity : 0;
+    const subtotal = order.totalRate;
+    const discount = order.discount;
+    const grandTotal = subtotal - discount;
+
+    // Stock Check details
+    const stockSize = order.product?.stockSize ?? 0;
+    const isAvailable = stockSize >= quantity;
+    const stockCheck = {
+      productName: order.product?.productName || 'N/A',
+      orderQuantity: quantity,
+      stockSize: stockSize,
+      isAvailable: isAvailable,
+      statusText: isAvailable ? 'পর্যাপ্ত' : 'অপ্রতুল',
+    };
+
+    // Delivery and Driver Details
+    const activeDelivery = order.deliveries?.[0] || null;
+    let deliveryDetails = null;
+    let trackingTimeline: any[] = [];
+
+    if (activeDelivery) {
+      const driver = activeDelivery.driver;
+
+      deliveryDetails = {
+        deliveryId: activeDelivery.deliveryId,
+        address: activeDelivery.address,
+        upozela: activeDelivery.upozela,
+        district: activeDelivery.district,
+        deliveryTime: activeDelivery.deliveryTime,
+        status: activeDelivery.status,
+        statusText: mapDeliveryStatusText(activeDelivery.status),
+        currentLocation: activeDelivery.currentLocation || null,
+        driver: driver
+          ? {
+              driverId: driver.driverId,
+              driverName: driver.driverName,
+              driverImage: driver.driverImage || null,
+              truckNumber: driver.truckNumber || null,
+              phoneNumber: driver.phoneNumber,
+            }
+          : null,
+      };
+
+      // Construct Delivery Tracking Timeline
+      const orderAccepted =
+        order.status !== 'PENDING' && order.status !== 'CANCELLED';
+      const reachedPickup =
+        activeDelivery.status === 'IN_TRANSIT' ||
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const pickedUp =
+        activeDelivery.status === 'IN_TRANSIT' ||
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const deliveryStarted =
+        activeDelivery.status === 'IN_TRANSIT' ||
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const nearDestination =
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const deliveryCompleted = activeDelivery.status === 'DELIVERED';
+
+      trackingTimeline = [
+        {
+          title: 'অর্ডার গ্রহণ করা হয়েছে',
+          status: orderAccepted ? 'COMPLETED' : 'PENDING',
+          time: orderAccepted ? order.updatedAt : null,
+        },
+        {
+          title: 'পিকআপ পয়েন্টে পৌঁছেছে',
+          status: reachedPickup ? 'COMPLETED' : 'PENDING',
+          time: reachedPickup
+            ? activeDelivery.startDeliveryTime || activeDelivery.updatedAt
+            : null,
+        },
+        {
+          title: 'পণ্য সংগ্রহ করা হয়েছে (Picked Up)',
+          status: pickedUp ? 'COMPLETED' : 'PENDING',
+          proofImage: activeDelivery.pickupProof || null,
+          time: pickedUp ? activeDelivery.startDeliveryTime : null,
+        },
+        {
+          title: 'ডেলিভারি শুরু হয়েছে',
+          status: deliveryStarted ? 'COMPLETED' : 'PENDING',
+          currentLocation: activeDelivery.currentLocation || null,
+          time: deliveryStarted ? activeDelivery.startDeliveryTime : null,
+        },
+        {
+          title: 'গন্তব্যের কাছাকাছি',
+          status: nearDestination ? 'COMPLETED' : 'PENDING',
+          time: nearDestination ? activeDelivery.updatedAt : null,
+        },
+        {
+          title: 'ডেলিভারি সম্পন্ন',
+          status: deliveryCompleted ? 'COMPLETED' : 'PENDING',
+          proofImage: activeDelivery.deliveryProof || null,
+          time: deliveryCompleted ? activeDelivery.endDeliveryTime : null,
+        },
+      ];
+    }
+
     return {
       ...order,
       statusText: mapOrderStatusText(order.status),
-      paymentStatus: isPaid ? 'PAID' : 'UNPAID',
-      paymentStatusText: isPaid ? 'Paid' : 'Unpaid',
       quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
       partyName: order.party?.businessName || order.party?.partyName || 'N/A',
+      subtotal,
+      discount,
+      grandTotal,
+      unitPrice,
+      stockCheck,
+      deliveryDetails,
+      trackingTimeline,
     };
   }
 
@@ -251,7 +398,9 @@ export class OrderService {
         where: { companyId: updateOrderDto.companyId },
       });
       if (!companyExists) {
-        throw new NotFoundException(`Company with ID "${updateOrderDto.companyId}" not found`);
+        throw new NotFoundException(
+          `Company with ID "${updateOrderDto.companyId}" not found`,
+        );
       }
     }
 
@@ -260,7 +409,9 @@ export class OrderService {
         where: { productId: updateOrderDto.productId },
       });
       if (!productExists) {
-        throw new NotFoundException(`Product with ID "${updateOrderDto.productId}" not found`);
+        throw new NotFoundException(
+          `Product with ID "${updateOrderDto.productId}" not found`,
+        );
       }
     }
 
@@ -269,7 +420,9 @@ export class OrderService {
         where: { partyId: updateOrderDto.partyId },
       });
       if (!partyExists) {
-        throw new NotFoundException(`Party/Customer with ID "${updateOrderDto.partyId}" not found`);
+        throw new NotFoundException(
+          `Party/Customer with ID "${updateOrderDto.partyId}" not found`,
+        );
       }
     }
 
@@ -277,17 +430,23 @@ export class OrderService {
       where: { orderId: id },
       data: {
         ...updateOrderDto,
-        status: updateOrderDto.status ? (updateOrderDto.status as OrderStatus) : undefined,
+        status: updateOrderDto.status
+          ? (updateOrderDto.status as OrderStatus)
+          : undefined,
       },
     });
 
-    const actorId = reqUser?.sub || updatedOrder.partyId || updatedOrder.companyId;
-    const actorType = reqUser?.roles[0] || (updatedOrder.partyId ? 'PARTY' : 'COMPANY');
+    const actorId =
+      reqUser?.sub || updatedOrder.partyId || updatedOrder.companyId;
+    const actorType =
+      reqUser?.roles[0] || (updatedOrder.partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'UPDATE_ORDER',
       description: `Updated order ${updatedOrder.showOrderId}`,
+      companyId: updatedOrder.companyId,
+      partyId: updatedOrder.partyId,
     });
 
     return updatedOrder;
@@ -299,13 +458,17 @@ export class OrderService {
       where: { orderId: id },
     });
 
-    const actorId = reqUser?.sub || deletedOrder.partyId || deletedOrder.companyId;
-    const actorType = reqUser?.roles[0] || (deletedOrder.partyId ? 'PARTY' : 'COMPANY');
+    const actorId =
+      reqUser?.sub || deletedOrder.partyId || deletedOrder.companyId;
+    const actorType =
+      reqUser?.roles[0] || (deletedOrder.partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'DELETE_ORDER',
       description: `Deleted order ${deletedOrder.showOrderId}`,
+      companyId: deletedOrder.companyId,
+      partyId: deletedOrder.partyId,
     });
 
     return deletedOrder;
@@ -332,8 +495,8 @@ export class OrderService {
     const quantity = order.bag;
     const rate = quantity > 0 ? order.totalRate / quantity : 0;
     const subtotal = order.totalRate;
-    const vat = subtotal * 0.05; // 5% VAT
-    const grandTotal = subtotal + vat;
+    const vat = 0;
+    const grandTotal = subtotal;
 
     return {
       invoiceMeta: {
@@ -350,14 +513,16 @@ export class OrderService {
         phoneNumber: order.company.phoneNumber,
         address: `${order.company.address}, ${order.company.upozela}, ${order.company.district}`,
       },
-      buyer: order.party ? {
-        partyId: order.party.partyId,
-        partyName: order.party.partyName,
-        businessName: order.party.businessName,
-        email: order.party.email,
-        phoneNumber: order.party.phoneNumber,
-        address: `${order.party.address}, ${order.party.upozela}, ${order.party.district}`,
-      } : null,
+      buyer: order.party
+        ? {
+            partyId: order.party.partyId,
+            partyName: order.party.partyName,
+            businessName: order.party.businessName,
+            email: order.party.email,
+            phoneNumber: order.party.phoneNumber,
+            address: `${order.party.address}, ${order.party.upozela}, ${order.party.district}`,
+          }
+        : null,
       item: {
         productId: order.product.productId,
         productName: order.product.productName,
@@ -375,7 +540,11 @@ export class OrderService {
     };
   }
 
-  async findDriverAssignedOrders(driverId: string, type?: string, query?: PaginationQueryDto) {
+  async findDriverAssignedOrders(
+    driverId: string,
+    type?: string,
+    query?: PaginationQueryDto,
+  ) {
     // Verify driver exists
     const driverExists = await this.prisma.driver.findUnique({
       where: { driverId },
@@ -430,13 +599,17 @@ export class OrderService {
     // If requester is a VENDOR, ensure they own the order
     if (reqUser?.roles?.includes(Role.VENDOR)) {
       if (order.companyId !== reqUser.sub) {
-        throw new ForbiddenException('You do not have permission to accept this order');
+        throw new ForbiddenException(
+          'You do not have permission to accept this order',
+        );
       }
     }
 
     // Verify order status is PENDING
     if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException(`Only pending orders can be accepted. Current status is ${order.status}`);
+      throw new BadRequestException(
+        `Only pending orders can be accepted. Current status is ${order.status}`,
+      );
     }
 
     const updatedOrder = await this.prisma.order.update({
@@ -451,6 +624,8 @@ export class OrderService {
       actorId,
       action: 'ACCEPT_ORDER',
       description: `Accepted order ${updatedOrder.showOrderId}`,
+      companyId: updatedOrder.companyId,
+      partyId: updatedOrder.partyId,
     });
 
     // Create notification and send via WebSockets if party is associated
@@ -481,13 +656,20 @@ export class OrderService {
     // If requester is a VENDOR, ensure they own the order
     if (reqUser?.roles?.includes(Role.VENDOR)) {
       if (order.companyId !== reqUser.sub) {
-        throw new ForbiddenException('You do not have permission to cancel this order');
+        throw new ForbiddenException(
+          'You do not have permission to cancel this order',
+        );
       }
     }
 
     // Verify order is not already DELIVERED or CANCELLED
-    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.CANCELLED) {
-      throw new BadRequestException(`Cannot cancel order in ${order.status} status`);
+    if (
+      order.status === OrderStatus.DELIVERED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot cancel order in ${order.status} status`,
+      );
     }
 
     const updatedOrder = await this.prisma.order.update({
@@ -502,6 +684,8 @@ export class OrderService {
       actorId,
       action: 'CANCEL_ORDER',
       description: `Cancelled order ${updatedOrder.showOrderId}`,
+      companyId: updatedOrder.companyId,
+      partyId: updatedOrder.partyId,
     });
 
     // Create notification and send via WebSockets if party is associated

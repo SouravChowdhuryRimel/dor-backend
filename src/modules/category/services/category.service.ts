@@ -2,7 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
-import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../../shared/pagination/pagination.util';
 
 @Injectable()
 export class CategoryService {
@@ -234,8 +237,40 @@ export class CategoryService {
       },
     });
     if (count !== uniqueAdminIds.length) {
-      throw new NotFoundException('One or more admins were not found or do not have the ADMIN role');
+      throw new NotFoundException(
+        'One or more admins were not found or do not have the ADMIN role',
+      );
     }
+  }
+
+  async removeAdmin(categoryId: string, adminId: string) {
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId },
+    });
+    if (!category) throw new NotFoundException('Category not found');
+
+    const association = await this.prisma.adminCategory.findUnique({
+      where: {
+        userId_categoryId: {
+          userId: adminId,
+          categoryId,
+        },
+      },
+    });
+    if (!association) {
+      throw new NotFoundException('Admin is not assigned to this category');
+    }
+
+    await this.prisma.adminCategory.delete({
+      where: {
+        userId_categoryId: {
+          userId: adminId,
+          categoryId,
+        },
+      },
+    });
+
+    return this.findOne(categoryId);
   }
 
   async remove(id: string) {

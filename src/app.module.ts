@@ -31,7 +31,6 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
 import { SupportModule } from './modules/support/support.module';
 
-
 @Module({
   imports: [
     ConfigModule.forRoot({

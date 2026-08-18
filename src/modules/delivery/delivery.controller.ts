@@ -16,7 +16,15 @@ import { DeliveryService } from './delivery.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
 import { GetDeliveriesQueryDto } from './dto/get-deliveries-query.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 import { DeliveryStatus } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -39,7 +47,10 @@ const deliveryProofUpload = {
     },
     filename: (req, file, callback) => {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      callback(null, `delivery-proof-${uniqueSuffix}${extname(file.originalname)}`);
+      callback(
+        null,
+        `delivery-proof-${uniqueSuffix}${extname(file.originalname)}`,
+      );
     },
   }),
 };
@@ -53,7 +64,10 @@ export class DeliveryController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new delivery assignment' })
-  @ApiResponse({ status: 201, description: 'Delivery assignment successfully created.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Delivery assignment successfully created.',
+  })
   create(@Body() createDeliveryDto: CreateDeliveryDto, @Req() req: any) {
     return this.deliveryService.create(createDeliveryDto, req.user);
   }
@@ -75,7 +89,10 @@ export class DeliveryController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a delivery assignment' })
-  @ApiResponse({ status: 200, description: 'Delivery assignment successfully updated.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Delivery assignment successfully updated.',
+  })
   @ApiResponse({ status: 404, description: 'Delivery assignment not found.' })
   update(
     @Param('id') id: string,
@@ -87,7 +104,10 @@ export class DeliveryController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a delivery assignment' })
-  @ApiResponse({ status: 200, description: 'Delivery assignment successfully deleted.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Delivery assignment successfully deleted.',
+  })
   @ApiResponse({ status: 404, description: 'Delivery assignment not found.' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.deliveryService.remove(id, req.user);
@@ -108,7 +128,9 @@ export class DeliveryController {
   @Patch(':id/pickup')
   @UseInterceptors(FileInterceptor('pickupProof', deliveryProofUpload))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Pickup a delivery and upload pickup proof (Driver)' })
+  @ApiOperation({
+    summary: 'Pickup a delivery and upload pickup proof (Driver)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -140,7 +162,9 @@ export class DeliveryController {
   @Patch(':id/deliver')
   @UseInterceptors(FileInterceptor('deliveryProof', deliveryProofUpload))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Complete delivery and upload delivery proof (Driver)' })
+  @ApiOperation({
+    summary: 'Complete delivery and upload delivery proof (Driver)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -160,6 +184,10 @@ export class DeliveryController {
     } else if (req.body?.deliveryProof) {
       deliveryProofPath = req.body.deliveryProof;
     }
-    return this.deliveryService.completeDelivery(id, deliveryProofPath, req.user);
+    return this.deliveryService.completeDelivery(
+      id,
+      deliveryProofPath,
+      req.user,
+    );
   }
 }

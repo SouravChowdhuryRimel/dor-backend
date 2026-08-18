@@ -20,16 +20,21 @@ export class DeliveryService {
       where: { driverId: createDeliveryDto.driverId },
     });
     if (!driverExists) {
-      throw new NotFoundException(`Driver with ID "${createDeliveryDto.driverId}" not found`);
+      throw new NotFoundException(
+        `Driver with ID "${createDeliveryDto.driverId}" not found`,
+      );
     }
 
+    let orderExists: any = null;
     // Verify order exists if orderId is provided
     if (createDeliveryDto.orderId) {
-      const orderExists = await this.prisma.order.findUnique({
+      orderExists = await this.prisma.order.findUnique({
         where: { orderId: createDeliveryDto.orderId },
       });
       if (!orderExists) {
-        throw new NotFoundException(`Order with ID "${createDeliveryDto.orderId}" not found`);
+        throw new NotFoundException(
+          `Order with ID "${createDeliveryDto.orderId}" not found`,
+        );
       }
     }
 
@@ -37,8 +42,12 @@ export class DeliveryService {
       data: {
         ...createDeliveryDto,
         deliveryTime: new Date(createDeliveryDto.deliveryTime),
-        startDeliveryTime: createDeliveryDto.startDeliveryTime ? new Date(createDeliveryDto.startDeliveryTime) : null,
-        endDeliveryTime: createDeliveryDto.endDeliveryTime ? new Date(createDeliveryDto.endDeliveryTime) : null,
+        startDeliveryTime: createDeliveryDto.startDeliveryTime
+          ? new Date(createDeliveryDto.startDeliveryTime)
+          : null,
+        endDeliveryTime: createDeliveryDto.endDeliveryTime
+          ? new Date(createDeliveryDto.endDeliveryTime)
+          : null,
       },
     });
 
@@ -56,6 +65,8 @@ export class DeliveryService {
       actorId,
       action: 'CREATE_DELIVERY',
       description: `Created delivery assignment ${delivery.deliveryId} for driver ${createDeliveryDto.driverId}`,
+      companyId: orderExists?.companyId,
+      partyId: orderExists?.partyId,
     });
 
     return delivery;
@@ -116,7 +127,11 @@ export class DeliveryService {
     return delivery;
   }
 
-  async update(id: string, updateDeliveryDto: UpdateDeliveryDto, reqUser?: any) {
+  async update(
+    id: string,
+    updateDeliveryDto: UpdateDeliveryDto,
+    reqUser?: any,
+  ) {
     const delivery = await this.findOne(id);
 
     if (updateDeliveryDto.driverId) {
@@ -124,7 +139,9 @@ export class DeliveryService {
         where: { driverId: updateDeliveryDto.driverId },
       });
       if (!driverExists) {
-        throw new NotFoundException(`Driver with ID "${updateDeliveryDto.driverId}" not found`);
+        throw new NotFoundException(
+          `Driver with ID "${updateDeliveryDto.driverId}" not found`,
+        );
       }
     }
 
@@ -133,7 +150,9 @@ export class DeliveryService {
         where: { orderId: updateDeliveryDto.orderId },
       });
       if (!orderExists) {
-        throw new NotFoundException(`Order with ID "${updateDeliveryDto.orderId}" not found`);
+        throw new NotFoundException(
+          `Order with ID "${updateDeliveryDto.orderId}" not found`,
+        );
       }
     }
 
@@ -142,10 +161,14 @@ export class DeliveryService {
       updateData.deliveryTime = new Date(updateDeliveryDto.deliveryTime);
     }
     if (updateDeliveryDto.startDeliveryTime !== undefined) {
-      updateData.startDeliveryTime = updateDeliveryDto.startDeliveryTime ? new Date(updateDeliveryDto.startDeliveryTime) : null;
+      updateData.startDeliveryTime = updateDeliveryDto.startDeliveryTime
+        ? new Date(updateDeliveryDto.startDeliveryTime)
+        : null;
     }
     if (updateDeliveryDto.endDeliveryTime !== undefined) {
-      updateData.endDeliveryTime = updateDeliveryDto.endDeliveryTime ? new Date(updateDeliveryDto.endDeliveryTime) : null;
+      updateData.endDeliveryTime = updateDeliveryDto.endDeliveryTime
+        ? new Date(updateDeliveryDto.endDeliveryTime)
+        : null;
     }
 
     const updatedDelivery = await this.prisma.delivery.update({
@@ -160,6 +183,12 @@ export class DeliveryService {
       });
     }
 
+    const order = updatedDelivery.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: updatedDelivery.orderId },
+        })
+      : null;
+
     const actorId = reqUser?.sub || updatedDelivery.driverId;
     const actorType = reqUser?.roles[0] || 'DRIVER';
     await this.activityLogService.log({
@@ -167,6 +196,8 @@ export class DeliveryService {
       actorId,
       action: 'UPDATE_DELIVERY',
       description: `Updated delivery ${id} status to ${updatedDelivery.status}`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
     });
 
     return updatedDelivery;
@@ -178,6 +209,12 @@ export class DeliveryService {
       where: { deliveryId: id },
     });
 
+    const order = deletedDelivery.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: deletedDelivery.orderId },
+        })
+      : null;
+
     const actorId = reqUser?.sub || deletedDelivery.driverId;
     const actorType = reqUser?.roles[0] || 'DRIVER';
     await this.activityLogService.log({
@@ -185,6 +222,8 @@ export class DeliveryService {
       actorId,
       action: 'DELETE_DELIVERY',
       description: `Deleted delivery assignment ${id}`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
     });
 
     return deletedDelivery;
@@ -196,12 +235,21 @@ export class DeliveryService {
       where: { deliveryId: id },
       data: { status: DeliveryStatus.ACCEPTED },
     });
-    
+
+    const order = updated.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: updated.orderId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
       action: 'ACCEPT_DELIVERY',
       description: `Driver accepted delivery ${id}`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
+      driverId: updated.driverId,
     });
     return updated;
   }
@@ -213,11 +261,20 @@ export class DeliveryService {
       data: { status: DeliveryStatus.REJECTED },
     });
 
+    const order = updated.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: updated.orderId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
       action: 'REJECT_DELIVERY',
       description: `Driver rejected delivery ${id}`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
+      driverId: updated.driverId,
     });
     return updated;
   }
@@ -240,11 +297,20 @@ export class DeliveryService {
       });
     }
 
+    const order = updated.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: updated.orderId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
       action: 'PICKUP_DELIVERY',
       description: `Driver picked up delivery ${id} and uploaded proof`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
+      driverId: updated.driverId,
     });
     return updated;
   }
@@ -256,11 +322,20 @@ export class DeliveryService {
       data: { status: DeliveryStatus.REACHED },
     });
 
+    const order = updated.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: updated.orderId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
       action: 'REACHED_DELIVERY',
       description: `Driver reached delivery location ${id}`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
+      driverId: updated.driverId,
     });
     return updated;
   }
@@ -276,11 +351,20 @@ export class DeliveryService {
       },
     });
 
+    const order = updated.orderId
+      ? await this.prisma.order.findUnique({
+          where: { orderId: updated.orderId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
       action: 'COMPLETE_DELIVERY',
       description: `Driver completed delivery ${id} and uploaded proof`,
+      companyId: order?.companyId,
+      partyId: order?.partyId,
+      driverId: updated.driverId,
     });
 
     if (updated.orderId) {

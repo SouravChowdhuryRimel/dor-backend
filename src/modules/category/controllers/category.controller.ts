@@ -1,5 +1,24 @@
-import { Controller, Post, Body, Get, Param, Patch, Delete, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Param,
+  Patch,
+  Delete,
+  UseGuards,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 import { CategoryService } from '../services/category.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
@@ -51,7 +70,10 @@ export class CategoryController {
       type: 'object',
       required: ['categoryName'],
       properties: {
-        categoryName: { type: 'string', description: 'The name of the category' },
+        categoryName: {
+          type: 'string',
+          description: 'The name of the category',
+        },
         adminIds: {
           type: 'array',
           items: { type: 'string' },
@@ -93,7 +115,10 @@ export class CategoryController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @ApiOperation({ summary: 'Get companies by category ID' })
-  @ApiResponse({ status: 200, description: 'Returns companies in the category.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns companies in the category.',
+  })
   @ApiResponse({ status: 404, description: 'Category not found.' })
   findCompaniesByCategoryId(@Param('id') id: string) {
     return this.categoryService.findCompaniesByCategoryId(id);
@@ -140,7 +165,10 @@ export class CategoryController {
     schema: {
       type: 'object',
       properties: {
-        categoryName: { type: 'string', description: 'The name of the category' },
+        categoryName: {
+          type: 'string',
+          description: 'The name of the category (optional)',
+        },
         adminIds: {
           type: 'array',
           items: { type: 'string' },
@@ -168,6 +196,20 @@ export class CategoryController {
       updateCategoryDto.categoryThumbnail = `/uploads/categories/${file.filename}`;
     }
     return this.categoryService.update(id, updateCategoryDto);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  @Delete(':id/admins/:adminId')
+  @ApiOperation({ summary: 'Remove an admin from a category (SUPER_ADMIN only)' })
+  @ApiResponse({ status: 200, description: 'Admin removed from category successfully.' })
+  @ApiResponse({ status: 404, description: 'Category or association not found.' })
+  removeAdmin(
+    @Param('id') id: string,
+    @Param('adminId') adminId: string,
+  ) {
+    return this.categoryService.removeAdmin(id, adminId);
   }
 
   @ApiBearerAuth()

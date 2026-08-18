@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { UpdateInquiryDto } from './dto/update-inquiry.dto';
@@ -18,7 +22,9 @@ export class InquiryService {
       where: { categoryId: createInquiryDto.categoryId },
     });
     if (!category) {
-      throw new NotFoundException(`Category with ID "${createInquiryDto.categoryId}" not found`);
+      throw new NotFoundException(
+        `Category with ID "${createInquiryDto.categoryId}" not found`,
+      );
     }
 
     const party = await this.prisma.party.findUnique({
@@ -168,7 +174,11 @@ export class InquiryService {
     return inquiry;
   }
 
-  async update(id: string, partyId: string, updateInquiryDto: UpdateInquiryDto) {
+  async update(
+    id: string,
+    partyId: string,
+    updateInquiryDto: UpdateInquiryDto,
+  ) {
     const inquiry = await this.prisma.inquiry.findUnique({
       where: { inquiryId: id },
     });

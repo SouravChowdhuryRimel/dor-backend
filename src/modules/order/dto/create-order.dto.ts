@@ -10,7 +10,8 @@ import { Type } from 'class-transformer';
 
 export class CreateOrderDto {
   @ApiPropertyOptional({
-    description: 'Unique friendly order ID. If not provided, it will be auto-generated.',
+    description:
+      'Unique friendly order ID. If not provided, it will be auto-generated.',
     example: 'ORD-88422',
   })
   @IsString()
@@ -69,7 +70,14 @@ export class CreateOrderDto {
 
   @ApiPropertyOptional({
     description: 'Status of the order',
-    enum: ['PENDING', 'ACCEPTED', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'CANCELLED'],
+    enum: [
+      'PENDING',
+      'ACCEPTED',
+      'PROCESSING',
+      'DISPATCHED',
+      'DELIVERED',
+      'CANCELLED',
+    ],
     example: 'PENDING',
   })
   @IsString()

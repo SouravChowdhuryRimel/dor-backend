@@ -29,8 +29,13 @@ export class NotificationController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.VENDOR)
-  @ApiOperation({ summary: 'Get all notifications for logged-in company (VENDOR only)' })
-  @ApiResponse({ status: 200, description: 'Return all notifications for the company.' })
+  @ApiOperation({
+    summary: 'Get all notifications for logged-in company (VENDOR only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return all notifications for the company.',
+  })
   findAll(@Req() req: any, @Query() query: PaginationQueryDto) {
     const companyId = req.user.sub;
     return this.notificationService.findAllForCompany(companyId, query);
@@ -41,7 +46,10 @@ export class NotificationController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.VENDOR)
   @ApiOperation({ summary: 'Mark a notification as read (VENDOR only)' })
-  @ApiResponse({ status: 200, description: 'Notification successfully updated.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification successfully updated.',
+  })
   markAsRead(@Param('id') id: string, @Req() req: any) {
     const companyId = req.user.sub;
     return this.notificationService.markAsRead(id, companyId);

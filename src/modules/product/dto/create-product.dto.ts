@@ -45,7 +45,8 @@ export class CreateProductDto {
   bagSize: string;
 
   @ApiPropertyOptional({
-    description: 'Default price of the product (Legacy, falls back to offerPrice)',
+    description:
+      'Default price of the product (Legacy, falls back to offerPrice)',
     example: 450.5,
   })
   @IsNumber()

@@ -34,7 +34,8 @@ export class GetProductsQueryDto extends PaginationQueryDto {
   maxPrice?: number;
 
   @ApiPropertyOptional({
-    description: 'Field to sort by (defaultPrice, productName, createdAt, stockSize)',
+    description:
+      'Field to sort by (defaultPrice, productName, createdAt, stockSize)',
     example: 'defaultPrice',
   })
   @IsString()

@@ -14,6 +14,7 @@ model Delivery {
   driver            Driver?        @relation(fields: [driverId], references: [driverId])
   orderId           String?        @map("order_id")
   order             Order?         @relation(fields: [orderId], references: [orderId])
+  currentLocation   String?        @map("current_location")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

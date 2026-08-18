@@ -101,4 +101,12 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsString({ each: true })
   companyDocument?: string[];
+
+  @ApiPropertyOptional({
+    description: 'URL of the company image / logo',
+    example: '/uploads/documents/company-image-123456.jpg',
+  })
+  @IsString()
+  @IsOptional()
+  companyImage?: string;
 }

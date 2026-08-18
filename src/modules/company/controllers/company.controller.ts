@@ -29,7 +29,7 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
 import { CompanyStatus } from '@prisma/client';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
@@ -41,27 +41,37 @@ export class CompanyController {
 
   @Post('register')
   @UseInterceptors(
-    FilesInterceptor('companyDocument', 10, {
-      storage: diskStorage({
-        destination: (req, file, callback) => {
-          const path = './uploads/documents';
-          try {
-            if (!fs.existsSync(path)) {
-              fs.mkdirSync(path, { recursive: true });
+    FileFieldsInterceptor(
+      [
+        { name: 'companyDocument', maxCount: 10 },
+        { name: 'companyImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req, file, callback) => {
+            const path = './uploads/documents';
+            try {
+              if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+              }
+              callback(null, path);
+            } catch (error) {
+              callback(error as Error, path);
             }
-            callback(null, path);
-          } catch (error) {
-            callback(error as Error, path);
-          }
-        },
-        filename: (req, file, callback) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `doc-${uniqueSuffix}${ext}`);
-        },
-      }),
-    }),
+          },
+          filename: (req, file, callback) => {
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            const prefix =
+              file.fieldname === 'companyImage'
+                ? 'company-image'
+                : 'company-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
+          },
+        }),
+      },
+    ),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -85,6 +95,11 @@ export class CompanyController {
             format: 'binary',
           },
         },
+        companyImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'Company image / logo',
+        },
       },
       required: [
         'phoneNumber',
@@ -106,15 +121,28 @@ export class CompanyController {
   })
   register(
     @Body() createCompanyDto: CreateCompanyDto,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles()
+    files: {
+      companyDocument?: Express.Multer.File[];
+      companyImage?: Express.Multer.File[];
+    },
   ) {
-    if (files && files.length > 0) {
-      createCompanyDto.companyDocument = files.map(
-        (file) => `/uploads/documents/${file.filename}`,
-      );
-    } else {
-      createCompanyDto.companyDocument = [];
+    const typedFiles = files as {
+      companyDocument?: Express.Multer.File[];
+      companyImage?: Express.Multer.File[];
+    };
+    let uploadedDocs: string[] = [];
+    if (typedFiles) {
+      if (typedFiles.companyDocument && typedFiles.companyDocument.length > 0) {
+        uploadedDocs = typedFiles.companyDocument.map(
+          (file) => `/uploads/documents/${file.filename}`,
+        );
+      }
+      if (typedFiles.companyImage && typedFiles.companyImage.length > 0) {
+        createCompanyDto.companyImage = `/uploads/documents/${typedFiles.companyImage[0].filename}`;
+      }
     }
+    createCompanyDto.companyDocument = uploadedDocs;
     return this.companyService.register(createCompanyDto);
   }
 
@@ -123,7 +151,8 @@ export class CompanyController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
+    summary:
+      'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
   })
   getPending(@Query() query: PaginationQueryDto) {
     return this.companyService.findPending(query);
@@ -146,7 +175,7 @@ export class CompanyController {
   })
   approve(@Param('id') id: string, @Req() req: any) {
     const adminId = req.user['sub'];
-    return this.companyService.approve(id, adminId);
+    return this.companyService.approve(id, adminId, req.user);
   }
 
   @Get()
@@ -167,27 +196,37 @@ export class CompanyController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @UseInterceptors(
-    FilesInterceptor('companyDocument', 10, {
-      storage: diskStorage({
-        destination: (req, file, callback) => {
-          const path = './uploads/documents';
-          try {
-            if (!fs.existsSync(path)) {
-              fs.mkdirSync(path, { recursive: true });
+    FileFieldsInterceptor(
+      [
+        { name: 'companyDocument', maxCount: 10 },
+        { name: 'companyImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req, file, callback) => {
+            const path = './uploads/documents';
+            try {
+              if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+              }
+              callback(null, path);
+            } catch (error) {
+              callback(error as Error, path);
             }
-            callback(null, path);
-          } catch (error) {
-            callback(error as Error, path);
-          }
-        },
-        filename: (req, file, callback) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `doc-${uniqueSuffix}${ext}`);
-        },
-      }),
-    }),
+          },
+          filename: (req, file, callback) => {
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            const prefix =
+              file.fieldname === 'companyImage'
+                ? 'company-image'
+                : 'company-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
+          },
+        }),
+      },
+    ),
   )
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -212,6 +251,11 @@ export class CompanyController {
             format: 'binary',
           },
         },
+        companyImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'Company image / logo',
+        },
       },
     },
   })
@@ -219,21 +263,44 @@ export class CompanyController {
   update(
     @Param('id') id: string,
     @Body() updateCompanyDto: UpdateCompanyDto,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles()
+    files: {
+      companyDocument?: Express.Multer.File[];
+      companyImage?: Express.Multer.File[];
+    },
+    @Req() req: any,
   ) {
-    if (files && files.length > 0) {
-      updateCompanyDto.companyDocument = files.map(
-        (file) => `/uploads/documents/${file.filename}`,
-      );
+    const typedFiles = files as {
+      companyDocument?: Express.Multer.File[];
+      companyImage?: Express.Multer.File[];
+    };
+    const dataToUpdate: UpdateCompanyDto = { ...updateCompanyDto };
+
+    if (typedFiles) {
+      if (typedFiles.companyDocument && typedFiles.companyDocument.length > 0) {
+        dataToUpdate.companyDocument = typedFiles.companyDocument.map(
+          (file) => `/uploads/documents/${file.filename}`,
+        );
+      }
+      if (typedFiles.companyImage && typedFiles.companyImage.length > 0) {
+        dataToUpdate.companyImage = `/uploads/documents/${typedFiles.companyImage[0].filename}`;
+      }
     }
-    return this.companyService.update(id, updateCompanyDto);
+
+    return this.companyService.update(id, dataToUpdate, req.user);
   }
 
   @Get(':id/drivers')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Get list of drivers hired by a company and their associated parties' })
-  @ApiResponse({ status: 200, description: 'Return driver list with party details.' })
+  @ApiOperation({
+    summary:
+      'Get list of drivers hired by a company and their associated parties',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return driver list with party details.',
+  })
   @ApiResponse({ status: 404, description: 'Company not found.' })
   getCompanyDrivers(@Param('id') id: string) {
     return this.companyService.getCompanyDrivers(id);
@@ -243,7 +310,7 @@ export class CompanyController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Delete a company' })
-  remove(@Param('id') id: string) {
-    return this.companyService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.companyService.remove(id, req.user);
   }
 }

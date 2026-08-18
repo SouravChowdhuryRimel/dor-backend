@@ -10,17 +10,26 @@ import {
 } from 'class-validator';
 
 export class CreateDriverDto {
-  @ApiProperty({ description: 'Phone number of the driver', example: '1234567890' })
+  @ApiProperty({
+    description: 'Phone number of the driver',
+    example: '1234567890',
+  })
   @IsString()
   @IsNotEmpty()
   phoneNumber: string;
 
-  @ApiProperty({ description: 'Email address of the driver', example: 'driver@example.com' })
+  @ApiProperty({
+    description: 'Email address of the driver',
+    example: 'driver@example.com',
+  })
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ description: 'Secure password for driver login', example: 'DriverPass123!' })
+  @ApiProperty({
+    description: 'Secure password for driver login',
+    example: 'DriverPass123!',
+  })
   @IsString()
   @IsNotEmpty()
   @MinLength(6)
@@ -54,13 +63,15 @@ export class CreateDriverDto {
   @IsNotEmpty()
   district: string;
 
-
   @ApiPropertyOptional({ description: 'Load Capacity', example: '10 Ton' })
   @IsString()
   @IsOptional()
   loadCapacity?: string;
 
-  @ApiPropertyOptional({ description: 'Company IDs hiring this driver', type: [String] })
+  @ApiPropertyOptional({
+    description: 'Company IDs hiring this driver',
+    type: [String],
+  })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
     return Array.isArray(value) ? value : [value];
@@ -70,7 +81,10 @@ export class CreateDriverDto {
   @IsOptional()
   companyIds?: string[];
 
-  @ApiPropertyOptional({ description: 'Party IDs hiring this driver', type: [String] })
+  @ApiPropertyOptional({
+    description: 'Party IDs hiring this driver',
+    type: [String],
+  })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
     return Array.isArray(value) ? value : [value];
@@ -80,7 +94,10 @@ export class CreateDriverDto {
   @IsOptional()
   partyIds?: string[];
 
-  @ApiProperty({ description: 'Driving Licence Number', example: 'DL-987654321' })
+  @ApiProperty({
+    description: 'Driving Licence Number',
+    example: 'DL-987654321',
+  })
   @IsString()
   @IsNotEmpty()
   drivingLicenceNumber: string;
@@ -93,7 +110,7 @@ export class CreateDriverDto {
   @ApiPropertyOptional({
     description: 'Documents of the driver',
     type: [String],
-    example: ['url1.jpg', 'url2.jpg']
+    example: ['url1.jpg', 'url2.jpg'],
   })
   @IsArray()
   @IsString({ each: true })

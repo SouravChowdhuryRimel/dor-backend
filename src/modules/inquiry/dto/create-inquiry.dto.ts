@@ -12,7 +12,8 @@ export class CreateInquiryDto {
 
   @ApiProperty({
     description: 'Detailed description of the inquiry',
-    example: 'We need high quality premium concrete cement for building foundation.',
+    example:
+      'We need high quality premium concrete cement for building foundation.',
   })
   @IsString()
   @IsNotEmpty()

@@ -84,11 +84,17 @@ export class ProductController {
         'subCategoryId',
       ],
       properties: {
-        productImage: { type: 'array', items: { type: 'string', format: 'binary' } },
+        productImage: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
         productName: { type: 'string' },
         unit: { type: 'string' },
         bagSize: { type: 'string' },
-        defaultPrice: { type: 'number', description: 'Legacy, falls back to offerPrice' },
+        defaultPrice: {
+          type: 'number',
+          description: 'Legacy, falls back to offerPrice',
+        },
         regularPrice: { type: 'number' },
         offerPrice: { type: 'number' },
         minimumOrder: { type: 'number' },
@@ -105,7 +111,9 @@ export class ProductController {
     @Req() req: any,
   ) {
     if (files && files.length > 0) {
-      data.productImage = files.map((file) => `/uploads/products/${file.filename}`);
+      data.productImage = files.map(
+        (file) => `/uploads/products/${file.filename}`,
+      );
     } else if (data.productImage) {
       if (typeof data.productImage === 'string') {
         data.productImage = [data.productImage];
@@ -120,16 +128,23 @@ export class ProductController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
-  @ApiOperation({ summary: 'Set or update customized rate for a product and party' })
-  @ApiResponse({ status: 200, description: 'Product party rate successfully set.' })
-  setPartyRate(@Body() dto: SetPartyProductRateDto) {
-    return this.productService.setPartyRate(dto);
+  @ApiOperation({
+    summary: 'Set or update customized rate for a product and party',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Product party rate successfully set.',
+  })
+  setPartyRate(@Body() dto: SetPartyProductRateDto, @Req() req: any) {
+    return this.productService.setPartyRate(dto, req.user);
   }
 
   @Get('party-rates/:partyId')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Get customized rates list of all products for a specific party' })
+  @ApiOperation({
+    summary: 'Get customized rates list of all products for a specific party',
+  })
   @ApiResponse({ status: 200, description: 'Return rates list.' })
   getPartyRates(@Param('partyId') partyId: string) {
     return this.productService.getPartyRates(partyId);
@@ -139,49 +154,63 @@ export class ProductController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
-  @ApiOperation({ summary: 'Get list of products with low stock (out of stock or below min order)' })
+  @ApiOperation({
+    summary:
+      'Get list of products with low stock (out of stock or below min order)',
+  })
   @ApiResponse({ status: 200, description: 'Return low stock products.' })
   findLowStock(@Query() query: PaginationQueryDto) {
     return this.productService.findLowStock(query);
   }
 
   @Get('sub-category/:subCategoryId')
+  @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({ summary: 'Get all public products by subcategory ID' })
   @ApiResponse({ status: 200, description: 'Return subcategory products.' })
   findSubCategoryProducts(
     @Param('subCategoryId') subCategoryId: string,
     @Query() query: PaginationQueryDto,
+    @Req() req: any,
   ) {
-    return this.productService.findSubCategoryProducts(subCategoryId, query);
+    return this.productService.findSubCategoryProducts(subCategoryId, query, req.user);
   }
 
   @Get('company/:companyId')
-  @ApiOperation({ summary: 'Get products belonging to a company with filters and search' })
+  @UseGuards(OptionalAccessTokenGuard)
+  @ApiOperation({
+    summary: 'Get products belonging to a company with filters and search',
+  })
   @ApiResponse({ status: 200, description: 'Return company products.' })
   findCompanyProducts(
     @Param('companyId') companyId: string,
     @Query() query: GetProductsQueryDto,
+    @Req() req: any,
   ) {
-    return this.productService.findCompanyProducts(companyId, query);
+    return this.productService.findCompanyProducts(companyId, query, req.user);
   }
 
   @Get('my-products')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.VENDOR)
-  @ApiOperation({ summary: 'Get products belonging to the logged-in vendor\'s company' })
-  @ApiResponse({ status: 200, description: 'Return vendor\'s company products.' })
-  findMyProducts(
-    @Req() req: any,
-    @Query() query: GetProductsQueryDto,
-  ) {
+  @ApiOperation({
+    summary: "Get products belonging to the logged-in vendor's company",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Return vendor's company products.",
+  })
+  findMyProducts(@Req() req: any, @Query() query: GetProductsQueryDto) {
     const companyId = req.user.sub;
-    return this.productService.findCompanyProducts(companyId, query);
+    return this.productService.findCompanyProducts(companyId, query, req.user);
   }
 
   @Get()
   @UseGuards(OptionalAccessTokenGuard)
-  @ApiOperation({ summary: 'Get all products with fuzzy search, subcategory, price filtering, and sorting' })
+  @ApiOperation({
+    summary:
+      'Get all products with fuzzy search, subcategory, price filtering, and sorting',
+  })
   @ApiResponse({ status: 200, description: 'Return all products.' })
   findAll(@Query() query: GetProductsQueryDto, @Req() req: any) {
     return this.productService.findAll(query, req.user);
@@ -189,7 +218,9 @@ export class ProductController {
 
   @Get(':id')
   @UseGuards(OptionalAccessTokenGuard)
-  @ApiOperation({ summary: 'Get product by ID (Public / Restricted for Vendor)' })
+  @ApiOperation({
+    summary: 'Get product by ID (Public / Restricted for Vendor)',
+  })
   @ApiResponse({ status: 200, description: 'Return a product by ID.' })
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.productService.findOne(id, req.user);
@@ -207,7 +238,10 @@ export class ProductController {
     schema: {
       type: 'object',
       properties: {
-        productImage: { type: 'array', items: { type: 'string', format: 'binary' } },
+        productImage: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
         productName: { type: 'string' },
         unit: { type: 'string' },
         bagSize: { type: 'string' },
@@ -226,11 +260,14 @@ export class ProductController {
     @Param('id') id: string,
     @Body() data: UpdateProductDto,
     @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: any,
   ) {
     if (files?.length) {
-      data.productImage = files.map((file) => `/uploads/products/${file.filename}`);
+      data.productImage = files.map(
+        (file) => `/uploads/products/${file.filename}`,
+      );
     }
-    return this.productService.update(id, data);
+    return this.productService.update(id, data, req.user);
   }
 
   @Delete(':id')
@@ -239,7 +276,7 @@ export class ProductController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({ summary: 'Delete a product (SUPER_ADMIN, ADMIN, VENDOR)' })
   @ApiResponse({ status: 200, description: 'Product successfully deleted.' })
-  remove(@Param('id') id: string) {
-    return this.productService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.productService.remove(id, req.user);
   }
 }

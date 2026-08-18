@@ -178,6 +178,32 @@ export class AuthController {
   refreshTokens(@Req() req: any) {
     const userId = req.user['sub'];
     const refreshToken = req.user['refreshToken'];
-    return this.authService.refreshTokens(userId, refreshToken);
+    const tokenType = req.user['tokenType'];
+    return this.authService.refreshTokens(userId, refreshToken, tokenType);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(RefreshTokenGuard)
+  @Post('refresh')
+  @ApiOperation({
+    summary: 'Refresh access token (POST)',
+    description:
+      'Acquires a new pair of access and refresh tokens using a valid refresh token. Requires a valid Refresh Token in the Authorization header or request body.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tokens successfully refreshed.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden. Refresh token is missing, expired, or invalid.',
+    type: ForbiddenErrorResponseDto,
+  })
+  refreshTokensPost(@Req() req: any) {
+    const userId = req.user['sub'];
+    const refreshToken = req.user['refreshToken'];
+    const tokenType = req.user['tokenType'];
+    return this.authService.refreshTokens(userId, refreshToken, tokenType);
   }
 }

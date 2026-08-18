@@ -82,6 +82,14 @@ export class CreateDeliveryDto {
   driverId?: string;
 
   @ApiPropertyOptional({
+    description: 'Current real-time location or landmark of the delivery',
+    example: 'বনানী ওভারপাস পার হচ্ছে (Passing Banani overpass)',
+  })
+  @IsString()
+  @IsOptional()
+  currentLocation?: string;
+
+  @ApiPropertyOptional({
     description: 'ID of the associated order',
     example: 'order-uuid-string',
   })

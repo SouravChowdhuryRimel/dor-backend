@@ -12,10 +12,9 @@ import { join } from 'path';
 
 async function bootstrap() {
   try {
-    const app = await NestFactory.create<NestExpressApplication>(
-      AppModule,
-      { bufferLogs: true },
-    );
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+      bufferLogs: true,
+    });
 
     app.useLogger(app.get(PinoLogger));
     const configService = app.get(ConfigService);

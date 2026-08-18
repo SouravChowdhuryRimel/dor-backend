@@ -1,6 +1,11 @@
 import { Controller, Get, Query, UseGuards, Req } from '@nestjs/common';
 import { ActivityLogService } from './activity-log.service';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -33,7 +38,10 @@ export class ActivityLogController {
 
   @Get('my-logs')
   @ApiOperation({ summary: 'Get activity logs of the current logged-in user' })
-  @ApiResponse({ status: 200, description: 'Return logs for the authenticated user.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Return logs for the authenticated user.',
+  })
   findMyLogs(@Req() req: any, @Query() query: PaginationQueryDto) {
     const actorId = req.user['sub'];
     return this.activityLogService.findMyLogs(actorId, query);

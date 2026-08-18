@@ -11,10 +11,18 @@ import {
   UploadedFiles,
   BadRequestException,
   Query,
+  Req,
 } from '@nestjs/common';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { PartyService } from '../services/party.service';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
@@ -55,7 +63,8 @@ export class PartyController {
             const uniqueSuffix =
               Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = extname(file.originalname);
-            const prefix = file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
+            const prefix =
+              file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
             callback(null, `${prefix}-${uniqueSuffix}${ext}`);
           },
         }),
@@ -116,11 +125,14 @@ export class PartyController {
       partyDocument?: Express.Multer.File[];
       profileImage?: Express.Multer.File[];
     },
+    @Req() req?: any,
   ) {
     let uploadedDocs: string[] = [];
     if (files) {
       if (files.partyDocument && files.partyDocument.length > 0) {
-        uploadedDocs = files.partyDocument.map((file) => `/uploads/documents/${file.filename}`);
+        uploadedDocs = files.partyDocument.map(
+          (file) => `/uploads/documents/${file.filename}`,
+        );
       }
       if (files.profileImage && files.profileImage.length > 0) {
         createPartyDto.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
@@ -129,7 +141,8 @@ export class PartyController {
     createPartyDto.partyDocument = uploadedDocs;
 
     // Normalize bazzarArea
-    const bazzarAreaValue = createPartyDto.bazzarArea || createPartyDto.bazzar || createPartyDto.area;
+    const bazzarAreaValue =
+      createPartyDto.bazzarArea || createPartyDto.bazzar || createPartyDto.area;
     if (!bazzarAreaValue) {
       throw new BadRequestException('bazzarArea, bazzar, or area is required');
     }
@@ -149,7 +162,7 @@ export class PartyController {
     delete normalizedDto.bazzar;
     delete normalizedDto.area;
 
-    return this.partyService.create(normalizedDto);
+    return this.partyService.create(normalizedDto, req?.user);
   }
 
   @Get()
@@ -170,8 +183,8 @@ export class PartyController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Verify a party (ADMIN and SUPER_ADMIN only)' })
-  verify(@Param('id') id: string) {
-    return this.partyService.verify(id);
+  verify(@Param('id') id: string, @Req() req: any) {
+    return this.partyService.verify(id, req.user);
   }
 
   @Patch(':id')
@@ -198,7 +211,8 @@ export class PartyController {
             const uniqueSuffix =
               Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = extname(file.originalname);
-            const prefix = file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
+            const prefix =
+              file.fieldname === 'profileImage' ? 'party-profile' : 'party-doc';
             callback(null, `${prefix}-${uniqueSuffix}${ext}`);
           },
         }),
@@ -227,7 +241,10 @@ export class PartyController {
         treadLicense: { type: 'string' },
         openingDue: { type: 'number' },
         creditLimit: { type: 'number' },
-        status: { type: 'string', description: 'Status of the party (ACTIVE/INACTIVE)' },
+        status: {
+          type: 'string',
+          description: 'Status of the party (ACTIVE/INACTIVE)',
+        },
         partyDocument: {
           type: 'array',
           items: {
@@ -252,6 +269,7 @@ export class PartyController {
       partyDocument?: Express.Multer.File[];
       profileImage?: Express.Multer.File[];
     },
+    @Req() req?: any,
   ) {
     const dataToUpdate: any = { ...updatePartyDto };
 
@@ -267,7 +285,8 @@ export class PartyController {
     }
 
     // Normalize bazzarArea
-    const bazzarAreaValue = updatePartyDto.bazzarArea || updatePartyDto.bazzar || updatePartyDto.area;
+    const bazzarAreaValue =
+      updatePartyDto.bazzarArea || updatePartyDto.bazzar || updatePartyDto.area;
     if (bazzarAreaValue) {
       dataToUpdate.bazzarArea = bazzarAreaValue;
     }
@@ -286,14 +305,20 @@ export class PartyController {
       dataToUpdate.creditLimit = isNaN(creditLimit) ? 0 : creditLimit;
     }
 
-    return this.partyService.update(id, dataToUpdate);
+    return this.partyService.update(id, dataToUpdate, req?.user);
   }
 
   @Get(':id/drivers')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Get list of drivers hired by a party and their associated companies' })
-  @ApiResponse({ status: 200, description: 'Return driver list with company details.' })
+  @ApiOperation({
+    summary:
+      'Get list of drivers hired by a party and their associated companies',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return driver list with company details.',
+  })
   @ApiResponse({ status: 404, description: 'Party not found.' })
   getPartyDrivers(@Param('id') id: string) {
     return this.partyService.getPartyDrivers(id);
@@ -301,7 +326,7 @@ export class PartyController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a party' })
-  remove(@Param('id') id: string) {
-    return this.partyService.remove(id);
+  remove(@Param('id') id: string, @Req() req?: any) {
+    return this.partyService.remove(id, req?.user);
   }
 }

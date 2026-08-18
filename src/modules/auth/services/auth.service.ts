@@ -60,7 +60,9 @@ export class AuthService {
 
   async signUp(registerDto: RegisterDto) {
     try {
-      const userExists = await this.usersService.findByPhone(registerDto.phoneNumber);
+      const userExists = await this.usersService.findByPhone(
+        registerDto.phoneNumber,
+      );
       if (userExists) {
         throw new BadRequestException('User already exists');
       }
@@ -112,7 +114,9 @@ export class AuthService {
           bazzarArea: null,
           createdAt: newUser.createdAt,
           updatedAt: newUser.updatedAt,
-          isVerified: newUser.roles.includes(Role.SUPER_ADMIN) || newUser.roles.includes(Role.ADMIN),
+          isVerified:
+            newUser.roles.includes(Role.SUPER_ADMIN) ||
+            newUser.roles.includes(Role.ADMIN),
           status: 'APPROVED',
         },
       };
@@ -169,14 +173,18 @@ export class AuthService {
             bazzarArea: null,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-            isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
+            isVerified:
+              user.roles.includes(Role.SUPER_ADMIN) ||
+              user.roles.includes(Role.ADMIN),
             status: 'APPROVED',
           },
         };
       }
 
       // 2. Check Company table
-      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
+      const company = await this.companyService.findByPhone(
+        loginDto.phoneNumber,
+      );
       if (company) {
         const passwordMatches = await argon2.verify(
           company.password,
@@ -316,7 +324,9 @@ export class AuthService {
 
   async signInCompany(loginDto: LoginDto) {
     try {
-      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
+      const company = await this.companyService.findByPhone(
+        loginDto.phoneNumber,
+      );
       if (!company) throw new UnauthorizedException('Access Denied');
 
       const passwordMatches = await argon2.verify(
@@ -464,7 +474,10 @@ export class AuthService {
 
     switch (account.accountType) {
       case 'user':
-        await this.usersService.updatePassword(account.id, resetPasswordDto.password);
+        await this.usersService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
         break;
       case 'company':
         await this.companyService.updatePassword(
@@ -473,7 +486,10 @@ export class AuthService {
         );
         break;
       case 'party':
-        await this.partyService.updatePassword(account.id, resetPasswordDto.password);
+        await this.partyService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
         break;
       case 'driver':
         await this.driverService.updatePassword(
@@ -502,7 +518,9 @@ export class AuthService {
           if (p) {
             actorType = 'PARTY';
           } else {
-            const d = await this.driverService.findOne(userId).catch(() => null);
+            const d = await this.driverService
+              .findOne(userId)
+              .catch(() => null);
             if (d) {
               actorType = 'DRIVER';
             }
@@ -529,51 +547,160 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(userId: string, refreshToken: string) {
+  async refreshTokens(
+    userId: string,
+    refreshToken: string,
+    tokenType?: string,
+  ) {
     try {
       const activeSessionToken = await this.redisService.get(
         `session:${userId}`,
       );
-      if (!activeSessionToken || activeSessionToken !== refreshToken) {
-        throw new ForbiddenException(
-          'Access Denied - Session Expired or Revoked',
-        );
+
+      if (tokenType !== 'access') {
+        if (!activeSessionToken || activeSessionToken !== refreshToken) {
+          throw new ForbiddenException(
+            'Access Denied - Session Expired or Revoked',
+          );
+        }
+      } else {
+        if (!activeSessionToken) {
+          throw new ForbiddenException(
+            'Access Denied - Session Expired or Revoked',
+          );
+        }
       }
 
+      // 1. Check User table
       const user = await this.usersService.findById(userId);
-      if (!user) throw new ForbiddenException('Access Denied');
-      if (!user.isActive) {
-        throw new ForbiddenException('Access Denied: Account is inactive');
+      if (user) {
+        if (!user.isActive) {
+          throw new ForbiddenException('Access Denied: Account is inactive');
+        }
+
+        const tokens = await this.getTokens(user.id, user.email, user.roles);
+        await this.storeSession(user.id, tokens.refreshToken);
+
+        const catInfo = await this.getAdminCategoryInfo(user.id);
+
+        return {
+          ...tokens,
+          user: {
+            id: user.id,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            name: user.name,
+            roles: user.roles,
+            categoryId: catInfo.categoryId,
+            categoryIds: catInfo.categoryIds,
+            businessName: null,
+            district: null,
+            upozela: null,
+            address: null,
+            bazzarArea: null,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            isVerified:
+              user.roles.includes(Role.SUPER_ADMIN) ||
+              user.roles.includes(Role.ADMIN),
+            status: 'APPROVED',
+          },
+        };
       }
 
-      const tokens = await this.getTokens(user.id, user.email, user.roles);
+      // 2. Check Company table
+      const company = await this.companyService
+        .findOne(userId)
+        .catch(() => null);
+      if (company) {
+        const tokens = await this.getTokens(company.companyId, company.email, [
+          Role.VENDOR,
+        ]);
+        await this.storeSession(company.companyId, tokens.refreshToken);
 
-      // Rotate refresh tokens dynamically to prevent token replay hijacking
-      await this.storeSession(user.id, tokens.refreshToken);
+        return {
+          ...tokens,
+          user: {
+            id: company.companyId,
+            email: company.email,
+            phoneNumber: company.phoneNumber,
+            name: company.ownerName,
+            roles: [Role.VENDOR],
+            categoryId: company.categoryId,
+            businessName: company.companyName,
+            district: company.district,
+            upozela: company.upozela,
+            address: company.address,
+            bazzarArea: null,
+            createdAt: company.createdAt,
+            updatedAt: company.updatedAt,
+            isVerified: company.isVerified,
+            status: company.status,
+          },
+        };
+      }
 
-      const catInfo = await this.getAdminCategoryInfo(user.id);
+      // 3. Check Party table
+      const party = await this.partyService.findOne(userId).catch(() => null);
+      if (party) {
+        const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
+          Role.PARTY,
+        ]);
+        await this.storeSession(party.partyId, tokens.refreshToken);
 
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-          roles: user.roles,
-          categoryId: catInfo.categoryId,
-          categoryIds: catInfo.categoryIds,
-          businessName: null,
-          district: null,
-          upozela: null,
-          address: null,
-          bazzarArea: null,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-          isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
-          status: 'APPROVED',
-        },
-      };
+        return {
+          ...tokens,
+          user: {
+            id: party.partyId,
+            email: party.email,
+            phoneNumber: party.phoneNumber,
+            name: party.partyName,
+            roles: [Role.PARTY],
+            categoryId: party.categoryId,
+            businessName: party.businessName,
+            district: party.district,
+            upozela: party.upozela,
+            address: party.address,
+            bazzarArea: party.bazzarArea,
+            createdAt: party.createdAt,
+            updatedAt: party.updatedAt,
+            isVerified: party.isVerified,
+            status: party.status,
+          },
+        };
+      }
+
+      // 4. Check Driver table
+      const driver = await this.driverService.findOne(userId).catch(() => null);
+      if (driver) {
+        const tokens = await this.getTokens(driver.driverId, driver.email, [
+          Role.DRIVER,
+        ]);
+        await this.storeSession(driver.driverId, tokens.refreshToken);
+
+        return {
+          ...tokens,
+          user: {
+            id: driver.driverId,
+            email: driver.email,
+            phoneNumber: driver.phoneNumber,
+            name: driver.driverName,
+            roles: [Role.DRIVER],
+            categoryId: driver.categoryId,
+            businessName: null,
+            district: driver.district,
+            upozela: driver.upozela,
+            address: driver.address,
+            bazzarArea: null,
+            createdAt: driver.createdAt,
+            updatedAt: driver.updatedAt,
+            isVerified: driver.isVerified,
+            status: 'APPROVED',
+          },
+        };
+      }
+
+      throw new ForbiddenException('Access Denied');
     } catch (error) {
       this.logger.error(
         `Failed to refresh session tokens for user ${userId}: ${error.message}`,

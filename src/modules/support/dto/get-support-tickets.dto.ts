@@ -4,7 +4,8 @@ import { Type } from 'class-transformer';
 
 export class GetSupportTicketsDto {
   @ApiPropertyOptional({
-    description: 'Filter tickets by status (e.g. OPEN, IN_PROGRESS, RESOLVED, CLOSED)',
+    description:
+      'Filter tickets by status (e.g. OPEN, IN_PROGRESS, RESOLVED, CLOSED)',
     example: 'OPEN',
   })
   @IsString()

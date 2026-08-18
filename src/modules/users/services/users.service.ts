@@ -19,7 +19,7 @@ export class UsersService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   async onApplicationBootstrap() {
     this.logger.log('Checking for Super Admin existence...');
@@ -42,8 +42,7 @@ export class UsersService implements OnApplicationBootstrap {
         this.configService.get<string>('SUPER_ADMIN_EMAIL') ||
         'superadmin@example.com';
       const phoneNumber =
-        this.configService.get<string>('SUPER_ADMIN_PHONE') ||
-        '01700000000';
+        this.configService.get<string>('SUPER_ADMIN_PHONE') || '01700000000';
       const password =
         this.configService.get<string>('SUPER_ADMIN_PASSWORD') || 'password123';
 
@@ -62,7 +61,9 @@ export class UsersService implements OnApplicationBootstrap {
           roles: [Role.SUPER_ADMIN],
         },
       });
-      this.logger.log(`Super Admin created successfully with phone: ${phoneNumber}`);
+      this.logger.log(
+        `Super Admin created successfully with phone: ${phoneNumber}`,
+      );
       this.logger.log('--- EXAMPLE LOGIN ROUTE ---');
       this.logger.log(
         `curl -X POST http://localhost:3000/api/v1/auth/signin \\`,
@@ -85,7 +86,10 @@ export class UsersService implements OnApplicationBootstrap {
 
   private mapAdminCategories(user: any) {
     if (!user) return user;
-    const categoryIds = user.adminCategories?.map((ac: any) => ac.category?.categoryId || ac.categoryId) || [];
+    const categoryIds =
+      user.adminCategories?.map(
+        (ac: any) => ac.category?.categoryId || ac.categoryId,
+      ) || [];
     const category = user.adminCategories?.[0]?.category || null;
     const categoryId = categoryIds[0] || null;
     const { adminCategories, ...rest } = user;
@@ -94,6 +98,7 @@ export class UsersService implements OnApplicationBootstrap {
       categoryId,
       categoryIds,
       category,
+      adminCategories,
     };
   }
 
@@ -350,6 +355,12 @@ export class UsersService implements OnApplicationBootstrap {
         adminCategories: {
           select: {
             categoryId: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
           },
         },
       },

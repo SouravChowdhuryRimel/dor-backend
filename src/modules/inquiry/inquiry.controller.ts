@@ -75,7 +75,11 @@ export class InquiryController {
         title: { type: 'string' },
         description: { type: 'string' },
         categoryId: { type: 'string' },
-        image: { type: 'string', format: 'binary', description: 'Product Image (optional)' },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Product Image (optional)',
+        },
       },
     },
   })
@@ -123,7 +127,11 @@ export class InquiryController {
         title: { type: 'string' },
         description: { type: 'string' },
         categoryId: { type: 'string' },
-        image: { type: 'string', format: 'binary', description: 'Product Image (optional)' },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Product Image (optional)',
+        },
       },
     },
   })

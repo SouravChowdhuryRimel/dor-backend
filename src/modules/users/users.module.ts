@@ -12,4 +12,4 @@ import { DriverModule } from '../driver/driver.module';
   providers: [UsersService],
   exports: [UsersService],
 })
-export class UsersModule { }
+export class UsersModule {}

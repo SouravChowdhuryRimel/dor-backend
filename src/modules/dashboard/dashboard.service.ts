@@ -1,37 +1,86 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
-import { CompanyStatus, ComplaintStatus, DeliveryStatus, OrderStatus } from '@prisma/client';
-
+import {
+  CompanyStatus,
+  ComplaintStatus,
+  DeliveryStatus,
+  OrderStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSuperAdminSummary() {
-    const totalCompanies = await this.prisma.company.count();
-    const pendingVerificationCompanies = await this.prisma.company.count({
-      where: { status: CompanyStatus.PENDING },
-    });
-    const totalOrders = await this.prisma.order.count();
-    const totalComplaints = await this.prisma.complaint.count({
-      where: {
-        status: {
-          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
-        },
+  async getSuperAdminSummary(reqUser?: any) {
+    const isAdmin = reqUser?.roles?.includes('ADMIN') && !reqUser?.roles?.includes('SUPER_ADMIN');
+    let categoryIds: string[] = [];
+    if (isAdmin) {
+      const adminCategories = await this.prisma.adminCategory.findMany({
+        where: { userId: reqUser.sub },
+      });
+      categoryIds = adminCategories.map((ac) => ac.categoryId);
+    }
+
+    const companyWhere: any = {};
+    if (isAdmin) {
+      companyWhere.categoryId = { in: categoryIds };
+    }
+
+    const pendingCompanyWhere: any = { status: CompanyStatus.PENDING };
+    if (isAdmin) {
+      pendingCompanyWhere.categoryId = { in: categoryIds };
+    }
+
+    const orderWhere: any = {};
+    if (isAdmin) {
+      orderWhere.product = { categoryId: { in: categoryIds } };
+    }
+
+    const complaintWhere: any = {
+      status: {
+        in: [
+          ComplaintStatus.PENDING,
+          ComplaintStatus.UNDER_REVIEW,
+          ComplaintStatus.REOPENED,
+        ],
       },
+    };
+    if (isAdmin) {
+      complaintWhere.company = { categoryId: { in: categoryIds } };
+    }
+
+    const driverWhere: any = {};
+    if (isAdmin) {
+      driverWhere.categoryId = { in: categoryIds };
+    }
+
+    const partyWhere: any = {};
+    if (isAdmin) {
+      partyWhere.categoryId = { in: categoryIds };
+    }
+
+    const totalCompanies = await this.prisma.company.count({ where: companyWhere });
+    const pendingVerificationCompanies = await this.prisma.company.count({
+      where: pendingCompanyWhere,
+    });
+    const totalOrders = await this.prisma.order.count({ where: orderWhere });
+    const totalComplaints = await this.prisma.complaint.count({
+      where: complaintWhere,
     });
 
-    const totalDrivers = await this.prisma.driver.count();
-    const totalParties = await this.prisma.party.count();
+    const totalDrivers = await this.prisma.driver.count({ where: driverWhere });
+    const totalParties = await this.prisma.party.count({ where: partyWhere });
 
-    const totalRevenueAggregate = await this.prisma.order.aggregate({
+    const totalOrderValueAggregate = await this.prisma.order.aggregate({
+      where: orderWhere,
       _sum: { totalRate: true, bag: true },
     });
-    const totalRevenue = totalRevenueAggregate._sum.totalRate || 0;
-    const totalBagsOrdered = totalRevenueAggregate._sum.bag || 0;
+    const totalOrderValue = totalOrderValueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = totalOrderValueAggregate._sum.bag || 0;
 
     // Status breakdowns
     const companyStatuses = await this.prisma.company.groupBy({
+      where: companyWhere,
       by: ['status'],
       _count: { _all: true },
     });
@@ -46,6 +95,7 @@ export class DashboardService {
     });
 
     const complaintStatuses = await this.prisma.complaint.groupBy({
+      where: complaintWhere,
       by: ['status'],
       _count: { _all: true },
     });
@@ -75,6 +125,7 @@ export class DashboardService {
         createdAt: {
           gte: startOfTrend,
         },
+        ...orderWhere,
       },
       select: {
         createdAt: true,
@@ -82,7 +133,7 @@ export class DashboardService {
       },
     });
 
-    const weeklyRevenueTrend = last7Days.map((date) => {
+    const weeklyOrderValueTrend = last7Days.map((date) => {
       const dayStart = new Date(date);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -92,21 +143,26 @@ export class DashboardService {
       );
 
       const count = dayOrders.length;
-      const revenue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const orderValue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
         date: date.toISOString().split('T')[0],
         label: dateLabel,
         count,
-        revenue,
+        orderValue,
       };
     });
 
     // Top performers
     const productOrdersGroup = await this.prisma.order.groupBy({
+      where: orderWhere,
       by: ['productId'],
       _count: { _all: true },
       _sum: { bag: true, totalRate: true },
@@ -129,11 +185,12 @@ export class DashboardService {
         productName: info?.productName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     const companyOrdersGroup = await this.prisma.order.groupBy({
+      where: orderWhere,
       by: ['companyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -157,11 +214,12 @@ export class DashboardService {
         ownerName: info?.ownerName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     const partyOrdersGroup = await this.prisma.order.groupBy({
+      where: orderWhere,
       by: ['partyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -172,7 +230,9 @@ export class DashboardService {
       },
       take: 5,
     });
-    const filteredPartyGroups = partyOrdersGroup.filter((g) => g.partyId !== null);
+    const filteredPartyGroups = partyOrdersGroup.filter(
+      (g) => g.partyId !== null,
+    );
     const partyIds = filteredPartyGroups.map((g) => g.partyId as string);
     const partiesInfo = await this.prisma.party.findMany({
       where: { partyId: { in: partyIds } },
@@ -186,24 +246,27 @@ export class DashboardService {
         businessName: info?.businessName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     // Generate recent activities by fetching recent records
     const recentCompanies = await this.prisma.company.findMany({
+      where: companyWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { companyName: true, createdAt: true },
     });
 
     const recentComplaints = await this.prisma.complaint.findMany({
+      where: complaintWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { title: true, createdAt: true },
     });
 
     const recentOrders = await this.prisma.order.findMany({
+      where: orderWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { showOrderId: true, createdAt: true },
@@ -243,14 +306,14 @@ export class DashboardService {
         pendingVerificationCompanies,
         totalOrders,
         totalComplaints,
-        totalRevenue,
+        totalOrderValue,
         totalDrivers,
         totalParties,
         totalBagsOrdered,
       },
       companyStatusBreakdown,
       complaintStatusBreakdown,
-      weeklyRevenueTrend,
+      weeklyOrderValueTrend,
       topProducts,
       topCompanies,
       topParties,
@@ -281,12 +344,12 @@ export class DashboardService {
       where: { companyId },
     });
 
-    const revenueAggregate = await this.prisma.order.aggregate({
+    const orderValueAggregate = await this.prisma.order.aggregate({
       where: { companyId },
       _sum: { totalRate: true, bag: true },
     });
-    const totalRevenue = revenueAggregate._sum.totalRate || 0;
-    const totalBagsOrdered = revenueAggregate._sum.bag || 0;
+    const totalOrderValue = orderValueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = orderValueAggregate._sum.bag || 0;
 
     // Delivery Status Breakdown
     const deliveryStatuses = await this.prisma.delivery.groupBy({
@@ -343,7 +406,7 @@ export class DashboardService {
       select: { createdAt: true, totalRate: true },
     });
 
-    const weeklyRevenueTrend = last7Days.map((date) => {
+    const weeklyOrderValueTrend = last7Days.map((date) => {
       const dayStart = new Date(date);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -353,16 +416,67 @@ export class DashboardService {
       );
 
       const count = dayOrders.length;
-      const revenue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const orderValue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
         date: date.toISOString().split('T')[0],
         label: dateLabel,
         count,
-        revenue,
+        orderValue,
+      };
+    });
+
+    // Monthly Revenue Trend for the last 6 months
+    const last6Months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      d.setHours(0, 0, 0, 0);
+      last6Months.push(d);
+    }
+    const startOf6MonthTrend = new Date(last6Months[0]);
+
+    const sixMonthTrendOrders = await this.prisma.order.findMany({
+      where: {
+        companyId,
+        createdAt: { gte: startOf6MonthTrend },
+      },
+      select: { createdAt: true, totalRate: true, bag: true },
+    });
+
+    const sixMonthOrderValueTrend = last6Months.map((date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
+      const monthOrders = sixMonthTrendOrders.filter(
+        (o) => o.createdAt >= monthStart && o.createdAt <= monthEnd,
+      );
+
+      const count = monthOrders.length;
+      const orderValue = monthOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const bags = monthOrders.reduce((sum, o) => sum + (o.bag || 0), 0);
+
+      const monthLabel = date.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+      });
+
+      return {
+        month: `${year}-${String(month + 1).padStart(2, '0')}`,
+        label: monthLabel,
+        count,
+        orderValue,
+        bags,
       };
     });
 
@@ -377,7 +491,9 @@ export class DashboardService {
       },
       take: 5,
     });
-    const filteredPartyGroups = partyOrdersGroup.filter((g) => g.partyId !== null);
+    const filteredPartyGroups = partyOrdersGroup.filter(
+      (g) => g.partyId !== null,
+    );
     const partyIds = filteredPartyGroups.map((g) => g.partyId as string);
     const partiesInfo = await this.prisma.party.findMany({
       where: { partyId: { in: partyIds } },
@@ -391,7 +507,7 @@ export class DashboardService {
         businessName: info?.businessName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
@@ -418,7 +534,7 @@ export class DashboardService {
         productName: info?.productName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
@@ -462,12 +578,18 @@ export class DashboardService {
       {
         name: 'জাতীয় পরিচয়পত্র',
         description: 'মালিকের NID কপি',
-        file: company.companyDocument.length > 0 ? company.companyDocument[0] : null,
+        file:
+          company.companyDocument.length > 0
+            ? company.companyDocument[0]
+            : null,
       },
       {
         name: 'ব্যাংক তথ্য',
         description: 'ব্যাংক স্টেটমেন্ট বা চেক বই কপি',
-        file: company.companyDocument.length > 1 ? company.companyDocument[1] : null,
+        file:
+          company.companyDocument.length > 1
+            ? company.companyDocument[1]
+            : null,
       },
     ];
 
@@ -503,7 +625,11 @@ export class DashboardService {
       where: {
         companyId,
         status: {
-          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+          in: [
+            ComplaintStatus.PENDING,
+            ComplaintStatus.UNDER_REVIEW,
+            ComplaintStatus.REOPENED,
+          ],
         },
       },
     });
@@ -517,7 +643,15 @@ export class DashboardService {
     const now = new Date();
     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    const endOfLastMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
 
     const thisMonthOrders = await this.prisma.order.aggregate({
       where: {
@@ -542,7 +676,9 @@ export class DashboardService {
 
     let salesGrowth = 0;
     if (lastMonthSales > 0) {
-      salesGrowth = parseFloat((((thisMonthSales - lastMonthSales) / lastMonthSales) * 100).toFixed(1));
+      salesGrowth = parseFloat(
+        (((thisMonthSales - lastMonthSales) / lastMonthSales) * 100).toFixed(1),
+      );
     } else if (thisMonthSales > 0) {
       salesGrowth = 100.0;
     }
@@ -552,7 +688,12 @@ export class DashboardService {
       where: {
         companyId,
         status: {
-          in: [OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.PROCESSING, OrderStatus.DISPATCHED],
+          in: [
+            OrderStatus.PENDING,
+            OrderStatus.ACCEPTED,
+            OrderStatus.PROCESSING,
+            OrderStatus.DISPATCHED,
+          ],
         },
       },
       include: {
@@ -593,13 +734,13 @@ export class DashboardService {
       return {
         orderId: o.orderId,
         showOrderId: o.showOrderId,
-        partyName: o.party?.businessName || o.party?.partyName || 'Unknown Party',
+        partyName:
+          o.party?.businessName || o.party?.partyName || 'Unknown Party',
         productName: o.product?.productName || 'Unknown Product',
         quantity: o.bag,
         unit: o.product?.unit || o.bagSize || 'Bag',
         totalAmount: o.totalRate,
         deliveryStatus,
-        paymentStatus: 'Unpaid',
         createdAt: o.createdAt,
       };
     });
@@ -607,7 +748,7 @@ export class DashboardService {
     return {
       ownerName: company.ownerName,
       companyName: company.companyName,
-      totalSales: totalRevenue,
+      totalSales: totalOrderValue,
       salesGrowth,
       todayOrdersCount,
       stockAlertCount,
@@ -622,12 +763,13 @@ export class DashboardService {
         totalDrivers,
         totalParties,
         totalComplaints,
-        totalRevenue,
+        totalOrderValue,
         totalBagsOrdered,
       },
       deliveryStatusBreakdown,
       complaintStatusBreakdown,
-      weeklyRevenueTrend,
+      weeklyOrderValueTrend,
+      sixMonthOrderValueTrend,
       topParties,
       topProducts,
       recentOrders,
@@ -679,7 +821,9 @@ export class DashboardService {
       select: { companyId: true },
       distinct: ['companyId'],
     });
-    const companyIds = new Set<string>(orderedCompanies.map((o) => o.companyId));
+    const companyIds = new Set<string>(
+      orderedCompanies.map((o) => o.companyId),
+    );
     if (party.companyId) {
       companyIds.add(party.companyId);
     }
@@ -689,17 +833,21 @@ export class DashboardService {
       where: {
         partyId,
         status: {
-          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+          in: [
+            ComplaintStatus.PENDING,
+            ComplaintStatus.UNDER_REVIEW,
+            ComplaintStatus.REOPENED,
+          ],
         },
       },
     });
 
-    const spendAggregate = await this.prisma.order.aggregate({
+    const orderValueAggregate = await this.prisma.order.aggregate({
       where: { partyId },
       _sum: { totalRate: true, bag: true },
     });
-    const totalSpend = spendAggregate._sum.totalRate || 0;
-    const totalBagsOrdered = spendAggregate._sum.bag || 0;
+    const totalOrderValue = orderValueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = orderValueAggregate._sum.bag || 0;
 
     // Weekly Spend Trend
     const last7Days = [];
@@ -719,7 +867,7 @@ export class DashboardService {
       select: { createdAt: true, totalRate: true },
     });
 
-    const weeklySpendTrend = last7Days.map((date) => {
+    const weeklyOrderValueTrend = last7Days.map((date) => {
       const dayStart = new Date(date);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -729,16 +877,20 @@ export class DashboardService {
       );
 
       const count = dayOrders.length;
-      const spend = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const orderValue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
         date: date.toISOString().split('T')[0],
         label: dateLabel,
         count,
-        spend,
+        orderValue,
       };
     });
 
@@ -765,7 +917,7 @@ export class DashboardService {
         productName: info?.productName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalSpend: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
@@ -870,10 +1022,10 @@ export class DashboardService {
         deliveryRemaining,
         activeCompanies,
         pendingComplaints,
-        totalSpend,
+        totalOrderValue,
         totalBagsOrdered,
       },
-      weeklySpendTrend,
+      weeklyOrderValueTrend,
       topProducts,
       recentOrders,
       recentInquiries,
@@ -965,7 +1117,11 @@ export class DashboardService {
         (d) => d.createdAt >= dayStart && d.createdAt <= dayEnd,
       ).length;
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
@@ -975,9 +1131,10 @@ export class DashboardService {
       };
     });
 
-    const currentLocation = driver.upozela && driver.district 
-      ? `${driver.upozela}, ${driver.district}` 
-      : driver.district || driver.upozela || '';
+    const currentLocation =
+      driver.upozela && driver.district
+        ? `${driver.upozela}, ${driver.district}`
+        : driver.district || driver.upozela || '';
 
     // Fetch ongoing deliveries list with order, company and party details
     const ongoingDeliveriesRaw = await this.prisma.delivery.findMany({
@@ -1020,8 +1177,8 @@ export class DashboardService {
     const ongoingDeliveriesList = ongoingDeliveriesRaw.map((d) => {
       const company = d.order?.company;
       const party = d.order?.party;
-      const pickupPoint = company 
-        ? `${company.companyName} গেট, ${company.upozela || company.district || ''}` 
+      const pickupPoint = company
+        ? `${company.companyName} গেট, ${company.upozela || company.district || ''}`
         : null;
 
       return {
@@ -1068,7 +1225,8 @@ export class DashboardService {
       orderId: d.orderId,
       showOrderId: d.order?.showOrderId || null,
       companyName: d.order?.company?.companyName || null,
-      partyName: d.order?.party?.businessName || d.order?.party?.partyName || null,
+      partyName:
+        d.order?.party?.businessName || d.order?.party?.partyName || null,
       destinationAddress: d.address,
       upozela: d.upozela,
       district: d.district,

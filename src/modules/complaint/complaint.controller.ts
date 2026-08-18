@@ -89,7 +89,9 @@ export class ComplaintController {
     @Req() req: any,
   ) {
     if (files && files.length > 0) {
-      createComplaintDto.attachments = files.map((file) => `/uploads/documents/${file.filename}`);
+      createComplaintDto.attachments = files.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
     } else {
       createComplaintDto.attachments = [];
     }
@@ -104,8 +106,14 @@ export class ComplaintController {
   }
 
   @Get('summary')
-  @ApiOperation({ summary: 'Get summary metrics of complaints (Counts of Pending vs Resolved)' })
-  @ApiResponse({ status: 200, description: 'Returns pendingCount and resolvedCount.' })
+  @ApiOperation({
+    summary:
+      'Get summary metrics of complaints (Counts of Pending vs Resolved)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns pendingCount and resolvedCount.',
+  })
   getSummary() {
     return this.complaintService.getCounts();
   }
@@ -145,22 +153,35 @@ export class ComplaintController {
     @Req() req: any,
   ) {
     if (files && files.length > 0) {
-      createComplaintReplyDto.attachments = files.map((file) => `/uploads/documents/${file.filename}`);
+      createComplaintReplyDto.attachments = files.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
     } else {
       createComplaintReplyDto.attachments = [];
     }
-    return this.complaintService.addReply(id, createComplaintReplyDto, req.user);
+    return this.complaintService.addReply(
+      id,
+      createComplaintReplyDto,
+      req.user,
+    );
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update a complaint status' })
-  @ApiResponse({ status: 200, description: 'Complaint status successfully updated.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Complaint status successfully updated.',
+  })
   @ApiResponse({ status: 404, description: 'Complaint not found.' })
   updateStatus(
     @Param('id') id: string,
     @Body() updateComplaintStatusDto: UpdateComplaintStatusDto,
     @Req() req: any,
   ) {
-    return this.complaintService.updateStatus(id, updateComplaintStatusDto.status, req.user);
+    return this.complaintService.updateStatus(
+      id,
+      updateComplaintStatusDto.status,
+      req.user,
+    );
   }
 }

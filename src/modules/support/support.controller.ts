@@ -13,7 +13,12 @@ import { SupportService } from './support.service';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
 import { ReplySupportTicketDto } from './dto/reply-support-ticket.dto';
 import { GetSupportTicketsDto } from './dto/get-support-tickets.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 
 @ApiTags('Support Tickets')
@@ -25,7 +30,10 @@ export class SupportController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new support ticket' })
-  @ApiResponse({ status: 201, description: 'Support ticket successfully created.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Support ticket successfully created.',
+  })
   create(@Body() createTicketDto: CreateSupportTicketDto, @Req() req: any) {
     return this.supportService.createTicket(createTicketDto, req.user);
   }
@@ -38,7 +46,9 @@ export class SupportController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get support ticket details and conversation messages' })
+  @ApiOperation({
+    summary: 'Get support ticket details and conversation messages',
+  })
   @ApiResponse({ status: 200, description: 'Return support ticket details.' })
   @ApiResponse({ status: 404, description: 'Support ticket not found.' })
   findOne(@Param('id') id: string, @Req() req: any) {
@@ -59,7 +69,10 @@ export class SupportController {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update support ticket status' })
-  @ApiResponse({ status: 200, description: 'Support ticket status successfully updated.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Support ticket status successfully updated.',
+  })
   @ApiResponse({ status: 404, description: 'Support ticket not found.' })
   updateStatus(
     @Param('id') id: string,

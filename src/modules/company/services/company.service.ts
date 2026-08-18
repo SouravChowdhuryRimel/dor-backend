@@ -4,7 +4,11 @@ import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
 import * as argon2 from 'argon2';
 import { CompanyStatus, Prisma } from '@prisma/client';
-import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../../shared/pagination/pagination.util';
+import { ActivityLogService } from '../../activity-log/activity-log.service';
 
 const companyDetailsSelect = {
   companyId: true,
@@ -19,6 +23,7 @@ const companyDetailsSelect = {
   isVerified: true,
   incomeTax: true,
   companyDocument: true,
+  companyImage: true,
   categoryId: true,
   adminId: true,
   createdAt: true,
@@ -41,14 +46,19 @@ const companyDetailsSelect = {
 
 @Injectable()
 export class CompanyService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogService: ActivityLogService,
+  ) {}
 
   async register(createCompanyDto: CreateCompanyDto) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: createCompanyDto.categoryId },
     });
     if (!category) {
-      throw new NotFoundException(`Category with ID "${createCompanyDto.categoryId}" not found. Create a category first.`);
+      throw new NotFoundException(
+        `Category with ID "${createCompanyDto.categoryId}" not found. Create a category first.`,
+      );
     }
 
     const hashedPassword = await argon2.hash(createCompanyDto.password, {
@@ -57,7 +67,7 @@ export class CompanyService {
       timeCost: 3,
     });
 
-    return this.prisma.company.create({
+    const company = await this.prisma.company.create({
       data: {
         ...createCompanyDto,
         password: hashedPassword,
@@ -72,10 +82,21 @@ export class CompanyService {
         status: true,
         isVerified: true,
         incomeTax: true,
+        companyDocument: true,
+        companyImage: true,
         categoryId: true,
         createdAt: true,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: 'COMPANY',
+      actorId: company.companyId,
+      action: 'REGISTER_COMPANY',
+      description: `Registered new company: ${company.companyName}`,
+    });
+
+    return company;
   }
 
   async findPending(query?: PaginationQueryDto) {
@@ -99,6 +120,8 @@ export class CompanyService {
           status: true,
           isVerified: true,
           incomeTax: true,
+          companyDocument: true,
+          companyImage: true,
           createdAt: true,
         },
       }),
@@ -126,13 +149,13 @@ export class CompanyService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async approve(companyId: string, adminId: string) {
+  async approve(companyId: string, adminId: string, reqUser?: any) {
     const company = await this.prisma.company.findUnique({
       where: { companyId },
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    return this.prisma.company.update({
+    const updatedCompany = await this.prisma.company.update({
       where: { companyId },
       data: {
         status: CompanyStatus.APPROVED,
@@ -147,6 +170,16 @@ export class CompanyService {
         isVerified: true,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'ADMIN',
+      actorId: adminId,
+      action: 'APPROVE_COMPANY',
+      description: `Approved company registration: ${company.companyName}`,
+      companyId,
+    });
+
+    return updatedCompany;
   }
 
   async findAll(query?: PaginationQueryDto) {
@@ -175,7 +208,7 @@ export class CompanyService {
     return company;
   }
 
-  async update(id: string, updateCompanyDto: UpdateCompanyDto) {
+  async update(id: string, updateCompanyDto: UpdateCompanyDto, reqUser?: any) {
     const company = await this.prisma.company.findUnique({
       where: { companyId: id },
     });
@@ -187,19 +220,39 @@ export class CompanyService {
       dataToUpdate.password = await argon2.hash(dataToUpdate.password);
     }
 
-    return this.prisma.company.update({
+    const updatedCompany = await this.prisma.company.update({
       where: { companyId: id },
       data: dataToUpdate,
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'COMPANY',
+      actorId: reqUser?.sub || id,
+      action: 'UPDATE_COMPANY',
+      description: `Updated company: ${updatedCompany.companyName}`,
+      companyId: id,
+    });
+
+    return updatedCompany;
   }
 
-  async remove(id: string) {
+  async remove(id: string, reqUser?: any) {
     const company = await this.prisma.company.findUnique({
       where: { companyId: id },
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    return this.prisma.company.delete({ where: { companyId: id } });
+    const deletedCompany = await this.prisma.company.delete({ where: { companyId: id } });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'COMPANY',
+      actorId: reqUser?.sub || id,
+      action: 'DELETE_COMPANY',
+      description: `Deleted company: ${deletedCompany.companyName}`,
+      companyId: id,
+    });
+
+    return deletedCompany;
   }
 
   async findByEmail(email: string) {
@@ -259,7 +312,8 @@ export class CompanyService {
     return companyDrivers.map((cd) => {
       const driver = cd.driver;
       const parties = driver.partyDrivers.map((pd) => pd.party);
-      const { companyDrivers, partyDrivers, password, ...driverInfo } = driver as any;
+      const { companyDrivers, partyDrivers, password, ...driverInfo } =
+        driver as any;
       return {
         ...driverInfo,
         parties,

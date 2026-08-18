@@ -9,7 +9,8 @@ export class ForgotPasswordDto {
 
   @ApiPropertyOptional({
     enum: Role,
-    description: 'Optional account role when one email is used by multiple accounts',
+    description:
+      'Optional account role when one email is used by multiple accounts',
   })
   @IsOptional()
   @IsEnum(Role)

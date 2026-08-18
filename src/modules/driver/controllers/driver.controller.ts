@@ -11,6 +11,7 @@ import {
   UploadedFiles,
   BadRequestException,
   Query,
+  Req,
 } from '@nestjs/common';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 import { DriverService } from '../services/driver.service';
@@ -62,7 +63,8 @@ export class DriverController {
             const uniqueSuffix =
               Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = extname(file.originalname);
-            const prefix = file.fieldname === 'driverImage' ? 'driver-img' : 'driver-doc';
+            const prefix =
+              file.fieldname === 'driverImage' ? 'driver-img' : 'driver-doc';
             callback(null, `${prefix}-${uniqueSuffix}${ext}`);
           },
         }),
@@ -80,7 +82,10 @@ export class DriverController {
         driverName: { type: 'string' },
         address: { type: 'string' },
         district: { type: 'string', description: 'District of the driver' },
-        loadCapacity: { type: 'string', description: 'Load Capacity (optional)' },
+        loadCapacity: {
+          type: 'string',
+          description: 'Load Capacity (optional)',
+        },
         companyIds: {
           type: 'array',
           items: { type: 'string' },
@@ -129,6 +134,7 @@ export class DriverController {
       driverDocument?: Express.Multer.File[];
       driverImage?: Express.Multer.File[];
     },
+    @Req() req?: any,
   ) {
     if (files) {
       if (files.driverDocument && files.driverDocument.length > 0) {
@@ -147,15 +153,20 @@ export class DriverController {
     }
 
     // Normalize district/districs and upozela/upazela
-    const district = createDriverDto.district || (createDriverDto as any).districs;
-    const upozela = (createDriverDto as any).upozela || (createDriverDto as any).upazela;
+    const district =
+      createDriverDto.district || (createDriverDto as any).districs;
+    const upozela =
+      (createDriverDto as any).upozela || (createDriverDto as any).upazela;
 
     if (!district) {
       throw new BadRequestException('district is required');
     }
 
-    const truckNumber = (createDriverDto as any).truckNumber || (createDriverDto as any).trackNumber;
-    const truckType = (createDriverDto as any).truckType || (createDriverDto as any).trackType;
+    const truckNumber =
+      (createDriverDto as any).truckNumber ||
+      (createDriverDto as any).trackNumber;
+    const truckType =
+      (createDriverDto as any).truckType || (createDriverDto as any).trackType;
 
     const normalizedDto: any = {
       ...createDriverDto,
@@ -171,7 +182,7 @@ export class DriverController {
     delete normalizedDto.trackNumber;
     delete normalizedDto.trackType;
 
-    return this.driverService.create(normalizedDto);
+    return this.driverService.create(normalizedDto, req?.user);
   }
 
   @Get()
@@ -195,23 +206,28 @@ export class DriverController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Verify a driver (ADMIN and SUPER_ADMIN only)' })
-  verify(@Param('id') id: string) {
-    return this.driverService.verify(id);
+  verify(@Param('id') id: string, @Req() req: any) {
+    return this.driverService.verify(id, req.user);
   }
 
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Update a driver' })
-  update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto) {
-    return this.driverService.update(id, updateDriverDto);
+  update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto, @Req() req: any) {
+    return this.driverService.update(id, updateDriverDto, req.user);
   }
 
   @Get(':id/associations')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Get list of companies and parties associated with a driver' })
-  @ApiResponse({ status: 200, description: 'Return associated companies and parties.' })
+  @ApiOperation({
+    summary: 'Get list of companies and parties associated with a driver',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return associated companies and parties.',
+  })
   @ApiResponse({ status: 404, description: 'Driver not found.' })
   getDriverAssociations(@Param('id') id: string) {
     return this.driverService.getDriverAssociations(id);
@@ -221,7 +237,7 @@ export class DriverController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Delete a driver' })
-  remove(@Param('id') id: string) {
-    return this.driverService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.driverService.remove(id, req.user);
   }
 }

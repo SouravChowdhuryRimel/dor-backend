@@ -20,7 +20,9 @@ export class ComplaintService {
       where: { partyId: createComplaintDto.partyId },
     });
     if (!partyExists) {
-      throw new NotFoundException(`Party with ID "${createComplaintDto.partyId}" not found`);
+      throw new NotFoundException(
+        `Party with ID "${createComplaintDto.partyId}" not found`,
+      );
     }
 
     // Verify company exists
@@ -28,7 +30,9 @@ export class ComplaintService {
       where: { companyId: createComplaintDto.companyId },
     });
     if (!companyExists) {
-      throw new NotFoundException(`Company with ID "${createComplaintDto.companyId}" not found`);
+      throw new NotFoundException(
+        `Company with ID "${createComplaintDto.companyId}" not found`,
+      );
     }
 
     // Verify order exists if orderId is provided
@@ -37,7 +41,9 @@ export class ComplaintService {
         where: { orderId: createComplaintDto.orderId },
       });
       if (!orderExists) {
-        throw new NotFoundException(`Order with ID "${createComplaintDto.orderId}" not found`);
+        throw new NotFoundException(
+          `Order with ID "${createComplaintDto.orderId}" not found`,
+        );
       }
     }
 
@@ -47,7 +53,9 @@ export class ComplaintService {
         where: { driverId: createComplaintDto.driverId },
       });
       if (!driverExists) {
-        throw new NotFoundException(`Driver with ID "${createComplaintDto.driverId}" not found`);
+        throw new NotFoundException(
+          `Driver with ID "${createComplaintDto.driverId}" not found`,
+        );
       }
     }
 
@@ -57,11 +65,15 @@ export class ComplaintService {
         where: { productId: createComplaintDto.productId },
       });
       if (!productExists) {
-        throw new NotFoundException(`Product with ID "${createComplaintDto.productId}" not found`);
+        throw new NotFoundException(
+          `Product with ID "${createComplaintDto.productId}" not found`,
+        );
       }
     }
 
-    const showComplaintId = createComplaintDto.showComplaintId || `CMP-${Math.floor(1000 + Math.random() * 9000)}`;
+    const showComplaintId =
+      createComplaintDto.showComplaintId ||
+      `CMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const complaint = await this.prisma.complaint.create({
       data: {
@@ -82,13 +94,19 @@ export class ComplaintService {
     return complaint;
   }
 
-  async addReply(complaintId: string, createComplaintReplyDto: CreateComplaintReplyDto, reqUser?: any) {
+  async addReply(
+    complaintId: string,
+    createComplaintReplyDto: CreateComplaintReplyDto,
+    reqUser?: any,
+  ) {
     // Verify complaint exists
     const complaint = await this.prisma.complaint.findUnique({
       where: { complaintId },
     });
     if (!complaint) {
-      throw new NotFoundException(`Complaint with ID "${complaintId}" not found`);
+      throw new NotFoundException(
+        `Complaint with ID "${complaintId}" not found`,
+      );
     }
 
     const reply = await this.prisma.complaintMessage.create({
@@ -99,7 +117,8 @@ export class ComplaintService {
     });
 
     const actorId = reqUser?.sub || createComplaintReplyDto.senderId;
-    const actorType = reqUser?.roles[0] || createComplaintReplyDto.senderRole || 'USER';
+    const actorType =
+      reqUser?.roles[0] || createComplaintReplyDto.senderRole || 'USER';
     await this.activityLogService.log({
       actorType,
       actorId,
@@ -175,18 +194,26 @@ export class ComplaintService {
     });
 
     if (!complaint) {
-      throw new NotFoundException(`Complaint with ID "${complaintId}" not found`);
+      throw new NotFoundException(
+        `Complaint with ID "${complaintId}" not found`,
+      );
     }
 
     return complaint;
   }
 
-  async updateStatus(complaintId: string, status: ComplaintStatus, reqUser?: any) {
+  async updateStatus(
+    complaintId: string,
+    status: ComplaintStatus,
+    reqUser?: any,
+  ) {
     const complaint = await this.prisma.complaint.findUnique({
       where: { complaintId },
     });
     if (!complaint) {
-      throw new NotFoundException(`Complaint with ID "${complaintId}" not found`);
+      throw new NotFoundException(
+        `Complaint with ID "${complaintId}" not found`,
+      );
     }
 
     const updated = await this.prisma.complaint.update({
@@ -210,7 +237,11 @@ export class ComplaintService {
     const pending = await this.prisma.complaint.count({
       where: {
         status: {
-          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+          in: [
+            ComplaintStatus.PENDING,
+            ComplaintStatus.UNDER_REVIEW,
+            ComplaintStatus.REOPENED,
+          ],
         },
       },
     });

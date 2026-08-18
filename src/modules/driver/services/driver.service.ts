@@ -3,13 +3,20 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import * as argon2 from 'argon2';
-import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
+import { ActivityLogService } from '../../activity-log/activity-log.service';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../../shared/pagination/pagination.util';
 
 @Injectable()
 export class DriverService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogService: ActivityLogService,
+  ) {}
 
-  async create(createDriverDto: CreateDriverDto) {
+  async create(createDriverDto: CreateDriverDto, reqUser?: any) {
     const { companyIds = [], partyIds = [], ...driverData } = createDriverDto;
 
     if (companyIds.length > 0) {
@@ -34,11 +41,13 @@ export class DriverService {
       where: { categoryId: driverData.categoryId },
     });
     if (!category) {
-      throw new NotFoundException(`Category with ID "${driverData.categoryId}" not found`);
+      throw new NotFoundException(
+        `Category with ID "${driverData.categoryId}" not found`,
+      );
     }
 
     const hashedPassword = await argon2.hash(driverData.password);
-    return this.prisma.driver.create({
+    const driver = await this.prisma.driver.create({
       data: {
         ...driverData,
         password: hashedPassword,
@@ -58,6 +67,16 @@ export class DriverService {
         },
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'DRIVER',
+      actorId: reqUser?.sub || driver.driverId,
+      action: 'REGISTER_DRIVER',
+      description: `Registered new driver: ${driver.driverName}`,
+      driverId: driver.driverId,
+    });
+
+    return driver;
   }
 
   async findByPhone(phoneNumber: string) {
@@ -82,7 +101,6 @@ export class DriverService {
       data: { password: hashedPassword },
     });
   }
-
 
   async findAll(query?: PaginationQueryDto) {
     const page = query?.page || 1;
@@ -124,7 +142,7 @@ export class DriverService {
     return driver;
   }
 
-  async update(id: string, updateDriverDto: UpdateDriverDto) {
+  async update(id: string, updateDriverDto: UpdateDriverDto, reqUser?: any) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },
     });
@@ -135,19 +153,29 @@ export class DriverService {
       dataToUpdate.password = await argon2.hash(dataToUpdate.password);
     }
 
-    return this.prisma.driver.update({
+    const updated = await this.prisma.driver.update({
       where: { driverId: id },
       data: dataToUpdate as any,
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'DRIVER',
+      actorId: reqUser?.sub || id,
+      action: 'UPDATE_DRIVER',
+      description: `Updated driver: ${updated.driverName}`,
+      driverId: id,
+    });
+
+    return updated;
   }
 
-  async verify(id: string) {
+  async verify(id: string, reqUser?: any) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
-    return this.prisma.driver.update({
+    const verified = await this.prisma.driver.update({
       where: { driverId: id },
       data: { isVerified: true },
       select: {
@@ -159,6 +187,16 @@ export class DriverService {
         updatedAt: true,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'ADMIN',
+      actorId: reqUser?.sub || 'SYSTEM',
+      action: 'VERIFY_DRIVER',
+      description: `Verified driver: ${verified.driverName}`,
+      driverId: id,
+    });
+
+    return verified;
   }
 
   async getDriverAssociations(driverId: string) {
@@ -211,12 +249,22 @@ export class DriverService {
     };
   }
 
-  async remove(id: string) {
+  async remove(id: string, reqUser?: any) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
-    return this.prisma.driver.delete({ where: { driverId: id } });
+    const deleted = await this.prisma.driver.delete({ where: { driverId: id } });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'ADMIN',
+      actorId: reqUser?.sub || 'SYSTEM',
+      action: 'DELETE_DRIVER',
+      description: `Deleted driver: ${deleted.driverName}`,
+      driverId: id,
+    });
+
+    return deleted;
   }
 }

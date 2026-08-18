@@ -15,7 +15,9 @@ export class OfferService {
       where: { partyId: createOfferDto.partyId },
     });
     if (!partyExists) {
-      throw new NotFoundException(`Party with ID "${createOfferDto.partyId}" not found`);
+      throw new NotFoundException(
+        `Party with ID "${createOfferDto.partyId}" not found`,
+      );
     }
 
     // Verify product exists
@@ -23,7 +25,9 @@ export class OfferService {
       where: { productId: createOfferDto.productId },
     });
     if (!productExists) {
-      throw new NotFoundException(`Product with ID "${createOfferDto.productId}" not found`);
+      throw new NotFoundException(
+        `Product with ID "${createOfferDto.productId}" not found`,
+      );
     }
 
     return this.prisma.offer.create({
@@ -86,7 +90,9 @@ export class OfferService {
         where: { partyId: updateOfferDto.partyId },
       });
       if (!partyExists) {
-        throw new NotFoundException(`Party with ID "${updateOfferDto.partyId}" not found`);
+        throw new NotFoundException(
+          `Party with ID "${updateOfferDto.partyId}" not found`,
+        );
       }
     }
 
@@ -95,7 +101,9 @@ export class OfferService {
         where: { productId: updateOfferDto.productId },
       });
       if (!productExists) {
-        throw new NotFoundException(`Product with ID "${updateOfferDto.productId}" not found`);
+        throw new NotFoundException(
+          `Product with ID "${updateOfferDto.productId}" not found`,
+        );
       }
     }
 

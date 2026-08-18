@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
-import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../shared/pagination/pagination.util';
 
 @Injectable()
 export class NotificationService {
@@ -57,11 +64,15 @@ export class NotificationService {
     });
 
     if (!notification) {
-      throw new NotFoundException(`Notification with ID "${notificationId}" not found`);
+      throw new NotFoundException(
+        `Notification with ID "${notificationId}" not found`,
+      );
     }
 
     if (notification.companyId !== companyId) {
-      throw new ForbiddenException(`You do not have access to this notification`);
+      throw new ForbiddenException(
+        `You do not have access to this notification`,
+      );
     }
 
     return this.prisma.notification.update({

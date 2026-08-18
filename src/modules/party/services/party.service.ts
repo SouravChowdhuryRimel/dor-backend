@@ -3,19 +3,27 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import * as argon2 from 'argon2';
-import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
+import { ActivityLogService } from '../../activity-log/activity-log.service';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../../shared/pagination/pagination.util';
 
 @Injectable()
 export class PartyService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogService: ActivityLogService,
+  ) {}
 
-  async create(createPartyDto: CreatePartyDto) {
-
+  async create(createPartyDto: CreatePartyDto, reqUser?: any) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: createPartyDto.categoryId },
     });
     if (!category) {
-      throw new NotFoundException(`Category with ID "${createPartyDto.categoryId}" not found`);
+      throw new NotFoundException(
+        `Category with ID "${createPartyDto.categoryId}" not found`,
+      );
     }
 
     const hashedPassword = await argon2.hash(createPartyDto.password, {
@@ -24,7 +32,7 @@ export class PartyService {
       timeCost: 3,
     });
 
-    return this.prisma.party.create({
+    const party = await this.prisma.party.create({
       data: {
         ...createPartyDto,
         password: hashedPassword,
@@ -44,6 +52,16 @@ export class PartyService {
         },
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'PARTY',
+      actorId: reqUser?.sub || party.partyId,
+      action: 'REGISTER_PARTY',
+      description: `Registered new party: ${party.partyName}`,
+      partyId: party.partyId,
+    });
+
+    return party;
   }
 
   async findAll(query?: PaginationQueryDto) {
@@ -121,25 +139,35 @@ export class PartyService {
     });
   }
 
-  async update(id: string, updatePartyDto: UpdatePartyDto) {
+  async update(id: string, updatePartyDto: UpdatePartyDto, reqUser?: any) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },
     });
     if (!party) throw new NotFoundException('Party not found');
 
-    return this.prisma.party.update({
+    const updated = await this.prisma.party.update({
       where: { partyId: id },
       data: updatePartyDto as any,
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'PARTY',
+      actorId: reqUser?.sub || id,
+      action: 'UPDATE_PARTY',
+      description: `Updated party: ${updated.partyName}`,
+      partyId: id,
+    });
+
+    return updated;
   }
 
-  async verify(id: string) {
+  async verify(id: string, reqUser?: any) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },
     });
     if (!party) throw new NotFoundException('Party not found');
 
-    return this.prisma.party.update({
+    const verified = await this.prisma.party.update({
       where: { partyId: id },
       data: { isVerified: true },
       select: {
@@ -152,6 +180,16 @@ export class PartyService {
         updatedAt: true,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'ADMIN',
+      actorId: reqUser?.sub || 'SYSTEM',
+      action: 'VERIFY_PARTY',
+      description: `Verified party: ${verified.partyName}`,
+      partyId: id,
+    });
+
+    return verified;
   }
 
   async getPartyDrivers(partyId: string) {
@@ -192,7 +230,8 @@ export class PartyService {
     return partyDrivers.map((pd) => {
       const driver = pd.driver;
       const companies = driver.companyDrivers.map((cd) => cd.company);
-      const { companyDrivers, partyDrivers, password, ...driverInfo } = driver as any;
+      const { companyDrivers, partyDrivers, password, ...driverInfo } =
+        driver as any;
       return {
         ...driverInfo,
         companies,
@@ -200,12 +239,22 @@ export class PartyService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, reqUser?: any) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },
     });
     if (!party) throw new NotFoundException('Party not found');
 
-    return this.prisma.party.delete({ where: { partyId: id } });
+    const deleted = await this.prisma.party.delete({ where: { partyId: id } });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'ADMIN',
+      actorId: reqUser?.sub || 'SYSTEM',
+      action: 'DELETE_PARTY',
+      description: `Deleted party: ${deleted.partyName}`,
+      partyId: id,
+    });
+
+    return deleted;
   }
 }
