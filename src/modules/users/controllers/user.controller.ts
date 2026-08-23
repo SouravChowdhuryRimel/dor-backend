@@ -68,11 +68,12 @@ export class UserController {
       if (!user) {
         throw new NotFoundException('User profile not found');
       }
-      
-      const category = (user as any).adminCategories?.map((ac: any) => ({
-        categoryId: ac.category?.categoryId || ac.categoryId,
-        categoryName: ac.category?.categoryName || null,
-      })) || [];
+
+      const category =
+        (user as any).adminCategories?.map((ac: any) => ({
+          categoryId: ac.category?.categoryId || ac.categoryId,
+          categoryName: ac.category?.categoryName || null,
+        })) || [];
 
       return {
         id: user.id,
@@ -99,10 +100,14 @@ export class UserController {
         throw new NotFoundException('Company profile not found');
       }
 
-      const category = company.category ? [{
-        categoryId: company.category.categoryId,
-        categoryName: company.category.categoryName,
-      }] : [];
+      const category = company.category
+        ? [
+            {
+              categoryId: company.category.categoryId,
+              categoryName: company.category.categoryName,
+            },
+          ]
+        : [];
 
       return {
         id: company.companyId,
@@ -122,7 +127,7 @@ export class UserController {
             companyName: company.companyName,
             companyDocument: company.companyDocument,
             companyImage: company.companyImage || null,
-          }
+          },
         ],
         driver: [],
         party: [],
@@ -135,10 +140,14 @@ export class UserController {
         throw new NotFoundException('Party profile not found');
       }
 
-      const category = party.category ? [{
-        categoryId: party.category.categoryId,
-        categoryName: party.category.categoryName,
-      }] : [];
+      const category = party.category
+        ? [
+            {
+              categoryId: party.category.categoryId,
+              categoryName: party.category.categoryName,
+            },
+          ]
+        : [];
 
       return {
         id: party.partyId,
@@ -164,7 +173,7 @@ export class UserController {
             treadLicense: party.treadLicense || null,
             partyDocument: party.partyDocument,
             profileImage: party.profileImage || null,
-          }
+          },
         ],
       };
     }
@@ -175,10 +184,14 @@ export class UserController {
         throw new NotFoundException('Driver profile not found');
       }
 
-      const category = driver.category ? [{
-        categoryId: driver.category.categoryId,
-        categoryName: driver.category.categoryName,
-      }] : [];
+      const category = driver.category
+        ? [
+            {
+              categoryId: driver.category.categoryId,
+              categoryName: driver.category.categoryName,
+            },
+          ]
+        : [];
 
       return {
         id: driver.driverId,
@@ -203,7 +216,7 @@ export class UserController {
             nidNumber: driver.nidNumber,
             driverDocument: driver.driverDocument,
             driverImage: driver.driverImage || null,
-          }
+          },
         ],
         party: [],
       };
@@ -323,10 +336,13 @@ export class UserController {
             const ext = extname(file.originalname);
             let prefix = 'user-upload';
             if (file.fieldname === 'profileImage') prefix = 'party-profile';
-            else if (file.fieldname === 'companyImage') prefix = 'company-image';
-            else if (file.fieldname === 'companyDocument') prefix = 'company-doc';
+            else if (file.fieldname === 'companyImage')
+              prefix = 'company-image';
+            else if (file.fieldname === 'companyDocument')
+              prefix = 'company-doc';
             else if (file.fieldname === 'partyDocument') prefix = 'party-doc';
-            else if (file.fieldname === 'treadLicense') prefix = 'tread-license';
+            else if (file.fieldname === 'treadLicense')
+              prefix = 'tread-license';
             else if (file.fieldname === 'driverImage') prefix = 'driver-img';
             else if (file.fieldname === 'driverDocument') prefix = 'driver-doc';
             callback(null, `${prefix}-${uniqueSuffix}${ext}`);
@@ -412,18 +428,23 @@ export class UserController {
 
     if (roles.includes(Role.VENDOR)) {
       const updateData: any = {};
-      if (body.phoneNumber !== undefined) updateData.phoneNumber = body.phoneNumber;
+      if (body.phoneNumber !== undefined)
+        updateData.phoneNumber = body.phoneNumber;
       if (body.password !== undefined) updateData.password = body.password;
-      if (body.companyName !== undefined) updateData.companyName = body.companyName;
+      if (body.companyName !== undefined)
+        updateData.companyName = body.companyName;
       if (body.ownerName !== undefined) updateData.ownerName = body.ownerName;
       if (body.email !== undefined) updateData.email = body.email;
       if (body.district !== undefined) updateData.district = body.district;
       if (body.upozela !== undefined) updateData.upozela = body.upozela;
       if (body.address !== undefined) updateData.address = body.address;
-      if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
+      if (body.categoryId !== undefined)
+        updateData.categoryId = body.categoryId;
       if (body.incomeTax !== undefined) updateData.incomeTax = body.incomeTax;
-      if (body.companyDocument !== undefined) updateData.companyDocument = body.companyDocument;
-      if (body.companyImage !== undefined) updateData.companyImage = body.companyImage;
+      if (body.companyDocument !== undefined)
+        updateData.companyDocument = body.companyDocument;
+      if (body.companyImage !== undefined)
+        updateData.companyImage = body.companyImage;
 
       await this.companyService.update(sub, updateData, req.user);
       return this.getProfile(req);
@@ -432,21 +453,24 @@ export class UserController {
     if (roles.includes(Role.PARTY)) {
       const updateData: any = {};
       if (body.partyName !== undefined) updateData.partyName = body.partyName;
-      if (body.businessName !== undefined) updateData.businessName = body.businessName;
-      if (body.phoneNumber !== undefined) updateData.phoneNumber = body.phoneNumber;
+      if (body.businessName !== undefined)
+        updateData.businessName = body.businessName;
+      if (body.phoneNumber !== undefined)
+        updateData.phoneNumber = body.phoneNumber;
       if (body.email !== undefined) updateData.email = body.email;
       if (body.password !== undefined) updateData.password = body.password;
       if (body.address !== undefined) updateData.address = body.address;
       if (body.district !== undefined) updateData.district = body.district;
       if (body.upozela !== undefined) updateData.upozela = body.upozela;
-      
+
       const bazzarAreaValue = body.bazzarArea || body.bazzar || body.area;
       if (bazzarAreaValue !== undefined) {
         updateData.bazzarArea = bazzarAreaValue;
       }
-      
-      if (body.description !== undefined) updateData.description = body.description;
-      
+
+      if (body.description !== undefined)
+        updateData.description = body.description;
+
       if (body.openingDue !== undefined) {
         const openingDue = Number(body.openingDue);
         updateData.openingDue = isNaN(openingDue) ? 0 : openingDue;
@@ -455,11 +479,15 @@ export class UserController {
         const creditLimit = Number(body.creditLimit);
         updateData.creditLimit = isNaN(creditLimit) ? 0 : creditLimit;
       }
-      
-      if (body.treadLicense !== undefined) updateData.treadLicense = body.treadLicense;
-      if (body.partyDocument !== undefined) updateData.partyDocument = body.partyDocument;
-      if (body.profileImage !== undefined) updateData.profileImage = body.profileImage;
-      if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
+
+      if (body.treadLicense !== undefined)
+        updateData.treadLicense = body.treadLicense;
+      if (body.partyDocument !== undefined)
+        updateData.partyDocument = body.partyDocument;
+      if (body.profileImage !== undefined)
+        updateData.profileImage = body.profileImage;
+      if (body.categoryId !== undefined)
+        updateData.categoryId = body.categoryId;
       if (body.companyId !== undefined) updateData.companyId = body.companyId;
 
       await this.partyService.update(sub, updateData, req.user);
@@ -468,29 +496,35 @@ export class UserController {
 
     if (roles.includes(Role.DRIVER)) {
       const updateData: any = {};
-      if (body.phoneNumber !== undefined) updateData.phoneNumber = body.phoneNumber;
+      if (body.phoneNumber !== undefined)
+        updateData.phoneNumber = body.phoneNumber;
       if (body.password !== undefined) updateData.password = body.password;
       if (body.email !== undefined) updateData.email = body.email;
-      
+
       const driverImageVal = body.driverImage || body.profileImage;
       if (driverImageVal !== undefined) updateData.driverImage = driverImageVal;
-      
-      if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
-      if (body.driverName !== undefined) updateData.driverName = body.driverName;
+
+      if (body.categoryId !== undefined)
+        updateData.categoryId = body.categoryId;
+      if (body.driverName !== undefined)
+        updateData.driverName = body.driverName;
       if (body.address !== undefined) updateData.address = body.address;
       if (body.district !== undefined) updateData.district = body.district;
-      
+
       const upozelaVal = body.upozela || body.upazela;
       if (upozelaVal !== undefined) updateData.upozela = upozelaVal;
-      
-      if (body.loadCapacity !== undefined) updateData.loadCapacity = body.loadCapacity;
-      if (body.drivingLicenceNumber !== undefined) updateData.drivingLicenceNumber = body.drivingLicenceNumber;
+
+      if (body.loadCapacity !== undefined)
+        updateData.loadCapacity = body.loadCapacity;
+      if (body.drivingLicenceNumber !== undefined)
+        updateData.drivingLicenceNumber = body.drivingLicenceNumber;
       if (body.nidNumber !== undefined) updateData.nidNumber = body.nidNumber;
-      if (body.driverDocument !== undefined) updateData.driverDocument = body.driverDocument;
-      
+      if (body.driverDocument !== undefined)
+        updateData.driverDocument = body.driverDocument;
+
       const truckNumberVal = body.truckNumber || body.trackNumber;
       if (truckNumberVal !== undefined) updateData.truckNumber = truckNumberVal;
-      
+
       const truckTypeVal = body.truckType || body.trackType;
       if (truckTypeVal !== undefined) updateData.truckType = truckTypeVal;
 

@@ -7,7 +7,7 @@ import {
   IsOptional,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class CreateProductDto {
   @ApiPropertyOptional({
@@ -15,8 +15,17 @@ export class CreateProductDto {
     example: ['url1.jpg', 'url2.jpg'],
     type: [String],
   })
-  @IsArray()
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    if (typeof value === 'string') {
+      return [value];
+    }
+    return value as string[];
+  })
+  @IsArray()
   @IsString({ each: true })
   productImage?: string[];
 

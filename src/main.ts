@@ -9,6 +9,7 @@ import cluster, { Worker } from 'cluster';
 import * as os from 'os';
 import { AppModule } from './app.module';
 import { join } from 'path';
+import { RedisIoAdapter } from './common/adapters/redis-io.adapter';
 
 async function bootstrap() {
   try {
@@ -18,6 +19,11 @@ async function bootstrap() {
 
     app.useLogger(app.get(PinoLogger));
     const configService = app.get(ConfigService);
+
+    // Register Redis WebSocket adapter for Socket.io clustering
+    const redisIoAdapter = new RedisIoAdapter(app, configService);
+    await redisIoAdapter.connectToRedis();
+    app.useWebSocketAdapter(redisIoAdapter);
 
     // Express trust proxy
     app.set('trust proxy', true);

@@ -214,7 +214,11 @@ export class DriverController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   @ApiOperation({ summary: 'Update a driver' })
-  update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto, @Req() req: any) {
+  update(
+    @Param('id') id: string,
+    @Body() updateDriverDto: UpdateDriverDto,
+    @Req() req: any,
+  ) {
     return this.driverService.update(id, updateDriverDto, req.user);
   }
 

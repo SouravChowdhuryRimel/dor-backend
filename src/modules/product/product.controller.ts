@@ -17,6 +17,7 @@ import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { SetPartyProductRateDto } from './dto/set-party-rate.dto';
+import { UpdatePartyProductRateDto } from './dto/update-party-rate.dto';
 import { GetProductsQueryDto } from './dto/get-products-query.dto';
 import {
   ApiTags,
@@ -129,13 +130,28 @@ export class ProductController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
   @ApiOperation({
-    summary: 'Set or update customized rate for a product and party',
+    summary: 'Set customized rate for a product and party',
   })
   @ApiResponse({
     status: 200,
     description: 'Product party rate successfully set.',
   })
   setPartyRate(@Body() dto: SetPartyProductRateDto, @Req() req: any) {
+    return this.productService.setPartyRate(dto, req.user);
+  }
+
+  @Patch('party-rates')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
+  @ApiOperation({
+    summary: 'Update customized rate for a product and party',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Product party rate successfully updated.',
+  })
+  updatePartyRate(@Body() dto: UpdatePartyProductRateDto, @Req() req: any) {
     return this.productService.setPartyRate(dto, req.user);
   }
 
@@ -146,8 +162,68 @@ export class ProductController {
     summary: 'Get customized rates list of all products for a specific party',
   })
   @ApiResponse({ status: 200, description: 'Return rates list.' })
-  getPartyRates(@Param('partyId') partyId: string) {
-    return this.productService.getPartyRates(partyId);
+  getPartyRates(
+    @Param('partyId') partyId: string,
+    @Query('companyId') companyId?: string,
+  ) {
+    return this.productService.getPartyRates(partyId, companyId);
+  }
+
+  @Get(':productId/party-rates')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
+  @ApiOperation({
+    summary: 'Get all custom rates set for a specific product',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return list of custom party rates.',
+  })
+  getProductPartyRates(@Param('productId') productId: string, @Req() req: any) {
+    return this.productService.getProductPartyRates(productId, req.user);
+  }
+
+  @Get(':productId/party-rates/:partyId')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR, Role.PARTY)
+  @ApiOperation({
+    summary: 'Get the custom rate of a specific product for a specific party',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return custom party rate details.',
+  })
+  getSingleProductPartyRate(
+    @Param('productId') productId: string,
+    @Param('partyId') partyId: string,
+    @Req() req: any,
+  ) {
+    return this.productService.getSingleProductPartyRate(
+      productId,
+      partyId,
+      req.user,
+    );
+  }
+
+  @Delete(':productId/party-rates/:partyId')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR)
+  @ApiOperation({
+    summary: 'Delete custom rate for a specific product and party',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Custom rate successfully deleted.',
+  })
+  deletePartyRate(
+    @Param('productId') productId: string,
+    @Param('partyId') partyId: string,
+    @Req() req: any,
+  ) {
+    return this.productService.deletePartyRate(productId, partyId, req.user);
   }
 
   @Get('low-stock')
@@ -172,7 +248,11 @@ export class ProductController {
     @Query() query: PaginationQueryDto,
     @Req() req: any,
   ) {
-    return this.productService.findSubCategoryProducts(subCategoryId, query, req.user);
+    return this.productService.findSubCategoryProducts(
+      subCategoryId,
+      query,
+      req.user,
+    );
   }
 
   @Get('company/:companyId')

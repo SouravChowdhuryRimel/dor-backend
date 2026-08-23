@@ -25,21 +25,12 @@ const companyDetailsSelect = {
   companyDocument: true,
   companyImage: true,
   categoryId: true,
-  adminId: true,
   createdAt: true,
   updatedAt: true,
   category: {
     select: {
       categoryId: true,
       categoryName: true,
-    },
-  },
-  admin: {
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phoneNumber: true,
     },
   },
 } satisfies Prisma.CompanySelect;
@@ -214,15 +205,9 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    // If updating password, hash it
-    const dataToUpdate = { ...updateCompanyDto };
-    if (dataToUpdate.password) {
-      dataToUpdate.password = await argon2.hash(dataToUpdate.password);
-    }
-
     const updatedCompany = await this.prisma.company.update({
       where: { companyId: id },
-      data: dataToUpdate,
+      data: updateCompanyDto,
     });
 
     await this.activityLogService.log({
@@ -242,7 +227,9 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    const deletedCompany = await this.prisma.company.delete({ where: { companyId: id } });
+    const deletedCompany = await this.prisma.company.delete({
+      where: { companyId: id },
+    });
 
     await this.activityLogService.log({
       actorType: reqUser?.roles?.[0] || 'COMPANY',

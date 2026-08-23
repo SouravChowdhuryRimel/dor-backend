@@ -205,7 +205,9 @@ export class UpdateProfileDto {
   @IsOptional()
   driverDocument?: any;
 
-  @ApiPropertyOptional({ description: 'Upozela/Upazela of the driver (alias: upazela)' })
+  @ApiPropertyOptional({
+    description: 'Upozela/Upazela of the driver (alias: upazela)',
+  })
   @IsString()
   @IsOptional()
   upazela?: string;

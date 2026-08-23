@@ -202,13 +202,18 @@ export class CategoryController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Delete(':id/admins/:adminId')
-  @ApiOperation({ summary: 'Remove an admin from a category (SUPER_ADMIN only)' })
-  @ApiResponse({ status: 200, description: 'Admin removed from category successfully.' })
-  @ApiResponse({ status: 404, description: 'Category or association not found.' })
-  removeAdmin(
-    @Param('id') id: string,
-    @Param('adminId') adminId: string,
-  ) {
+  @ApiOperation({
+    summary: 'Remove an admin from a category (SUPER_ADMIN only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin removed from category successfully.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Category or association not found.',
+  })
+  removeAdmin(@Param('id') id: string, @Param('adminId') adminId: string) {
     return this.categoryService.removeAdmin(id, adminId);
   }
 

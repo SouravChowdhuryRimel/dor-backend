@@ -1,11 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsArray,
-  IsEnum,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
 import { CategoryStatusDto } from './create-category.dto';
 
 export class UpdateCategoryDto {

@@ -12,6 +12,10 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:-super-secret-key}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-refresh-secret-key}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-1h}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-7d}
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-superadmin@example.com}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-password123}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}

@@ -28,7 +28,6 @@ import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
-import { CompanyStatus } from '@prisma/client';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -233,17 +232,13 @@ export class CompanyController {
     schema: {
       type: 'object',
       properties: {
-        phoneNumber: { type: 'string' },
-        password: { type: 'string' },
         companyName: { type: 'string' },
         ownerName: { type: 'string' },
         email: { type: 'string', format: 'email' },
         district: { type: 'string' },
         upozela: { type: 'string' },
         address: { type: 'string' },
-        categoryId: { type: 'string' },
         incomeTax: { type: 'string' },
-        status: { type: 'string', enum: Object.values(CompanyStatus) },
         companyDocument: {
           type: 'array',
           items: {

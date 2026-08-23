@@ -255,7 +255,9 @@ export class DriverService {
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
-    const deleted = await this.prisma.driver.delete({ where: { driverId: id } });
+    const deleted = await this.prisma.driver.delete({
+      where: { driverId: id },
+    });
 
     await this.activityLogService.log({
       actorType: reqUser?.roles?.[0] || 'ADMIN',

@@ -129,7 +129,8 @@ export class ProductService {
     const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
     orderBy[sortBy] = sortOrder;
 
-    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const hasPartyRole =
+      reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
     const partyId = hasPartyRole ? reqUser.sub : null;
 
     const includeQuery: any = {
@@ -166,7 +167,8 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice = p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let effectivePrice =
+        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
@@ -174,7 +176,11 @@ export class ProductService {
         effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (p.offerPrice !== undefined && p.offerPrice !== null && p.offerPrice > 0) {
+      } else if (
+        p.offerPrice !== undefined &&
+        p.offerPrice !== null &&
+        p.offerPrice > 0
+      ) {
         effectivePrice = p.offerPrice;
       } else {
         effectivePrice = p.regularPrice;
@@ -188,7 +194,7 @@ export class ProductService {
         activePrice: effectivePrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-        companyCategoryName: (p.company as any)?.category?.categoryName || null,
+        companyCategoryName: p.company?.category?.categoryName || null,
         companyName: p.company?.companyName || null,
         categoryName: p.category?.categoryName || null,
         subCategoryName: p.subCategory?.title || null,
@@ -204,7 +210,8 @@ export class ProductService {
   }
 
   async findOne(id: string, reqUser?: any) {
-    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const hasPartyRole =
+      reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
     const partyId = hasPartyRole ? reqUser.sub : null;
 
     const includeQuery: any = {
@@ -243,7 +250,8 @@ export class ProductService {
       }
     }
 
-    let effectivePrice = product.offerPrice || product.regularPrice || product.defaultPrice || 0;
+    let effectivePrice =
+      product.offerPrice || product.regularPrice || product.defaultPrice || 0;
     let hasSpecialPrice = false;
     let specialPrice = null;
 
@@ -252,7 +260,11 @@ export class ProductService {
       effectivePrice = pAny.partyRates[0].rate;
       hasSpecialPrice = true;
       specialPrice = pAny.partyRates[0].rate;
-    } else if (product.offerPrice !== undefined && product.offerPrice !== null && product.offerPrice > 0) {
+    } else if (
+      product.offerPrice !== undefined &&
+      product.offerPrice !== null &&
+      product.offerPrice > 0
+    ) {
       effectivePrice = product.offerPrice;
     } else {
       effectivePrice = product.regularPrice;
@@ -266,8 +278,7 @@ export class ProductService {
       activePrice: effectivePrice,
       stockStatus: product.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
       stockStatusText: product.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyCategoryName:
-        (pAny.company as any)?.category?.categoryName || null,
+      companyCategoryName: pAny.company?.category?.categoryName || null,
       companyName: pAny.company?.companyName || null,
       categoryName: pAny.category?.categoryName || null,
       subCategoryName: pAny.subCategory?.title || null,
@@ -440,7 +451,17 @@ export class ProductService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async setPartyRate(dto: SetPartyProductRateDto, reqUser?: any) {
+  async setPartyRate(dto: Partial<SetPartyProductRateDto>, reqUser?: any) {
+    if (!dto.partyId) {
+      throw new BadRequestException('partyId is required');
+    }
+    if (!dto.productId) {
+      throw new BadRequestException('productId is required');
+    }
+    if (dto.rate === undefined) {
+      throw new BadRequestException('rate is required');
+    }
+
     const party = await this.prisma.party.findUnique({
       where: { partyId: dto.partyId },
     });
@@ -505,7 +526,7 @@ export class ProductService {
     return rate;
   }
 
-  async getPartyRates(partyId: string) {
+  async getPartyRates(partyId: string, companyId?: string) {
     const party = await this.prisma.party.findUnique({
       where: { partyId },
     });
@@ -513,7 +534,13 @@ export class ProductService {
       throw new NotFoundException(`Party with ID "${partyId}" not found`);
     }
 
+    const where: any = {};
+    if (companyId) {
+      where.companyId = companyId;
+    }
+
     const products = await this.prisma.product.findMany({
+      where,
       include: {
         partyRates: {
           where: { partyId },
@@ -542,6 +569,166 @@ export class ProductService {
     });
   }
 
+  async getProductPartyRates(productId: string, reqUser?: any) {
+    const product = await this.prisma.product.findUnique({
+      where: { productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID "${productId}" not found`);
+    }
+
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      if (product.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          `You do not have permission to view party rates for this product`,
+        );
+      }
+    }
+
+    const rates = await this.prisma.partyProductRate.findMany({
+      where: { productId },
+      include: {
+        party: {
+          select: {
+            partyId: true,
+            partyName: true,
+            email: true,
+            phoneNumber: true,
+          },
+        },
+      },
+    });
+
+    return rates.map((r) => ({
+      partyId: r.partyId,
+      partyName: r.party?.partyName || null,
+      email: r.party?.email || null,
+      phoneNumber: r.party?.phoneNumber || null,
+      customRate: r.rate,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+  }
+
+  async getSingleProductPartyRate(
+    productId: string,
+    partyId: string,
+    reqUser?: any,
+  ) {
+    const product = await this.prisma.product.findUnique({
+      where: { productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID "${productId}" not found`);
+    }
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes('VENDOR') &&
+        product.companyId !== reqUser.sub
+      ) {
+        throw new ForbiddenException(
+          `You do not have permission to view this custom rate`,
+        );
+      }
+      if (reqUser.roles.includes('PARTY') && partyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          `You do not have permission to view this custom rate`,
+        );
+      }
+    }
+
+    const customRateObj = await this.prisma.partyProductRate.findUnique({
+      where: {
+        partyId_productId: {
+          partyId,
+          productId,
+        },
+      },
+      include: {
+        party: {
+          select: {
+            partyId: true,
+            partyName: true,
+          },
+        },
+      },
+    });
+
+    if (!customRateObj) {
+      throw new NotFoundException(
+        `Custom rate not found for product "${productId}" and party "${partyId}"`,
+      );
+    }
+
+    return {
+      productId: customRateObj.productId,
+      productName: product.productName,
+      partyId: customRateObj.partyId,
+      partyName: customRateObj.party?.partyName || null,
+      customRate: customRateObj.rate,
+      defaultPrice: product.defaultPrice,
+      createdAt: customRateObj.createdAt,
+      updatedAt: customRateObj.updatedAt,
+    };
+  }
+
+  async deletePartyRate(productId: string, partyId: string, reqUser?: any) {
+    const product = await this.prisma.product.findUnique({
+      where: { productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID "${productId}" not found`);
+    }
+
+    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
+      if (product.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          `You do not have permission to delete custom rate for this product`,
+        );
+      }
+    }
+
+    const customRateObj = await this.prisma.partyProductRate.findUnique({
+      where: {
+        partyId_productId: {
+          partyId,
+          productId,
+        },
+      },
+    });
+
+    if (!customRateObj) {
+      throw new NotFoundException(
+        `Custom rate not found for product "${productId}" and party "${partyId}"`,
+      );
+    }
+
+    const deletedRate = await this.prisma.partyProductRate.delete({
+      where: {
+        partyId_productId: {
+          partyId,
+          productId,
+        },
+      },
+    });
+
+    const party = await this.prisma.party.findUnique({
+      where: { partyId },
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'VENDOR',
+      actorId: reqUser?.sub || product.companyId,
+      action: 'DELETE_PARTY_PRODUCT_RATE',
+      description: `Deleted custom rate for party ${party?.partyName || partyId} on product ${product.productName}`,
+      partyId,
+      companyId: product.companyId,
+    });
+
+    return deletedRate;
+  }
+
   async findSubCategoryProducts(
     subCategoryId: string,
     query?: PaginationQueryDto,
@@ -553,7 +740,8 @@ export class ProductService {
 
     const where = { subCategoryId };
 
-    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const hasPartyRole =
+      reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
     const partyId = hasPartyRole ? reqUser.sub : null;
 
     const includeQuery: any = {
@@ -587,7 +775,8 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice = p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let effectivePrice =
+        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
@@ -595,7 +784,11 @@ export class ProductService {
         effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (p.offerPrice !== undefined && p.offerPrice !== null && p.offerPrice > 0) {
+      } else if (
+        p.offerPrice !== undefined &&
+        p.offerPrice !== null &&
+        p.offerPrice > 0
+      ) {
         effectivePrice = p.offerPrice;
       } else {
         effectivePrice = p.regularPrice;
@@ -623,7 +816,11 @@ export class ProductService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async findCompanyProducts(companyId: string, query?: GetProductsQueryDto, reqUser?: any) {
+  async findCompanyProducts(
+    companyId: string,
+    query?: GetProductsQueryDto,
+    reqUser?: any,
+  ) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
@@ -665,7 +862,8 @@ export class ProductService {
     const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
     orderBy[sortBy] = sortOrder;
 
-    const hasPartyRole = reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const hasPartyRole =
+      reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
     const partyId = hasPartyRole ? reqUser.sub : null;
 
     const includeQuery: any = {
@@ -702,7 +900,8 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice = p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let effectivePrice =
+        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
@@ -710,7 +909,11 @@ export class ProductService {
         effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (p.offerPrice !== undefined && p.offerPrice !== null && p.offerPrice > 0) {
+      } else if (
+        p.offerPrice !== undefined &&
+        p.offerPrice !== null &&
+        p.offerPrice > 0
+      ) {
         effectivePrice = p.offerPrice;
       } else {
         effectivePrice = p.regularPrice;
@@ -724,7 +927,7 @@ export class ProductService {
         activePrice: effectivePrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-        companyCategoryName: (p.company as any)?.category?.categoryName || null,
+        companyCategoryName: p.company?.category?.categoryName || null,
         companyName: p.company?.companyName || null,
         categoryName: p.category?.categoryName || null,
         subCategoryName: p.subCategory?.title || null,

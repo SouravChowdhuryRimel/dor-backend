@@ -30,6 +30,7 @@ import { InquiryModule } from './modules/inquiry/inquiry.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
 import { SupportModule } from './modules/support/support.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { SupportModule } from './modules/support/support.module';
     NotificationModule,
     ActivityLogModule,
     SupportModule,
+    ChatModule,
   ],
   providers: [
     {

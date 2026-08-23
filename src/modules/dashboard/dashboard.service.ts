@@ -12,7 +12,9 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSuperAdminSummary(reqUser?: any) {
-    const isAdmin = reqUser?.roles?.includes('ADMIN') && !reqUser?.roles?.includes('SUPER_ADMIN');
+    const isAdmin =
+      reqUser?.roles?.includes('ADMIN') &&
+      !reqUser?.roles?.includes('SUPER_ADMIN');
     let categoryIds: string[] = [];
     if (isAdmin) {
       const adminCategories = await this.prisma.adminCategory.findMany({
@@ -59,7 +61,9 @@ export class DashboardService {
       partyWhere.categoryId = { in: categoryIds };
     }
 
-    const totalCompanies = await this.prisma.company.count({ where: companyWhere });
+    const totalCompanies = await this.prisma.company.count({
+      where: companyWhere,
+    });
     const pendingVerificationCompanies = await this.prisma.company.count({
       where: pendingCompanyWhere,
     });
