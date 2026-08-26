@@ -52,9 +52,6 @@ export class DashboardService {
     }
 
     const driverWhere: any = {};
-    if (isAdmin) {
-      driverWhere.categoryId = { in: categoryIds };
-    }
 
     const partyWhere: any = {};
     if (isAdmin) {

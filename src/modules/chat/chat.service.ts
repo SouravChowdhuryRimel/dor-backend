@@ -109,7 +109,6 @@ export class ChatService {
           role,
           image: driver.driverImage,
           email: driver.email,
-          categoryId: driver.categoryId,
         };
       }
     } catch (err) {

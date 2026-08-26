@@ -184,14 +184,7 @@ export class UserController {
         throw new NotFoundException('Driver profile not found');
       }
 
-      const category = driver.category
-        ? [
-            {
-              categoryId: driver.category.categoryId,
-              categoryName: driver.category.categoryName,
-            },
-          ]
-        : [];
+      const category: any[] = [];
 
       return {
         id: driver.driverId,
@@ -504,8 +497,6 @@ export class UserController {
       const driverImageVal = body.driverImage || body.profileImage;
       if (driverImageVal !== undefined) updateData.driverImage = driverImageVal;
 
-      if (body.categoryId !== undefined)
-        updateData.categoryId = body.categoryId;
       if (body.driverName !== undefined)
         updateData.driverName = body.driverName;
       if (body.address !== undefined) updateData.address = body.address;

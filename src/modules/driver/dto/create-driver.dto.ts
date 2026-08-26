@@ -40,14 +40,6 @@ export class CreateDriverDto {
   @IsOptional()
   driverImage?: string;
 
-  @ApiProperty({
-    description: 'Category ID associated with the driver',
-    example: 'uuid-string',
-  })
-  @IsString()
-  @IsNotEmpty()
-  categoryId: string;
-
   @ApiProperty({ description: 'Name of the driver', example: 'John Driver' })
   @IsString()
   @IsNotEmpty()

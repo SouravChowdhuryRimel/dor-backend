@@ -203,12 +203,6 @@ export class PartyService {
       include: {
         driver: {
           include: {
-            category: {
-              select: {
-                categoryId: true,
-                categoryName: true,
-              },
-            },
             companyDrivers: {
               include: {
                 company: {

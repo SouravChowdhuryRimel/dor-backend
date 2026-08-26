@@ -37,15 +37,6 @@ export class DriverService {
       }
     }
 
-    const category = await this.prisma.category.findUnique({
-      where: { categoryId: driverData.categoryId },
-    });
-    if (!category) {
-      throw new NotFoundException(
-        `Category with ID "${driverData.categoryId}" not found`,
-      );
-    }
-
     const hashedPassword = await argon2.hash(driverData.password);
     const driver = await this.prisma.driver.create({
       data: {
@@ -58,14 +49,6 @@ export class DriverService {
           create: [...new Set(partyIds)].map((partyId) => ({ partyId })),
         },
       } as any,
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
-          },
-        },
-      },
     });
 
     await this.activityLogService.log({
@@ -112,14 +95,6 @@ export class DriverService {
       this.prisma.driver.findMany({
         skip,
         take: limit,
-        include: {
-          category: {
-            select: {
-              categoryId: true,
-              categoryName: true,
-            },
-          },
-        },
       }),
     ]);
 
@@ -129,14 +104,6 @@ export class DriverService {
   async findOne(id: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
-          },
-        },
-      },
     });
     if (!driver) throw new NotFoundException('Driver not found');
     return driver;

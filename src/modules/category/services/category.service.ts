@@ -159,36 +159,13 @@ export class CategoryService {
   async findDriversByCategoryId(categoryId: string) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId },
-      select: {
-        drivers: {
-          select: {
-            driverId: true,
-            phoneNumber: true,
-            email: true,
-            driverImage: true,
-            driverName: true,
-            address: true,
-            district: true,
-            upozela: true,
-            truckNumber: true,
-            truckType: true,
-            loadCapacity: true,
-            drivingLicenceNumber: true,
-            nidNumber: true,
-            driverDocument: true,
-            isVerified: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        },
-      },
     });
 
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    return category.drivers;
+    return [];
   }
 
   async update(id: string, updateCategoryDto: UpdateCategoryDto) {

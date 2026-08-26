@@ -272,12 +272,6 @@ export class CompanyService {
       include: {
         driver: {
           include: {
-            category: {
-              select: {
-                categoryId: true,
-                categoryName: true,
-              },
-            },
             partyDrivers: {
               include: {
                 party: {

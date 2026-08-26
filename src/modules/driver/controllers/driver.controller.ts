@@ -98,7 +98,6 @@ export class DriverController {
         },
         drivingLicenceNumber: { type: 'string' },
         nidNumber: { type: 'string' },
-        categoryId: { type: 'string' },
         driverImage: {
           type: 'string',
           format: 'binary',
@@ -122,7 +121,6 @@ export class DriverController {
         'district',
         'drivingLicenceNumber',
         'nidNumber',
-        'categoryId',
       ],
     },
   })

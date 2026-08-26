@@ -5,7 +5,6 @@ model Category {
   status            CategoryStatus @default(ACTIVE)
   companies         Company[]
   parties           Party[]
-  drivers           Driver[]
   adminCategories   AdminCategory[]
   inquiries         Inquiry[]
   subCategories     SubCategory[]
