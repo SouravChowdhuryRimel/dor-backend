@@ -5,6 +5,7 @@ model User {
   password         String
   name             String?
   isActive         Boolean   @default(true) @map("is_active")
+  profileImage     String?   @map("profile_image")
   roles            Role[]    @default([USER])
   refreshToken     String?
   managedCompanies Company[]

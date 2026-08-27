@@ -66,23 +66,23 @@ export class OrderController {
   })
   @ApiResponse({ status: 200, description: 'Return detailed invoice object.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
-  generateInvoice(@Param('id') id: string) {
-    return this.orderService.generateInvoice(id);
+  generateInvoice(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.generateInvoice(id, req.user);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all orders' })
   @ApiResponse({ status: 200, description: 'Return all orders.' })
-  findAll(@Query() query: GetOrdersQueryDto) {
-    return this.orderService.findAll(query);
+  findAll(@Query() query: GetOrdersQueryDto, @Req() req: any) {
+    return this.orderService.findAll(query, req.user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get an order by ID' })
   @ApiResponse({ status: 200, description: 'Return order details.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
-  findOne(@Param('id') id: string) {
-    return this.orderService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.findOne(id, req.user);
   }
 
   @Patch(':id')

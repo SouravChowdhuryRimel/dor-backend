@@ -80,6 +80,7 @@ export class UserController {
         phoneNumber: user.phoneNumber,
         ownerName: user.name || null,
         email: user.email || null,
+        profileImage: (user as any).profileImage || null,
         district: null,
         upozela: null,
         address: null,
@@ -403,11 +404,12 @@ export class UserController {
     }
 
     if (roles.includes(Role.SUPER_ADMIN) || roles.includes(Role.ADMIN)) {
-      const { name, email, phoneNumber, password } = body;
+      const { name, email, phoneNumber, password, profileImage } = body;
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email;
       if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
+      if (profileImage !== undefined) updateData.profileImage = profileImage;
       if (password) {
         updateData.password = await argon2.hash(password, {
           type: argon2.argon2id,

@@ -26,6 +26,9 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Role } from '../../common/constants/role.enum';
 import { ComplaintStatus } from '@prisma/client';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -101,8 +104,8 @@ export class ComplaintController {
   @Get()
   @ApiOperation({ summary: 'Get all complaints' })
   @ApiResponse({ status: 200, description: 'Return all complaints.' })
-  findAll(@Query() query: GetComplaintsQueryDto) {
-    return this.complaintService.findAll(query);
+  findAll(@Query() query: GetComplaintsQueryDto, @Req() req: any) {
+    return this.complaintService.findAll(query, req.user);
   }
 
   @Get('summary')
@@ -114,16 +117,16 @@ export class ComplaintController {
     status: 200,
     description: 'Returns pendingCount and resolvedCount.',
   })
-  getSummary() {
-    return this.complaintService.getCounts();
+  getSummary(@Req() req: any) {
+    return this.complaintService.getCounts(req.user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get complaint details and discussion thread' })
   @ApiResponse({ status: 200, description: 'Return complaint details.' })
   @ApiResponse({ status: 404, description: 'Complaint not found.' })
-  findOne(@Param('id') id: string) {
-    return this.complaintService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.complaintService.findOne(id, req.user);
   }
 
   @Post(':id/reply')
@@ -167,6 +170,8 @@ export class ComplaintController {
   }
 
   @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @ApiOperation({ summary: 'Update a complaint status' })
   @ApiResponse({
     status: 200,

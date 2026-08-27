@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Role } from '../../common/constants/role.enum';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateComplaintDto } from './dto/create-complaint.dto';
 import { CreateComplaintReplyDto } from './dto/create-complaint-reply.dto';
@@ -99,15 +100,7 @@ export class ComplaintService {
     createComplaintReplyDto: CreateComplaintReplyDto,
     reqUser?: any,
   ) {
-    // Verify complaint exists
-    const complaint = await this.prisma.complaint.findUnique({
-      where: { complaintId },
-    });
-    if (!complaint) {
-      throw new NotFoundException(
-        `Complaint with ID "${complaintId}" not found`,
-      );
-    }
+    const complaint = await this.findOne(complaintId, reqUser);
 
     const reply = await this.prisma.complaintMessage.create({
       data: {
@@ -129,7 +122,7 @@ export class ComplaintService {
     return reply;
   }
 
-  async findAll(query?: GetComplaintsQueryDto) {
+  async findAll(query?: GetComplaintsQueryDto, reqUser?: any) {
     const where: any = {};
     if (query?.status) {
       where.status = query.status;
@@ -145,6 +138,22 @@ export class ComplaintService {
     }
     if (query?.productId) {
       where.productId = query.productId;
+    }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        where.partyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        where.driverId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.product = { categoryId: { in: categoryIds } };
+      }
     }
 
     const page = query?.page || 1;
@@ -173,7 +182,7 @@ export class ComplaintService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async findOne(complaintId: string) {
+  async findOne(complaintId: string, reqUser?: any) {
     const complaint = await this.prisma.complaint.findUnique({
       where: { complaintId },
       include: {
@@ -199,6 +208,37 @@ export class ComplaintService {
       );
     }
 
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        if (complaint.companyId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to access this complaint`);
+        }
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        if (complaint.partyId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to access this complaint`);
+        }
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        if (complaint.driverId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to access this complaint`);
+        }
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        const targetProductId = complaint.productId || complaint.order?.productId;
+        if (targetProductId) {
+          const product = await this.prisma.product.findUnique({
+            where: { productId: targetProductId },
+            select: { categoryId: true },
+          });
+          if (!product || !categoryIds.includes(product.categoryId)) {
+            throw new ForbiddenException(`You do not have permission to access this complaint`);
+          }
+        }
+      }
+    }
+
     return complaint;
   }
 
@@ -207,14 +247,7 @@ export class ComplaintService {
     status: ComplaintStatus,
     reqUser?: any,
   ) {
-    const complaint = await this.prisma.complaint.findUnique({
-      where: { complaintId },
-    });
-    if (!complaint) {
-      throw new NotFoundException(
-        `Complaint with ID "${complaintId}" not found`,
-      );
-    }
+    const complaint = await this.findOne(complaintId, reqUser);
 
     const updated = await this.prisma.complaint.update({
       where: { complaintId },
@@ -233,9 +266,27 @@ export class ComplaintService {
     return updated;
   }
 
-  async getCounts() {
+  async getCounts(reqUser?: any) {
+    const where: any = {};
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        where.partyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        where.driverId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.product = { categoryId: { in: categoryIds } };
+      }
+    }
+
     const pending = await this.prisma.complaint.count({
       where: {
+        ...where,
         status: {
           in: [
             ComplaintStatus.PENDING,
@@ -248,6 +299,7 @@ export class ComplaintService {
 
     const resolved = await this.prisma.complaint.count({
       where: {
+        ...where,
         status: {
           in: [ComplaintStatus.RESOLVED, ComplaintStatus.CANCELLED],
         },

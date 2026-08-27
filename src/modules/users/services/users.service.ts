@@ -19,7 +19,7 @@ export class UsersService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async onApplicationBootstrap() {
     this.logger.log('Checking for Super Admin existence...');
@@ -112,8 +112,8 @@ export class UsersService implements OnApplicationBootstrap {
     let catIds: string[] = [];
     if (data.categoryIds && data.categoryIds.length > 0) {
       catIds = data.categoryIds;
-    } else if (data.categoryId) {
-      catIds = [data.categoryId];
+    } else if ((data as any).categoryId) {
+      catIds = [(data as any).categoryId];
     }
 
     const user = await this.prisma.user.create({
@@ -133,6 +133,7 @@ export class UsersService implements OnApplicationBootstrap {
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
         adminCategories: {
@@ -171,6 +172,7 @@ export class UsersService implements OnApplicationBootstrap {
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
         adminCategories: {
@@ -203,6 +205,7 @@ export class UsersService implements OnApplicationBootstrap {
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
         adminCategories: {
@@ -231,19 +234,11 @@ export class UsersService implements OnApplicationBootstrap {
   async updateAdmin(id: string, data: UpdateAdminDto): Promise<Partial<User>> {
     await this.findAdminById(id);
 
-    const password = data.password
-      ? await argon2.hash(data.password, {
-          type: argon2.argon2id,
-          memoryCost: 65536,
-          timeCost: 3,
-        })
-      : undefined;
-
     let catIds: string[] | undefined = undefined;
     if (data.categoryIds && data.categoryIds.length > 0) {
       catIds = data.categoryIds;
-    } else if (data.categoryId) {
-      catIds = [data.categoryId];
+    } else if ((data as any).categoryId) {
+      catIds = [(data as any).categoryId];
     }
 
     // Update categories by deleting existing ones and inserting new ones if provided
@@ -257,16 +252,14 @@ export class UsersService implements OnApplicationBootstrap {
       where: { id },
       data: {
         email: data.email,
-        phoneNumber: data.phoneNumber,
         name: data.name,
-        isActive: data.isActive,
-        ...(password ? { password } : {}),
+        profileImage: data.profileImage,
         ...(catIds !== undefined
           ? {
-              adminCategories: {
-                create: catIds.map((cid) => ({ categoryId: cid })),
-              },
-            }
+            adminCategories: {
+              create: catIds.map((cid) => ({ categoryId: cid })),
+            },
+          }
           : {}),
       },
       select: {
@@ -274,6 +267,7 @@ export class UsersService implements OnApplicationBootstrap {
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
         adminCategories: {

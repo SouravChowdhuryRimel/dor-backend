@@ -442,9 +442,11 @@ export class AuthService {
       forgotPasswordDto.role,
     );
 
+    let token = '';
+
     // Always return the same response to avoid email-account enumeration.
     if (account) {
-      const token = randomBytes(32).toString('hex');
+      token = randomBytes(32).toString('hex');
       const ttlSeconds = 15 * 60;
 
       await this.redisService.setJson(
@@ -452,25 +454,88 @@ export class AuthService {
         account,
         ttlSeconds,
       );
-      await this.sendPasswordResetEmail(account.email, token);
+
+      try {
+        await this.sendPasswordResetEmail(account.email, token);
+      } catch (error) {
+        this.logger.error(`Failed to send password-reset email: ${error.message}`);
+        // Do not throw the error if SMTP is not configured or in non-production environments
+        const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+        const hasSmtp = !!this.configService.get<string>('SMTP_HOST');
+        if (isProd && hasSmtp) {
+          throw error;
+        }
+      }
     }
 
-    return {
+    const response: any = {
       message:
         'If an account exists for this email, a password-reset token has been sent.',
     };
+
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+    const hasSmtp = !!this.configService.get<string>('SMTP_HOST');
+    if (account && (!isProd || !hasSmtp)) {
+      response.token = token;
+    }
+
+    return response;
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    let account: PasswordResetAccount | null = null;
     const key = `password-reset:${resetPasswordDto.token}`;
-    const account = await this.redisService.getJson<PasswordResetAccount>(key);
+
+    // 1. Try to find the token in Redis first (standard hex token flow)
+    account = await this.redisService.getJson<PasswordResetAccount>(key);
+
+    if (account) {
+      // Consume the token before updating the password so it cannot be reused.
+      await this.redisService.del(key);
+    } else {
+      // 2. Fallback to JWT verification if token is a JWT
+      try {
+        let payload: any = null;
+        // Try verifying with JWT_SECRET (Access Token)
+        try {
+          payload = await this.jwtService.verifyAsync(resetPasswordDto.token, {
+            secret: this.configService.get<string>('JWT_SECRET'),
+          });
+        } catch (accessErr) {
+          // If access token verification fails, try with JWT_REFRESH_SECRET (Refresh Token)
+          payload = await this.jwtService.verifyAsync(resetPasswordDto.token, {
+            secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          });
+        }
+
+        if (payload && payload.sub) {
+          const roles = payload.roles || [];
+          let accountType: 'user' | 'company' | 'party' | 'driver' = 'user';
+
+          if (roles.includes(Role.VENDOR)) {
+            accountType = 'company';
+          } else if (roles.includes(Role.PARTY)) {
+            accountType = 'party';
+          } else if (roles.includes(Role.DRIVER)) {
+            accountType = 'driver';
+          }
+
+          account = {
+            id: payload.sub,
+            email: payload.email || '',
+            accountType,
+          };
+        }
+      } catch (jwtError) {
+        this.logger.error(
+          `Failed to verify password-reset token as JWT: ${jwtError.message}`,
+        );
+      }
+    }
 
     if (!account) {
       throw new BadRequestException('Invalid or expired password-reset token');
     }
-
-    // Consume the token before updating the password so it cannot be reused.
-    await this.redisService.del(key);
 
     switch (account.accountType) {
       case 'user':

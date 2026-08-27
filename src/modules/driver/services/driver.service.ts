@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
@@ -18,6 +18,20 @@ export class DriverService {
 
   async create(createDriverDto: CreateDriverDto, reqUser?: any) {
     const { companyIds = [], partyIds = [], ...driverData } = createDriverDto;
+
+    const existingDriverByPhone = await this.prisma.driver.findFirst({
+      where: { phoneNumber: driverData.phoneNumber },
+    });
+    if (existingDriverByPhone) {
+      throw new ConflictException('Phone number already exists');
+    }
+
+    const existingDriverByEmail = await this.prisma.driver.findUnique({
+      where: { email: driverData.email },
+    });
+    if (existingDriverByEmail) {
+      throw new ConflictException('Email already exists');
+    }
 
     if (companyIds.length > 0) {
       const companyCount = await this.prisma.company.count({

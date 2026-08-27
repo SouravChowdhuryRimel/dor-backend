@@ -117,7 +117,7 @@ export class OrderService {
     return order;
   }
 
-  async findAll(query?: GetOrdersQueryDto) {
+  async findAll(query?: GetOrdersQueryDto, reqUser?: any) {
     const where: any = {};
     if (query?.companyId) {
       where.companyId = query.companyId;
@@ -125,6 +125,23 @@ export class OrderService {
     if (query?.partyId) {
       where.partyId = query.partyId;
     }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        where.partyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        where.deliveries = { some: { driverId: reqUser.sub } };
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.product = { categoryId: { in: categoryIds } };
+      }
+    }
+
     if (query?.status) {
       where.status = query.status as OrderStatus;
     }
@@ -214,7 +231,7 @@ export class OrderService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, reqUser?: any) {
     const order = await this.prisma.order.findUnique({
       where: { orderId: id },
       include: {
@@ -231,6 +248,31 @@ export class OrderService {
     });
     if (!order) {
       throw new NotFoundException(`Order with ID "${id}" not found`);
+    }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        if (order.companyId !== reqUser.sub) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        if (order.partyId !== reqUser.sub) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        const hasDelivery = order.deliveries?.some((d) => d.driverId === reqUser.sub);
+        if (!hasDelivery) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!categoryIds.includes(order.product.categoryId)) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      }
     }
 
     const mapOrderStatusText = (status: OrderStatus): string => {
@@ -391,7 +433,7 @@ export class OrderService {
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto, reqUser?: any) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, reqUser);
 
     if (updateOrderDto.companyId) {
       const companyExists = await this.prisma.company.findUnique({
@@ -453,7 +495,7 @@ export class OrderService {
   }
 
   async remove(id: string, reqUser?: any) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, reqUser);
     const deletedOrder = await this.prisma.order.delete({
       where: { orderId: id },
     });
@@ -474,18 +516,8 @@ export class OrderService {
     return deletedOrder;
   }
 
-  async generateInvoice(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { orderId },
-      include: {
-        company: true,
-        party: true,
-        product: true,
-      },
-    });
-    if (!order) {
-      throw new NotFoundException(`Order with ID "${orderId}" not found`);
-    }
+  async generateInvoice(orderId: string, reqUser?: any) {
+    const order = await this.findOne(orderId, reqUser);
 
     const invoiceNumber = `INV-${order.showOrderId}`;
     const issueDate = order.createdAt;
@@ -560,10 +592,10 @@ export class OrderService {
     const where: any = { driverId };
 
     if (type === 'pending') {
-      where.status = 'VAN_COMING';
+      where.status = { in: ['PENDING', 'ACCEPTED'] };
     } else if (type === 'ongoing') {
       where.status = {
-        in: ['TRANSFER_IN_PROGRESS', 'NEAREST_TRANSFER'],
+        in: ['IN_TRANSIT', 'REACHED'],
       };
     } else if (type === 'completed') {
       where.status = 'DELIVERED';
@@ -594,7 +626,7 @@ export class OrderService {
   }
 
   async acceptOrder(id: string, reqUser: any) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, reqUser);
 
     // If requester is a VENDOR, ensure they own the order
     if (reqUser?.roles?.includes(Role.VENDOR)) {
@@ -651,7 +683,7 @@ export class OrderService {
   }
 
   async cancelOrder(id: string, reqUser: any) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, reqUser);
 
     // If requester is a VENDOR, ensure they own the order
     if (reqUser?.roles?.includes(Role.VENDOR)) {

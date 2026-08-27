@@ -75,16 +75,16 @@ export class DeliveryController {
   @Get()
   @ApiOperation({ summary: 'Get all deliveries' })
   @ApiResponse({ status: 200, description: 'Return all deliveries.' })
-  findAll(@Query() query: GetDeliveriesQueryDto) {
-    return this.deliveryService.findAll(query);
+  findAll(@Query() query: GetDeliveriesQueryDto, @Req() req: any) {
+    return this.deliveryService.findAll(query, req.user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a delivery assignment by ID' })
   @ApiResponse({ status: 200, description: 'Return delivery details.' })
   @ApiResponse({ status: 404, description: 'Delivery assignment not found.' })
-  findOne(@Param('id') id: string) {
-    return this.deliveryService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.deliveryService.findOne(id, req.user);
   }
 
   @Patch(':id')

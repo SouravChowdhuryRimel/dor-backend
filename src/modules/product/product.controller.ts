@@ -164,9 +164,10 @@ export class ProductController {
   @ApiResponse({ status: 200, description: 'Return rates list.' })
   getPartyRates(
     @Param('partyId') partyId: string,
+    @Req() req: any,
     @Query('companyId') companyId?: string,
   ) {
-    return this.productService.getPartyRates(partyId, companyId);
+    return this.productService.getPartyRates(partyId, companyId, req.user);
   }
 
   @Get(':productId/party-rates')
@@ -235,8 +236,8 @@ export class ProductController {
       'Get list of products with low stock (out of stock or below min order)',
   })
   @ApiResponse({ status: 200, description: 'Return low stock products.' })
-  findLowStock(@Query() query: PaginationQueryDto) {
-    return this.productService.findLowStock(query);
+  findLowStock(@Query() query: PaginationQueryDto, @Req() req: any) {
+    return this.productService.findLowStock(query, req.user);
   }
 
   @Get('sub-category/:subCategoryId')

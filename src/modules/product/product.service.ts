@@ -99,8 +99,26 @@ export class ProductService {
       where.subCategoryId = query.subCategoryId;
     }
 
-    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
-      where.companyId = reqUser.sub;
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('VENDOR')) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes('PARTY')) {
+        const party = await this.prisma.party.findUnique({
+          where: { partyId: reqUser.sub },
+          select: { companyId: true },
+        });
+        if (party && party.companyId) {
+          where.companyId = party.companyId;
+        } else {
+          where.companyId = 'none';
+        }
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
     } else if (query?.companyId) {
       where.companyId = query.companyId;
     }
@@ -244,9 +262,27 @@ export class ProductService {
       throw new NotFoundException(`Product not found`);
     }
 
-    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
-      if (product.companyId !== reqUser.sub) {
-        throw new NotFoundException(`Product not found`);
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('VENDOR')) {
+        if (product.companyId !== reqUser.sub) {
+          throw new NotFoundException(`Product not found`);
+        }
+      } else if (reqUser.roles.includes('PARTY')) {
+        const party = await this.prisma.party.findUnique({
+          where: { partyId: reqUser.sub },
+          select: { companyId: true },
+        });
+        if (!party || party.companyId !== product.companyId) {
+          throw new ForbiddenException(`You do not have permission to access this product`);
+        }
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!categoryIds.includes(product.categoryId)) {
+          throw new ForbiddenException(`You do not have permission to access this product`);
+        }
       }
     }
 
@@ -300,13 +336,23 @@ export class ProductService {
 
     const updateData: any = { ...updateProductDto };
 
-    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
-      if (product.companyId !== reqUser.sub) {
-        throw new ForbiddenException(
-          `You do not have permission to update this product`,
-        );
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('VENDOR')) {
+        if (product.companyId !== reqUser.sub) {
+          throw new ForbiddenException(
+            `You do not have permission to update this product`,
+          );
+        }
+        delete updateData.companyId;
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!categoryIds.includes(product.categoryId)) {
+          throw new ForbiddenException(`You do not have permission to modify this product`);
+        }
       }
-      delete updateData.companyId;
     }
 
     if (updateProductDto.subCategoryId) {
@@ -372,11 +418,21 @@ export class ProductService {
       throw new NotFoundException(`Product not found`);
     }
 
-    if (reqUser && reqUser.roles && reqUser.roles.includes('VENDOR')) {
-      if (product.companyId !== reqUser.sub) {
-        throw new ForbiddenException(
-          `You do not have permission to delete this product`,
-        );
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('VENDOR')) {
+        if (product.companyId !== reqUser.sub) {
+          throw new ForbiddenException(
+            `You do not have permission to delete this product`,
+          );
+        }
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!categoryIds.includes(product.categoryId)) {
+          throw new ForbiddenException(`You do not have permission to modify this product`);
+        }
       }
     }
 
@@ -395,13 +451,12 @@ export class ProductService {
     return deletedProduct;
   }
 
-  async findLowStock(query?: PaginationQueryDto) {
+  async findLowStock(query?: PaginationQueryDto, reqUser?: any) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
 
-    // Out of stock or stock size less than minimumOrder
-    const where = {
+    const where: any = {
       OR: [
         { stockSize: { lte: 0 } },
         {
@@ -411,6 +466,18 @@ export class ProductService {
         },
       ],
     };
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('VENDOR')) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.product.count({ where }),
@@ -526,7 +593,7 @@ export class ProductService {
     return rate;
   }
 
-  async getPartyRates(partyId: string, companyId?: string) {
+  async getPartyRates(partyId: string, companyId?: string, reqUser?: any) {
     const party = await this.prisma.party.findUnique({
       where: { partyId },
     });
@@ -535,7 +602,25 @@ export class ProductService {
     }
 
     const where: any = {};
-    if (companyId) {
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('PARTY')) {
+        if (partyId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to view other parties' rates`);
+        }
+        where.companyId = party.companyId || 'none';
+      } else if (reqUser.roles.includes('VENDOR')) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+        if (companyId) {
+          where.companyId = companyId;
+        }
+      }
+    } else if (companyId) {
       where.companyId = companyId;
     }
 
@@ -821,6 +906,30 @@ export class ProductService {
     query?: GetProductsQueryDto,
     reqUser?: any,
   ) {
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('PARTY')) {
+        const party = await this.prisma.party.findUnique({
+          where: { partyId: reqUser.sub },
+          select: { companyId: true },
+        });
+        if (!party || party.companyId !== companyId) {
+          throw new ForbiddenException(`You do not have permission to access products of this company`);
+        }
+      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+        const company = await this.prisma.company.findUnique({
+          where: { companyId },
+          select: { categoryId: true },
+        });
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!company || !categoryIds.includes(company.categoryId)) {
+          throw new ForbiddenException(`You do not have permission to access products of this company`);
+        }
+      }
+    }
+
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;

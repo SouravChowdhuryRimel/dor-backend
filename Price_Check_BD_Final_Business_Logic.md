@@ -1,17 +1,11 @@
 # Price Check BD — Final Business Logic & Functional Specification
 
-> **Document Type:** Business Logic / Functional Source of Truth
-> 
-> **App Name:** Price Check BD
-> 
-> **Platforms:** Mobile App (Android & iOS) + Web Admin Panel
-> 
-> **Primary Roles:** Super Admin, Admin, Company, Driver, Party
-> 
-> **Language Goal:** Bengali-first, English-supported
-> 
+> **Document Type:** Business Logic / Functional Source of Truth  
+> **App Name:** Price Check BD  
+> **Platforms:** Mobile App (Android & iOS) + Web Admin Panel  
+> **Primary Roles:** Super Admin, Admin, Company, Driver, Party  
+> **Language Goal:** Bengali-first, English-supported  
 > **Important:** এই document-এর latest business rules আগের payment/ledger-centric planning-কে supersede করে।
-> 
 
 ---
 
@@ -84,7 +78,7 @@ App manage করবে না:
 
 ### Core Rule
 
-```
+```text
 APP:
 Product Price
    ↓
@@ -121,35 +115,35 @@ Price Check BD-এর primary roles:
 
 Category এই system-এ শুধু product classification নয়। এটি **primary business scope**।
 
- do not use sub-category rules here.
+উদাহরণ:
+
+- Rice Mill
+- Plastic Dana
 
 ## 4.1 Registration Category Rule
 
 ### Company
-
 একটি Company registration-এর সময় **একটি single category**-এর অধীনে register করবে।
 
 ### Driver
+No need category during registration.
 
-একজন Driver registration-এর সময় **একটি single category**-এর অধীনে register করবে।
 
 ### Party
-
 একজন Party registration-এর সময় **একটি single category**-এর অধীনে register করবে।
 
 ### Admin
-
 একজন Admin-কে Super Admin এক বা একাধিক category access দিতে পারবে।
 
 উদাহরণ:
 
-```
+```text
 Admin A
 ├── Rice Mill
 └── Plastic Dana
 ```
 
-Admin A এই two category-এর সকল relevant data manage করতে পারবে।
+Admin A এই দুই category-এর সকল relevant data manage করতে পারবে।
 
 ---
 
@@ -159,7 +153,7 @@ Admin-এর জন্য আলাদা complex platform permission matrix প
 
 ## Core Rule
 
-```
+```text
 Admin Access = Assigned Category-এর Full Operational Access
 ```
 
@@ -213,7 +207,6 @@ Super Admin দেখতে এবং manage করতে পারবে:
 ## 6.2 Super Admin Responsibilities
 
 ### Platform Governance
-
 - পুরো platform audit করা
 - suspicious activity review করা
 - user moderation
@@ -221,35 +214,30 @@ Super Admin দেখতে এবং manage করতে পারবে:
 - system activity monitor
 
 ### Verification
-
 - Pending Company document review
 - Pending Driver document review
 - Pending Party document review
 - Account approve / reject
 
 ### Admin Management
-
 - Admin account create
 - Admin update
 - Admin status manage
 - Admin-কে এক বা একাধিক Category assign
 
 ### Category Management
-
 - Category create
 - Category edit
 - Category status manage
 - Category-level oversight
 
 ### Complaints
-
 - সকল Complaint দেখতে পারবে
 - Complaint update করতে পারবে
 - Complaint resolve করতে পারবে
 - Complaint reopen/escalate করতে পারবে যদি প্রয়োজন হয়
 
 ### Products / Orders / Delivery / Inquiry
-
 Super Admin এগুলো **operationally company-এর হয়ে manage করবে না**।
 
 সে primarily:
@@ -262,7 +250,6 @@ Super Admin এগুলো **operationally company-এর হয়ে manage ক�
 করবে।
 
 ### Analytics
-
 Super Admin detailed global analytics দেখতে পারবে।
 
 সে চাইলে individual:
@@ -275,10 +262,9 @@ Super Admin detailed global analytics দেখতে পারবে।
 দেখতে পারবে।
 
 ### Chat
-
 Super Admin শুধুমাত্র:
 
-```
+```text
 Super Admin ↔ Admin
 ```
 
@@ -296,13 +282,13 @@ Admin তার assigned category-এর মধ্যে সব relevant operati
 
 উদাহরণ:
 
-```
+```text
 Admin A Access:
 - Rice Mill
 - Plastic Dana
 ```
 
-তাহলে Admin A এই two category-এর:
+তাহলে Admin A এই দুই category-এর:
 
 - Company
 - Party
@@ -343,7 +329,7 @@ Admin করতে পারবে না:
 
 Admin chat করতে পারবে:
 
-```
+```text
 Admin ↔ Super Admin
 Admin ↔ Company
 ```
@@ -390,7 +376,7 @@ Company:
 
 Company chat করতে পারবে:
 
-```
+```text
 Company ↔ Admin
 Company ↔ Driver
 Company ↔ Party
@@ -426,7 +412,7 @@ Driver:
 
 ## 9.3 Driver Chat
 
-```
+```text
 Driver ↔ Company
 Driver ↔ Party
 ```
@@ -435,7 +421,7 @@ Driver ↔ Party
 
 Driver payment App-এর মাধ্যমে হবে না।
 
-```
+```text
 Driver payment settlement = Manual / Outside App
 ```
 
@@ -459,7 +445,7 @@ Party:
 ## 10.2 Party Responsibilities
 
 - নিজের category-এর Product browse
-- Lowest effective price অনুযায়ী Product listing دیکھا
+- Lowest effective price অনুযায়ী Product listing দেখা
 - Offer price দেখা
 - নিজের Special Price দেখা
 - Order place
@@ -474,7 +460,7 @@ Party:
 
 ## 10.3 Party Chat
 
-```
+```text
 Party ↔ Company
 Party ↔ Driver
 ```
@@ -497,7 +483,7 @@ Regular Price হলো product-এর default/normal market price।
 
 উদাহরণ:
 
-```
+```text
 Product A
 Regular Price: 2500 Tk
 ```
@@ -506,7 +492,7 @@ UI-তে Offer/Special Price active থাকলে Regular Price strike-throug
 
 উদাহরণ:
 
-```
+```text
 Regular Price: ~~2500 Tk~~
 Offer Price:   2100 Tk
 ```
@@ -521,7 +507,7 @@ Offer Price হলো Company-এর general discounted price।
 
 উদাহরণ:
 
-```
+```text
 Product A
 
 Regular Price: 2500 Tk
@@ -530,13 +516,13 @@ Offer Price:   2100 Tk
 
 Party-এর Special Price না থাকলে payable/display effective price:
 
-```
+```text
 Effective Price = Offer Price
 ```
 
 যদি Offer Price না থাকে:
 
-```
+```text
 Effective Price = Regular Price
 ```
 
@@ -548,7 +534,7 @@ Special Price হলো specific Party-এর জন্য Company-এর custom
 
 উদাহরণ:
 
-```
+```text
 Product A
 
 Regular Price: 2500 Tk
@@ -558,7 +544,7 @@ Special Price: 1500 Tk
 
 যদি Party-এর জন্য Special Price থাকে, Party দেখবে:
 
-```
+```text
 Regular Price: 2500 Tk
 Offer Price:   2100 Tk
 Your Special Price: 1500 Tk
@@ -566,7 +552,7 @@ Your Special Price: 1500 Tk
 
 Effective ordering price হবে:
 
-```
+```text
 Special Price
 ```
 
@@ -576,7 +562,7 @@ Special Price
 
 Final displayed/order price নির্ধারণের priority:
 
-```
+```text
 1. Special Price
 2. Offer Price
 3. Regular Price
@@ -584,7 +570,7 @@ Final displayed/order price নির্ধারণের priority:
 
 অর্থাৎ:
 
-```
+```text
 IF Special Price exists for current Party:
     Effective Price = Special Price
 
@@ -601,7 +587,7 @@ ELSE:
 
 Party-এর Product listing defaultভাবে:
 
-```
+```text
 Lowest Effective Price
         ↓
 Higher Effective Price
@@ -614,7 +600,7 @@ Sort করার সময় current Party-এর জন্য effective price �
 ## Example
 
 | Company | Regular Price | Offer Price | Party Special Price | Effective Price |
-| --- | --- | --- | --- | --- |
+|---|---:|---:|---:|---:|
 | Company A | 2500 | 2100 | — | 2100 |
 | Company B | 2400 | 2200 | 1500 | 1500 |
 | Company C | 2300 | — | — | 2300 |
@@ -633,7 +619,7 @@ Party শুধু তার own category-এর relevant Product দেখব�
 
 উদাহরণ:
 
-```
+```text
 Party Category = Rice Mill
 ```
 
@@ -662,7 +648,7 @@ Inquiry form:
 
 ## 15.2 Inquiry Flow
 
-```
+```text
 Party searches Product
         ↓
 Product not found
@@ -696,11 +682,9 @@ Company নিজের category-এর Inquiry দেখতে পারবে�
 ## 15.4 Admin / Super Admin Inquiry Access
 
 ### Super Admin
-
 সব Inquiry view করতে পারবে।
 
 ### Admin
-
 শুধু assigned category-এর Inquiry view করতে পারবে।
 
 Admin/Super Admin commercial negotiation করবে না; তারা oversight/audit করবে।
@@ -723,7 +707,7 @@ Party:
 
 ## 16.2 Order Value
 
-```
+```text
 Order Value = Effective Product Price × Quantity
 ```
 
@@ -731,7 +715,7 @@ Order Value app-এর মধ্যে display করা যাবে।
 
 কিন্তু:
 
-```
+```text
 Order Value ≠ Payment Record
 ```
 
@@ -741,7 +725,7 @@ Order Value ≠ Payment Record
 
 Recommended business lifecycle:
 
-```
+```text
 Placed
   ↓
 Accepted
@@ -761,7 +745,7 @@ Completed
 
 Alternative terminal state:
 
-```
+```text
 Cancelled
 ```
 
@@ -806,7 +790,7 @@ Category-based Driver filtering প্রযোজ্য হবে।
 
 ## 19.2 Driver Request Flow
 
-```
+```text
 Company sends Delivery Request
         ↓
 Driver receives Request
@@ -831,13 +815,13 @@ Pickup Proof হতে পারে:
 
 এর business meaning:
 
-```
+```text
 Driver officially received goods from Company
 ```
 
 Pickup proof submit হওয়ার পর:
 
-```
+```text
 Delivery Status = Picked Up
 ```
 
@@ -854,15 +838,15 @@ Delivery Proof হতে পারে:
 - Receiver confirmation-related evidence
 - Optional note
 
-এর পর:
+এরপর:
 
-```
+```text
 Delivery Status = Delivered
 ```
 
 এবং business process অনুযায়ী:
 
-```
+```text
 Order Status = Completed
 ```
 
@@ -876,7 +860,7 @@ Order Status = Completed
 
 Delivery complete হওয়ার পর Party এবং Company নিজেদের মধ্যে manually টাকা লেনদেন করবে।
 
-```
+```text
 Party ↔ Company Payment = Outside App
 ```
 
@@ -884,7 +868,7 @@ Party ↔ Company Payment = Outside App
 
 Driver-এর delivery charge / payment-ও:
 
-```
+```text
 Manual / Outside App
 ```
 
@@ -931,7 +915,7 @@ Company নিজের বিরুদ্ধে হওয়া Complaint:
 
 কিন্তু Company:
 
-```
+```text
 Complaint Resolved করতে পারবে না
 ```
 
@@ -959,7 +943,7 @@ Driver নিজের বিরুদ্ধে Complaint:
 
 কিন্তু Driver:
 
-```
+```text
 Complaint Resolved করতে পারবে না
 ```
 
@@ -971,7 +955,7 @@ Complaint Resolved করতে পারবে না
 
 কারণ:
 
-```
+```text
 Company Product
     ↓
 Company Order
@@ -998,7 +982,7 @@ Company delivery chain-এর stakeholder।
 
 Complaint final resolution authority:
 
-```
+```text
 Admin
 Super Admin
 ```
@@ -1007,7 +991,7 @@ Super Admin
 
 ## Complaint Lifecycle Example
 
-```
+```text
 Submitted
    ↓
 Under Review
@@ -1029,7 +1013,7 @@ Other possible states:
 
 ## Core Rule
 
-```
+```text
 Company / Driver = Respond
 Admin / Super Admin = Resolve
 ```
@@ -1043,7 +1027,7 @@ Chat access intentionally restricted থাকবে।
 ## Chat Matrix
 
 | User | Can Chat With |
-| --- | --- |
+|---|---|
 | Super Admin | Admin |
 | Admin | Super Admin, Company |
 | Company | Admin, Driver, Party |
@@ -1052,7 +1036,7 @@ Chat access intentionally restricted থাকবে।
 
 ## Not Allowed Examples
 
-```
+```text
 Super Admin ↔ Party   = No
 Super Admin ↔ Driver  = No
 Super Admin ↔ Company = No
@@ -1095,7 +1079,6 @@ Audit Log হলো system-এর central governance record।
 ## 30.1 What Should Be Audited
 
 ### Account Activity
-
 - registration
 - verification
 - approval
@@ -1105,7 +1088,6 @@ Audit Log হলো system-এর central governance record।
 - unban
 
 ### Admin Activity
-
 - Admin created
 - Admin category assigned
 - Admin category changed
@@ -1113,7 +1095,6 @@ Audit Log হলো system-এর central governance record।
 - Complaint resolution
 
 ### Product Activity
-
 - Product created
 - Product edited
 - Regular Price changed
@@ -1122,7 +1103,6 @@ Audit Log হলো system-এর central governance record।
 - Special Price changed
 
 ### Order Activity
-
 - Order placed
 - Order accepted
 - Order rejected
@@ -1132,7 +1112,6 @@ Audit Log হলো system-এর central governance record।
 - Order completed
 
 ### Delivery Activity
-
 - Delivery request
 - Driver accepted/rejected
 - Pickup proof
@@ -1140,7 +1119,6 @@ Audit Log হলো system-এর central governance record।
 - Delivery proof
 
 ### Complaint Activity
-
 - Complaint submitted
 - Company response
 - Driver response
@@ -1149,13 +1127,11 @@ Audit Log হলো system-এর central governance record।
 - Complaint reopened
 
 ### Inquiry Activity
-
 - Inquiry submitted
 - Company viewed/responded
 - Inquiry closed/cancelled
 
 ### Chat / Moderation Relevant Activity
-
 - moderation-related chat events
 - abuse report
 - account action after review
@@ -1166,7 +1142,7 @@ Audit Log হলো system-এর central governance record।
 
 প্রতিটি important audit event ideally answer করবে:
 
-```
+```text
 Who?
 Did What?
 To Which Entity?
@@ -1178,7 +1154,7 @@ What Changed?
 
 Example:
 
-```
+```text
 Actor: Company ABC
 Action: Special Price Updated
 Target: Product A
@@ -1195,7 +1171,7 @@ Timestamp: ...
 
 ## Super Admin
 
-```
+```text
 Global Audit Logs
 ```
 
@@ -1203,7 +1179,7 @@ Global Audit Logs
 
 ## Admin
 
-```
+```text
 Assigned Categories Filtered Audit Logs
 ```
 
@@ -1310,13 +1286,13 @@ Admin তার assigned category-এর filtered analytics দেখতে প�
 
 Example:
 
-```
+```text
 Admin Access:
 - Rice Mill
 - Plastic Dana
 ```
 
-Admin analytics শুধু এই two category-এর data নিয়ে তৈরি হবে।
+Admin analytics শুধু এই দুই category-এর data নিয়ে তৈরি হবে।
 
 Admin দেখতে পারবে:
 
@@ -1454,7 +1430,7 @@ Admin এবং Super Admin user details page থেকে performance দেখ
 
 Company, Driver এবং Party-এর common flow:
 
-```
+```text
 Registration
     ↓
 Documents / Information Submitted
@@ -1468,7 +1444,7 @@ Approved
 
 Alternative:
 
-```
+```text
 Rejected
 Suspended
 Banned
@@ -1495,7 +1471,7 @@ Category Admin তার scope-এর user operationally manage করবে।
 # 42. Data Visibility Summary
 
 | Data Area | Super Admin | Admin | Company | Driver | Party |
-| --- | --- | --- | --- | --- | --- |
+|---|---|---|---|---|---|
 | Categories | All + Manage | Assigned View | Own Category | Own Category | Own Category |
 | Admins | All + Manage | No Global Manage | No | No | No |
 | Companies | All | Assigned Categories | Own | Related | Related |
@@ -1514,7 +1490,7 @@ Category Admin তার scope-এর user operationally manage করবে।
 
 # 43. Main End-to-End Product Order Flow
 
-```
+```text
 Company Registered
       ↓
 Verified
@@ -1562,7 +1538,7 @@ Money Settlement Happens Outside App
 
 # 44. Main Inquiry Flow
 
-```
+```text
 Party Needs Product
       ↓
 Searches Product
@@ -1590,7 +1566,7 @@ Normal Order + Delivery Flow
 
 # 45. Main Complaint Flow
 
-```
+```text
 Party Submits Complaint
       ↓
 Complaint Type:
@@ -1609,7 +1585,7 @@ Admin or Super Admin Resolves
 
 ## Important Driver Complaint Visibility
 
-```
+```text
 Driver Complaint
       ↓
 Related Delivery
@@ -1623,7 +1599,7 @@ Driver + Company + Admin + Super Admin Can View
 
 # 46. Main Admin Scope Flow
 
-```
+```text
 Super Admin Creates Admin
       ↓
 Assigns Categories
@@ -1639,7 +1615,7 @@ Admin Manages Full Operational Scope
 
 Example:
 
-```
+```text
 Admin A
 Access:
 - Rice Mill
@@ -1718,7 +1694,7 @@ Older planning documents may contain these concepts, but this document supersede
 
 Main question:
 
-```
+```text
 Is the whole platform healthy and properly controlled?
 ```
 
@@ -1741,7 +1717,7 @@ Focus:
 
 Main question:
 
-```
+```text
 What is happening inside my assigned categories?
 ```
 
@@ -1765,7 +1741,7 @@ Focus:
 
 Main question:
 
-```
+```text
 How is my company performing and what needs action?
 ```
 
@@ -1786,7 +1762,7 @@ Focus:
 
 Main question:
 
-```
+```text
 What deliveries do I need to complete?
 ```
 
@@ -1806,7 +1782,7 @@ Focus:
 
 Main question:
 
-```
+```text
 What can I buy, what have I ordered, and what is happening with my orders?
 ```
 
@@ -1843,13 +1819,13 @@ App order value জানবে, payment transaction জানবে না।
 
 ## Principle 4 — Pricing Priority Is Fixed
 
-```
+```text
 Special Price > Offer Price > Regular Price
 ```
 
 ## Principle 5 — Complaint Respond and Resolve Are Different
 
-```
+```text
 Company / Driver = Respond
 Admin / Super Admin = Resolve
 ```
@@ -1860,7 +1836,7 @@ Sensitive business actions audit trail-এ থাকবে।
 
 ## Principle 7 — Analytics Are Operational
 
-Analytics app activity and operational performance-এর ওপর ভিত্তি করবে, actual financial settlement-এর ওপর নয়।
+Analytics app activity এবং operational performance-এর ওপর ভিত্তি করবে, actual financial settlement-এর ওপর নয়।
 
 ## Principle 8 — Super Admin Is Global
 
@@ -1878,7 +1854,7 @@ Assigned category-এর operational data-তে full scoped access।
 
 # 51. Final System Mental Model
 
-```
+```text
                          SUPER ADMIN
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -1901,6 +1877,7 @@ Assigned category-এর operational data-তে full scoped access।
         ├── Complaints
         ├── Analytics
         └── Audit Logs
+
 
 CATEGORY
    │
@@ -1943,18 +1920,17 @@ CATEGORY
 Price Check BD-এর final business identity:
 
 > **A category-driven B2B marketplace and operational coordination platform where Companies publish products and prices, Parties discover and order products, Drivers execute deliveries, Inquiries connect unmet demand with Companies, Complaints are reviewed and resolved by Admin/Super Admin, and all important platform activity is tracked through Analytics and Audit Logs.**
-> 
 
 সবচেয়ে গুরুত্বপূর্ণ boundary:
 
-```
+```text
 Price Check BD coordinates business.
 Price Check BD does not process money.
 ```
 
 এবং সবচেয়ে গুরুত্বপূর্ণ governance rule:
 
-```
+```text
 Super Admin = Global Access
 Admin = Full Access Within Assigned Categories
 Company / Driver = Complaint Response

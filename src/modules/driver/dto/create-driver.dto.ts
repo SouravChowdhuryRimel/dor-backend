@@ -104,6 +104,10 @@ export class CreateDriverDto {
     type: [String],
     example: ['url1.jpg', 'url2.jpg'],
   })
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    return Array.isArray(value) ? value : [value];
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

@@ -46,14 +46,6 @@ export class CreateAdminDto {
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'Category ID to associate this admin with (single)',
-    example: 'uuid-string',
-  })
-  @IsString()
-  @IsOptional()
-  categoryId?: string;
-
-  @ApiPropertyOptional({
     description: 'List of Category IDs to associate this admin with (multiple)',
     example: ['uuid-string'],
     type: [String],

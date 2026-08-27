@@ -9,6 +9,8 @@ import {
   Param,
   Patch,
   Delete,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,7 +19,12 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiQuery,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import * as fs from 'fs';
 import { UsersService } from '../services/users.service';
 import { CreateAdminDto } from '../dto/create-admin.dto';
 import { UpdateAdminDto } from '../dto/update-admin.dto';
@@ -103,6 +110,30 @@ export class UsersController {
 
   @Patch('admins/:id')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      storage: diskStorage({
+        destination: (req, file, callback) => {
+          const path = './uploads/documents';
+          try {
+            if (!fs.existsSync(path)) {
+              fs.mkdirSync(path, { recursive: true });
+            }
+            callback(null, path);
+          } catch (error) {
+            callback(error as Error, path);
+          }
+        },
+        filename: (req, file, callback) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `admin-profile-${uniqueSuffix}${ext}`);
+        },
+      }),
+    }),
+  )
   @ApiOperation({ summary: 'Update an admin (ADMIN, SUPER_ADMIN)' })
   @ApiBody({ type: UpdateAdminDto })
   @ApiResponse({ status: 200, description: 'Admin updated successfully.' })
@@ -110,7 +141,11 @@ export class UsersController {
   async updateAdmin(
     @Param('id') id: string,
     @Body() updateAdminDto: UpdateAdminDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
+    if (file) {
+      updateAdminDto.profileImage = `/uploads/documents/${file.filename}`;
+    }
     return this.usersService.updateAdmin(id, updateAdminDto);
   }
 

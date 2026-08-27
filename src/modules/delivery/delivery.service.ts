@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Role } from '../../common/constants/role.enum';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryDto } from './dto/update-delivery.dto';
@@ -72,13 +73,29 @@ export class DeliveryService {
     return delivery;
   }
 
-  async findAll(query?: GetDeliveriesQueryDto) {
+  async findAll(query?: GetDeliveriesQueryDto, reqUser?: any) {
     const where: any = {};
     if (query?.driverId) {
       where.driverId = query.driverId;
     }
     if (query?.status) {
       where.status = query.status;
+    }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        where.order = { companyId: reqUser.sub };
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        where.order = { partyId: reqUser.sub };
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        where.driverId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.order = { product: { categoryId: { in: categoryIds } } };
+      }
     }
 
     const page = query?.page || 1;
@@ -107,7 +124,7 @@ export class DeliveryService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, reqUser?: any) {
     const delivery = await this.prisma.delivery.findUnique({
       where: { deliveryId: id },
       include: {
@@ -124,6 +141,30 @@ export class DeliveryService {
     if (!delivery) {
       throw new NotFoundException(`Delivery with ID "${id}" not found`);
     }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        if (delivery.order && delivery.order.companyId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to access this delivery`);
+        }
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        if (delivery.order && delivery.order.partyId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to access this delivery`);
+        }
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        if (delivery.driverId !== reqUser.sub) {
+          throw new ForbiddenException(`You do not have permission to access this delivery`);
+        }
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (delivery.order && delivery.order.product && !categoryIds.includes(delivery.order.product.categoryId)) {
+          throw new ForbiddenException(`You do not have permission to access this delivery`);
+        }
+      }
+    }
     return delivery;
   }
 
@@ -132,7 +173,7 @@ export class DeliveryService {
     updateDeliveryDto: UpdateDeliveryDto,
     reqUser?: any,
   ) {
-    const delivery = await this.findOne(id);
+    const delivery = await this.findOne(id, reqUser);
 
     if (updateDeliveryDto.driverId) {
       const driverExists = await this.prisma.driver.findUnique({
@@ -204,7 +245,7 @@ export class DeliveryService {
   }
 
   async remove(id: string, reqUser?: any) {
-    await this.findOne(id);
+    await this.findOne(id, reqUser);
     const deletedDelivery = await this.prisma.delivery.delete({
       where: { deliveryId: id },
     });
@@ -230,7 +271,7 @@ export class DeliveryService {
   }
 
   async acceptDelivery(id: string, reqUser?: any) {
-    const delivery = await this.findOne(id);
+    const delivery = await this.findOne(id, reqUser);
     const updated = await this.prisma.delivery.update({
       where: { deliveryId: id },
       data: { status: DeliveryStatus.ACCEPTED },
@@ -255,7 +296,7 @@ export class DeliveryService {
   }
 
   async rejectDelivery(id: string, reqUser?: any) {
-    const delivery = await this.findOne(id);
+    const delivery = await this.findOne(id, reqUser);
     const updated = await this.prisma.delivery.update({
       where: { deliveryId: id },
       data: { status: DeliveryStatus.REJECTED },
@@ -280,7 +321,7 @@ export class DeliveryService {
   }
 
   async pickupDelivery(id: string, pickupProof: string, reqUser?: any) {
-    const delivery = await this.findOne(id);
+    const delivery = await this.findOne(id, reqUser);
     const updated = await this.prisma.delivery.update({
       where: { deliveryId: id },
       data: {
@@ -316,7 +357,7 @@ export class DeliveryService {
   }
 
   async reachedDelivery(id: string, reqUser?: any) {
-    const delivery = await this.findOne(id);
+    const delivery = await this.findOne(id, reqUser);
     const updated = await this.prisma.delivery.update({
       where: { deliveryId: id },
       data: { status: DeliveryStatus.REACHED },
@@ -341,7 +382,7 @@ export class DeliveryService {
   }
 
   async completeDelivery(id: string, deliveryProof: string, reqUser?: any) {
-    const delivery = await this.findOne(id);
+    const delivery = await this.findOne(id, reqUser);
     const updated = await this.prisma.delivery.update({
       where: { deliveryId: id },
       data: {
