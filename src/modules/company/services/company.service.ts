@@ -208,6 +208,7 @@ export class CompanyService {
     const updatedCompany = await this.prisma.company.update({
       where: { companyId: id },
       data: updateCompanyDto,
+      select: companyDetailsSelect,
     });
 
     await this.activityLogService.log({
@@ -229,6 +230,7 @@ export class CompanyService {
 
     const deletedCompany = await this.prisma.company.delete({
       where: { companyId: id },
+      select: companyDetailsSelect,
     });
 
     await this.activityLogService.log({

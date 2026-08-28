@@ -3,11 +3,32 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
 import * as argon2 from 'argon2';
+import { Prisma } from '@prisma/client';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
 import {
   createPaginatedResponse,
   PaginationQueryDto,
 } from '../../../shared/pagination/pagination.util';
+
+const driverDetailsSelect = {
+  driverId: true,
+  phoneNumber: true,
+  email: true,
+  driverImage: true,
+  driverName: true,
+  address: true,
+  district: true,
+  upozela: true,
+  truckNumber: true,
+  truckType: true,
+  loadCapacity: true,
+  drivingLicenceNumber: true,
+  nidNumber: true,
+  driverDocument: true,
+  isVerified: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.DriverSelect;
 
 @Injectable()
 export class DriverService {
@@ -63,6 +84,7 @@ export class DriverService {
           create: [...new Set(partyIds)].map((partyId) => ({ partyId })),
         },
       } as any,
+      select: driverDetailsSelect,
     });
 
     await this.activityLogService.log({
@@ -109,6 +131,7 @@ export class DriverService {
       this.prisma.driver.findMany({
         skip,
         take: limit,
+        select: driverDetailsSelect,
       }),
     ]);
 
@@ -118,6 +141,7 @@ export class DriverService {
   async findOne(id: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },
+      select: driverDetailsSelect,
     });
     if (!driver) throw new NotFoundException('Driver not found');
     return driver;
@@ -137,6 +161,7 @@ export class DriverService {
     const updated = await this.prisma.driver.update({
       where: { driverId: id },
       data: dataToUpdate as any,
+      select: driverDetailsSelect,
     });
 
     await this.activityLogService.log({
@@ -238,6 +263,7 @@ export class DriverService {
 
     const deleted = await this.prisma.driver.delete({
       where: { driverId: id },
+      select: driverDetailsSelect,
     });
 
     await this.activityLogService.log({

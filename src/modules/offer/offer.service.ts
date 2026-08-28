@@ -1,15 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { GetOffersQueryDto } from './dto/get-offers-query.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
+import { Role } from '../../common/constants/role.enum';
 
 @Injectable()
 export class OfferService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createOfferDto: CreateOfferDto) {
+  async create(createOfferDto: CreateOfferDto, reqUser?: any) {
     // Verify party exists
     const partyExists = await this.prisma.party.findUnique({
       where: { partyId: createOfferDto.partyId },
@@ -30,6 +31,15 @@ export class OfferService {
       );
     }
 
+    // Enforce ownership if user is VENDOR
+    if (reqUser && reqUser.roles && reqUser.roles.includes(Role.VENDOR)) {
+      if (productExists.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You can only create offers for your own products',
+        );
+      }
+    }
+
     return this.prisma.offer.create({
       data: {
         ...createOfferDto,
@@ -39,13 +49,21 @@ export class OfferService {
     });
   }
 
-  async findAll(query?: GetOffersQueryDto) {
+  async findAll(query?: GetOffersQueryDto, reqUser?: any) {
     const where: any = {};
     if (query?.partyId) {
       where.partyId = query.partyId;
     }
     if (query?.status) {
       where.status = query.status;
+    }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        where.product = { companyId: reqUser.sub };
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        where.partyId = reqUser.sub;
+      }
     }
 
     const page = query?.page || 1;
@@ -68,7 +86,7 @@ export class OfferService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, reqUser?: any) {
     const offer = await this.prisma.offer.findUnique({
       where: { offerId: id },
       include: {
@@ -79,11 +97,28 @@ export class OfferService {
     if (!offer) {
       throw new NotFoundException(`Offer with ID "${id}" not found`);
     }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        if (offer.product.companyId !== reqUser.sub) {
+          throw new ForbiddenException(
+            'You do not have permission to access this offer',
+          );
+        }
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        if (offer.partyId !== reqUser.sub) {
+          throw new ForbiddenException(
+            'You do not have permission to access this offer',
+          );
+        }
+      }
+    }
+
     return offer;
   }
 
-  async update(id: string, updateOfferDto: UpdateOfferDto) {
-    const offer = await this.findOne(id);
+  async update(id: string, updateOfferDto: UpdateOfferDto, reqUser?: any) {
+    const offer = await this.findOne(id, reqUser);
 
     if (updateOfferDto.partyId) {
       const partyExists = await this.prisma.party.findUnique({
@@ -105,6 +140,14 @@ export class OfferService {
           `Product with ID "${updateOfferDto.productId}" not found`,
         );
       }
+
+      if (reqUser && reqUser.roles && reqUser.roles.includes(Role.VENDOR)) {
+        if (productExists.companyId !== reqUser.sub) {
+          throw new ForbiddenException(
+            'You can only assign your own products to this offer',
+          );
+        }
+      }
     }
 
     const updateData: any = { ...updateOfferDto };
@@ -121,10 +164,11 @@ export class OfferService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, reqUser?: any) {
+    await this.findOne(id, reqUser);
     return this.prisma.offer.delete({
       where: { offerId: id },
     });
   }
 }
+

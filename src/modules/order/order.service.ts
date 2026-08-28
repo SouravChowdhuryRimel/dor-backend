@@ -468,15 +468,56 @@ export class OrderService {
       }
     }
 
+    const {
+      address,
+      upozela,
+      district,
+      deliveryTime,
+      specialNote,
+      ...orderUpdateData
+    } = updateOrderDto;
+
     const updatedOrder = await this.prisma.order.update({
       where: { orderId: id },
       data: {
-        ...updateOrderDto,
+        ...orderUpdateData,
         status: updateOrderDto.status
           ? (updateOrderDto.status as OrderStatus)
           : undefined,
       },
     });
+
+    if (address !== undefined || upozela !== undefined || district !== undefined || deliveryTime !== undefined || specialNote !== undefined) {
+      const existingDelivery = await this.prisma.delivery.findFirst({
+        where: { orderId: id },
+      });
+
+      if (existingDelivery) {
+        await this.prisma.delivery.update({
+          where: { deliveryId: existingDelivery.deliveryId },
+          data: {
+            address: address !== undefined ? address : undefined,
+            upozela: upozela !== undefined ? upozela : undefined,
+            district: district !== undefined ? district : undefined,
+            description: specialNote !== undefined ? specialNote : undefined,
+            deliveryTime: deliveryTime !== undefined ? new Date(deliveryTime) : undefined,
+          },
+        });
+      } else {
+        await this.prisma.delivery.create({
+          data: {
+            address: address || '',
+            upozela: upozela || '',
+            district: district || '',
+            description: specialNote || '',
+            deliveryTime: deliveryTime ? new Date(deliveryTime) : new Date(),
+            orderId: id,
+            status: 'PENDING',
+            driverId: null,
+          },
+        });
+      }
+    }
 
     const actorId =
       reqUser?.sub || updatedOrder.partyId || updatedOrder.companyId;

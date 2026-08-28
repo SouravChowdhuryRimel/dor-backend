@@ -150,12 +150,12 @@ export class ChatService {
       return vendorCatId ? adminCatIds.includes(vendorCatId) : false;
     }
 
-    // Operational roles (Company, Party, Driver) can only chat within the exact same category
+    // Operational roles (Company, Party) can only chat within the exact same category
     const isP1Categorized = (
-      [Role.VENDOR, Role.PARTY, Role.DRIVER] as Role[]
+      [Role.VENDOR, Role.PARTY] as Role[]
     ).includes(p1.role);
     const isP2Categorized = (
-      [Role.VENDOR, Role.PARTY, Role.DRIVER] as Role[]
+      [Role.VENDOR, Role.PARTY] as Role[]
     ).includes(p2.role);
 
     if (isP1Categorized && isP2Categorized) {

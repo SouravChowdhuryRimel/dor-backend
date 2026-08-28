@@ -3,11 +3,48 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import * as argon2 from 'argon2';
+import { Prisma } from '@prisma/client';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
 import {
   createPaginatedResponse,
   PaginationQueryDto,
 } from '../../../shared/pagination/pagination.util';
+
+const partyDetailsSelect = {
+  partyId: true,
+  partyName: true,
+  businessName: true,
+  phoneNumber: true,
+  email: true,
+  address: true,
+  district: true,
+  upozela: true,
+  bazzarArea: true,
+  description: true,
+  openingDue: true,
+  creditLimit: true,
+  status: true,
+  isVerified: true,
+  treadLicense: true,
+  partyDocument: true,
+  profileImage: true,
+  companyId: true,
+  categoryId: true,
+  createdAt: true,
+  updatedAt: true,
+  category: {
+    select: {
+      categoryId: true,
+      categoryName: true,
+    },
+  },
+  company: {
+    select: {
+      companyId: true,
+      companyName: true,
+    },
+  },
+} satisfies Prisma.PartySelect;
 
 @Injectable()
 export class PartyService {
@@ -37,20 +74,7 @@ export class PartyService {
         ...createPartyDto,
         password: hashedPassword,
       } as any,
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
-          },
-        },
-        company: {
-          select: {
-            companyId: true,
-            companyName: true,
-          },
-        },
-      },
+      select: partyDetailsSelect,
     });
 
     await this.activityLogService.log({
@@ -74,20 +98,7 @@ export class PartyService {
       this.prisma.party.findMany({
         skip,
         take: limit,
-        include: {
-          category: {
-            select: {
-              categoryId: true,
-              categoryName: true,
-            },
-          },
-          company: {
-            select: {
-              companyId: true,
-              companyName: true,
-            },
-          },
-        },
+        select: partyDetailsSelect,
       }),
     ]);
 
@@ -97,20 +108,7 @@ export class PartyService {
   async findOne(id: string) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },
-      include: {
-        category: {
-          select: {
-            categoryId: true,
-            categoryName: true,
-          },
-        },
-        company: {
-          select: {
-            companyId: true,
-            companyName: true,
-          },
-        },
-      },
+      select: partyDetailsSelect,
     });
     if (!party) throw new NotFoundException('Party not found');
     return party;
@@ -148,6 +146,7 @@ export class PartyService {
     const updated = await this.prisma.party.update({
       where: { partyId: id },
       data: updatePartyDto as any,
+      select: partyDetailsSelect,
     });
 
     await this.activityLogService.log({
@@ -239,7 +238,10 @@ export class PartyService {
     });
     if (!party) throw new NotFoundException('Party not found');
 
-    const deleted = await this.prisma.party.delete({ where: { partyId: id } });
+    const deleted = await this.prisma.party.delete({
+      where: { partyId: id },
+      select: partyDetailsSelect,
+    });
 
     await this.activityLogService.log({
       actorType: reqUser?.roles?.[0] || 'ADMIN',
