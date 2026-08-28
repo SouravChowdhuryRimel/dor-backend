@@ -27,6 +27,7 @@ services:
       redis:
         condition: service_healthy
     command: sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/src/main.js"
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -37,7 +38,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
       - POSTGRES_DB=${DB_NAME:-mydb}
     ports:
-      - '5435:5432'
+      - '127.0.0.1:5435:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,6 +47,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -58,6 +60,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - app-network
 
