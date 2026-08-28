@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, IsNumber, Min, IsArray } from 'class-validator';
+import { IsOptional, IsString, IsNumber, Min, IsArray, IsEnum } from 'class-validator';
+import { PackagingType, UnitType } from '@prisma/client';
 
 export class UpdateProductDto {
   @ApiPropertyOptional({
@@ -38,6 +39,22 @@ export class UpdateProductDto {
   @IsString()
   @Transform(({ value }) => (value === '' ? undefined : (value as string)))
   bagSize?: string;
+
+  @ApiPropertyOptional({
+    description: 'Type of packaging',
+    enum: PackagingType,
+  })
+  @IsOptional()
+  @IsEnum(PackagingType)
+  packagingType?: PackagingType;
+
+  @ApiPropertyOptional({
+    description: 'Type of unit',
+    enum: UnitType,
+  })
+  @IsOptional()
+  @IsEnum(UnitType)
+  unitType?: UnitType;
 
   @ApiPropertyOptional({ description: 'Default price' })
   @IsOptional()

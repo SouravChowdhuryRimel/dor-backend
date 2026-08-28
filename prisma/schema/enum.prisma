@@ -50,3 +50,30 @@ enum ComplaintType {
   DRIVER
   BOTH
 }
+
+enum PackagingType {
+  BAG
+  CARTON
+  BOX
+  BOTTLE
+  DRUM
+  CONTAINER
+  BUNDLE
+  PACK
+  PIECE
+}
+
+enum UnitType {
+  GRAM
+  KILOGRAM
+  TON
+  MILLILITER
+  LITER
+  PIECE
+  PACK
+  DOZEN
+  PAIR
+  SET
+  BUNDLE
+}
+

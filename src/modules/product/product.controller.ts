@@ -36,6 +36,8 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import * as fs from 'fs';
+import { PackagingType, UnitType } from '@prisma/client';
+
 
 const productImageUpload = {
   storage: diskStorage({
@@ -77,6 +79,8 @@ export class ProductController {
         'productName',
         'unit',
         'bagSize',
+        'packagingType',
+        'unitType',
         'regularPrice',
         'offerPrice',
         'minimumOrder',
@@ -92,6 +96,8 @@ export class ProductController {
         productName: { type: 'string' },
         unit: { type: 'string' },
         bagSize: { type: 'string' },
+        packagingType: { type: 'string', enum: Object.values(PackagingType) },
+        unitType: { type: 'string', enum: Object.values(UnitType) },
         defaultPrice: {
           type: 'number',
           description: 'Legacy, falls back to offerPrice',
@@ -326,6 +332,8 @@ export class ProductController {
         productName: { type: 'string' },
         unit: { type: 'string' },
         bagSize: { type: 'string' },
+        packagingType: { type: 'string', enum: Object.values(PackagingType) },
+        unitType: { type: 'string', enum: Object.values(UnitType) },
         defaultPrice: { type: 'number' },
         regularPrice: { type: 'number' },
         offerPrice: { type: 'number' },

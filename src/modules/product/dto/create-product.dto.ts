@@ -6,8 +6,10 @@ import {
   IsArray,
   IsOptional,
   Min,
+  IsEnum,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { PackagingType, UnitType } from '@prisma/client';
 
 export class CreateProductDto {
   @ApiPropertyOptional({
@@ -52,6 +54,24 @@ export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   bagSize: string;
+
+  @ApiProperty({
+    description: 'Type of packaging',
+    enum: PackagingType,
+    example: PackagingType.BAG,
+  })
+  @IsEnum(PackagingType)
+  @IsNotEmpty()
+  packagingType: PackagingType;
+
+  @ApiProperty({
+    description: 'Type of unit',
+    enum: UnitType,
+    example: UnitType.PIECE,
+  })
+  @IsEnum(UnitType)
+  @IsNotEmpty()
+  unitType: UnitType;
 
   @ApiPropertyOptional({
     description:

@@ -4,6 +4,8 @@ model Product {
   productName   String      @map("product_name")
   unit          String
   bagSize       String      @map("bag_size")
+  packagingType PackagingType @default(PIECE) @map("packaging_type")
+  unitType      UnitType      @default(PIECE) @map("unit_type")
   defaultPrice  Float       @map("default_price")
   regularPrice  Float       @map("regular_price")
   offerPrice    Float       @map("offer_price")
