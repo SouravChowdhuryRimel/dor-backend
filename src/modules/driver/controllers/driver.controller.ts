@@ -215,9 +215,9 @@ export class DriverController {
   @Patch('location')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.DRIVER)
+  @Roles(Role.DRIVER, Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Update location coordinates for logged-in driver',
+    summary: 'Update location coordinates for logged-in user (Driver or Company)',
   })
   @ApiResponse({ status: 200, description: 'Location updated successfully.' })
   updateMyLocation(
@@ -233,8 +233,9 @@ export class DriverController {
 
   @Patch(':id/location')
   @ApiBearerAuth()
-  @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Update location coordinates for a driver by ID' })
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.DRIVER, Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Update location coordinates for a driver or company by ID' })
   @ApiResponse({ status: 200, description: 'Location updated successfully.' })
   updateLocation(
     @Param('id') id: string,

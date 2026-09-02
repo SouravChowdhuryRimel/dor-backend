@@ -367,51 +367,87 @@ export class DriverService {
   }
 
   async updateLocation(
-    driverId: string,
+    targetId: string,
     updateLocationDto: UpdateDriverLocationDto,
     reqUser?: any,
   ) {
-    const driver = await this.prisma.driver.findUnique({
-      where: { driverId },
-    });
-    if (!driver) {
-      throw new NotFoundException(`Driver with ID "${driverId}" not found`);
-    }
-
     const { lat, long, address } = updateLocationDto;
 
-    const updatedDriver = await this.prisma.driver.update({
-      where: { driverId },
-      data: {
-        lat,
-        long,
-        address: address || undefined,
-      },
-      select: driverDetailsSelect,
+    // 1. Try finding Driver by ID
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: targetId },
     });
 
-    // Update active deliveries for this driver with new location coordinates
-    await this.prisma.delivery.updateMany({
-      where: {
-        driverId,
-        status: { in: ['PENDING', 'ACCEPTED', 'IN_TRANSIT', 'REACHED'] },
-      },
-      data: {
-        lat,
-        long,
-        currentLocation: address || `${lat}, ${long}`,
-      },
+    if (driver) {
+      const updatedDriver = await this.prisma.driver.update({
+        where: { driverId: targetId },
+        data: {
+          lat,
+          long,
+          address: address || undefined,
+        },
+        select: driverDetailsSelect,
+      });
+
+      // Update active deliveries for this driver with new location coordinates
+      await this.prisma.delivery.updateMany({
+        where: {
+          driverId: targetId,
+          status: { in: ['PENDING', 'ACCEPTED', 'IN_TRANSIT', 'REACHED'] },
+        },
+        data: {
+          lat,
+          long,
+          currentLocation: address || `${lat}, ${long}`,
+        },
+      });
+
+      await this.activityLogService.log({
+        actorType: reqUser?.roles?.[0] || 'DRIVER',
+        actorId: reqUser?.sub || targetId,
+        action: 'UPDATE_LOCATION',
+        description: `Updated driver location to lat: ${lat}, long: ${long}`,
+        driverId: targetId,
+      });
+
+      return updatedDriver;
+    }
+
+    // 2. If Driver not found, try finding Company by ID
+    const company = await this.prisma.company.findUnique({
+      where: { companyId: targetId },
     });
 
-    await this.activityLogService.log({
-      actorType: reqUser?.roles?.[0] || 'DRIVER',
-      actorId: reqUser?.sub || driverId,
-      action: 'UPDATE_LOCATION',
-      description: `Updated driver location to lat: ${lat}, long: ${long}`,
-      driverId,
-    });
+    if (company) {
+      const updatedCompany = await this.prisma.company.update({
+        where: { companyId: targetId },
+        data: {
+          latitude: lat,
+          longitude: long,
+          address: address || undefined,
+        },
+      });
 
-    return updatedDriver;
+      await this.activityLogService.log({
+        actorType: reqUser?.roles?.[0] || 'VENDOR',
+        actorId: reqUser?.sub || targetId,
+        action: 'UPDATE_LOCATION',
+        description: `Updated company location to lat: ${lat}, long: ${long}`,
+        companyId: targetId,
+      });
+
+      return {
+        companyId: updatedCompany.companyId,
+        companyName: updatedCompany.companyName,
+        address: updatedCompany.address,
+        latitude: updatedCompany.latitude,
+        longitude: updatedCompany.longitude,
+      };
+    }
+
+    throw new NotFoundException(
+      `Driver or Company with ID "${targetId}" not found`,
+    );
   }
 
   async remove(id: string, reqUser?: any) {
