@@ -25,13 +25,31 @@ export class ProductService {
   ) {}
 
   async create(createProductDto: CreateProductDto, reqUser?: any) {
-    const subCategory = await this.prisma.subCategory.findUnique({
-      where: { subCategoryId: createProductDto.subCategoryId },
-    });
-    if (!subCategory) {
-      throw new NotFoundException(
-        `SubCategory with ID "${createProductDto.subCategoryId}" not found.`,
+    let categoryId = createProductDto.categoryId;
+
+    if (createProductDto.subCategoryId) {
+      const subCategory = await this.prisma.subCategory.findUnique({
+        where: { subCategoryId: createProductDto.subCategoryId },
+      });
+      if (!subCategory) {
+        throw new NotFoundException(
+          `SubCategory with ID "${createProductDto.subCategoryId}" not found.`,
+        );
+      }
+      categoryId = categoryId || subCategory.categoryId;
+    }
+
+    if (!categoryId) {
+      throw new BadRequestException(
+        'Either categoryId or subCategoryId must be provided',
       );
+    }
+
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId },
+    });
+    if (!category) {
+      throw new NotFoundException(`Category with ID "${categoryId}" not found`);
     }
 
     let companyId = createProductDto.companyId;
@@ -63,7 +81,8 @@ export class ProductService {
       data: {
         ...productData,
         companyId,
-        categoryId: subCategory.categoryId,
+        categoryId,
+        subCategoryId: createProductDto.subCategoryId || null,
         offerPrice,
         regularPrice,
         defaultPrice,
@@ -121,6 +140,18 @@ export class ProductService {
       }
     } else if (query?.companyId) {
       where.companyId = query.companyId;
+    }
+
+    if (query?.categoryId) {
+      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+        if (where.categoryId.in.includes(query.categoryId)) {
+          where.categoryId = query.categoryId;
+        } else {
+          where.categoryId = 'none';
+        }
+      } else {
+        where.categoryId = query.categoryId;
+      }
     }
 
     if (query?.minPrice !== undefined || query?.maxPrice !== undefined) {
@@ -364,7 +395,18 @@ export class ProductService {
           `SubCategory with ID "${updateProductDto.subCategoryId}" not found.`,
         );
       }
-      updateData.categoryId = subCategory.categoryId;
+      updateData.categoryId = updateData.categoryId || subCategory.categoryId;
+    }
+
+    if (updateProductDto.categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { categoryId: updateProductDto.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID "${updateProductDto.categoryId}" not found`,
+        );
+      }
     }
 
     if (updateData.companyId) {
@@ -814,6 +856,122 @@ export class ProductService {
     return deletedRate;
   }
 
+  async findCategoryProducts(
+    categoryId: string,
+    query?: PaginationQueryDto,
+    reqUser?: any,
+  ) {
+    const page = query?.page || 1;
+    const limit = query?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const where: any = { categoryId };
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes('VENDOR')) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes('PARTY')) {
+        const party = await this.prisma.party.findUnique({
+          where: { partyId: reqUser.sub },
+          select: { companyId: true },
+        });
+        if (party && party.companyId) {
+          where.companyId = party.companyId;
+        } else {
+          where.companyId = 'none';
+        }
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!categoryIds.includes(categoryId)) {
+          throw new ForbiddenException(
+            'You do not have permission to access products of this category',
+          );
+        }
+      }
+    }
+
+    const hasPartyRole =
+      reqUser && reqUser.roles && reqUser.roles.includes('PARTY');
+    const partyId = hasPartyRole ? reqUser.sub : null;
+
+    const includeQuery: any = {
+      category: true,
+      subCategory: true,
+      company: {
+        select: {
+          companyName: true,
+          ownerName: true,
+        },
+      },
+    };
+
+    if (partyId) {
+      includeQuery.partyRates = {
+        where: { partyId },
+      };
+    }
+
+    const [total, data] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        include: includeQuery,
+        orderBy: {
+          defaultPrice: 'asc',
+        },
+      }),
+    ]);
+
+    const mappedData = data.map((p: any) => {
+      let effectivePrice =
+        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
+      let hasSpecialPrice = false;
+      let specialPrice = null;
+
+      if (p.partyRates && p.partyRates.length > 0) {
+        effectivePrice = p.partyRates[0].rate;
+        hasSpecialPrice = true;
+        specialPrice = p.partyRates[0].rate;
+      } else if (
+        p.offerPrice !== undefined &&
+        p.offerPrice !== null &&
+        p.offerPrice > 0
+      ) {
+        effectivePrice = p.offerPrice;
+      } else {
+        effectivePrice = p.regularPrice;
+      }
+
+      return {
+        ...p,
+        effectivePrice,
+        hasSpecialPrice,
+        specialPrice,
+        activePrice: effectivePrice,
+        stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+        companyName: p.company?.companyName || null,
+        categoryName: p.category?.categoryName || null,
+        subCategoryName: p.subCategory?.title || null,
+        status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+        statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+        unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+        stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+        minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+      };
+    });
+
+    return createPaginatedResponse(mappedData, total, page, limit);
+  }
+
   async findSubCategoryProducts(
     subCategoryId: string,
     query?: PaginationQueryDto,
@@ -941,6 +1099,10 @@ export class ProductService {
         contains: query.search,
         mode: 'insensitive',
       };
+    }
+
+    if (query?.categoryId) {
+      where.categoryId = query.categoryId;
     }
 
     if (query?.subCategoryId) {

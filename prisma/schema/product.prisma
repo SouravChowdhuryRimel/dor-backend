@@ -12,8 +12,8 @@ model Product {
   minimumOrder  Int         @map("minimum_order")
   description   String
   stockSize     Int         @map("stock_size")
-  subCategoryId String      @map("sub_category_id")
-  subCategory   SubCategory @relation(fields: [subCategoryId], references: [subCategoryId])
+  subCategoryId String?     @map("sub_category_id")
+  subCategory   SubCategory? @relation(fields: [subCategoryId], references: [subCategoryId])
   companyId     String      @map("company_id")
   company       Company     @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
   categoryId    String      @map("category_id")

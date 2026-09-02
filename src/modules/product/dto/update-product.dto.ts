@@ -103,6 +103,12 @@ export class UpdateProductDto {
   @Transform(({ value }) => (value === '' ? undefined : (value as string)))
   subCategoryId?: string;
 
+  @ApiPropertyOptional({ description: 'ID of the Category' })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => (value === '' ? undefined : (value as string)))
+  categoryId?: string;
+
   @ApiPropertyOptional({ description: 'ID of the associated company/vendor' })
   @IsOptional()
   @IsString()

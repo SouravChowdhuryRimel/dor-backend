@@ -296,14 +296,34 @@ export class PartyController {
     delete dataToUpdate.area;
 
     // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
-    if (dataToUpdate.openingDue !== undefined) {
+    if (dataToUpdate.openingDue !== undefined && dataToUpdate.openingDue !== null && (dataToUpdate.openingDue as any) !== '') {
       const openingDue = Number(dataToUpdate.openingDue);
-      dataToUpdate.openingDue = isNaN(openingDue) ? 0 : openingDue;
+      if (!isNaN(openingDue)) {
+        dataToUpdate.openingDue = openingDue;
+      } else {
+        delete dataToUpdate.openingDue;
+      }
+    } else {
+      delete dataToUpdate.openingDue;
     }
-    if (dataToUpdate.creditLimit !== undefined) {
+
+    if (dataToUpdate.creditLimit !== undefined && dataToUpdate.creditLimit !== null && (dataToUpdate.creditLimit as any) !== '') {
       const creditLimit = Number(dataToUpdate.creditLimit);
-      dataToUpdate.creditLimit = isNaN(creditLimit) ? 0 : creditLimit;
+      if (!isNaN(creditLimit)) {
+        dataToUpdate.creditLimit = creditLimit;
+      } else {
+        delete dataToUpdate.creditLimit;
+      }
+    } else {
+      delete dataToUpdate.creditLimit;
     }
+
+    // Clean up undefined properties
+    Object.keys(dataToUpdate).forEach((key) => {
+      if (dataToUpdate[key] === undefined) {
+        delete dataToUpdate[key];
+      }
+    });
 
     return this.partyService.update(id, dataToUpdate, req?.user);
   }

@@ -86,7 +86,6 @@ export class ProductController {
         'minimumOrder',
         'description',
         'stockSize',
-        'subCategoryId',
       ],
       properties: {
         productImage: {
@@ -107,7 +106,8 @@ export class ProductController {
         minimumOrder: { type: 'number' },
         description: { type: 'string' },
         stockSize: { type: 'number' },
-        subCategoryId: { type: 'string' },
+        subCategoryId: { type: 'string', description: 'ID of the SubCategory (Optional)' },
+        categoryId: { type: 'string', description: 'ID of the Category (Required if subCategoryId is not provided)' },
         companyId: { type: 'string', description: 'Associated company ID' },
       },
     },
@@ -246,6 +246,22 @@ export class ProductController {
     return this.productService.findLowStock(query, req.user);
   }
 
+  @Get('category/:categoryId')
+  @UseGuards(OptionalAccessTokenGuard)
+  @ApiOperation({ summary: 'Get all public products by category ID' })
+  @ApiResponse({ status: 200, description: 'Return category products.' })
+  findCategoryProducts(
+    @Param('categoryId') categoryId: string,
+    @Query() query: PaginationQueryDto,
+    @Req() req: any,
+  ) {
+    return this.productService.findCategoryProducts(
+      categoryId,
+      query,
+      req.user,
+    );
+  }
+
   @Get('sub-category/:subCategoryId')
   @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({ summary: 'Get all public products by subcategory ID' })
@@ -296,7 +312,7 @@ export class ProductController {
   @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({
     summary:
-      'Get all products with fuzzy search, subcategory, price filtering, and sorting',
+      'Get all products with fuzzy search, category, subcategory, price filtering, and sorting',
   })
   @ApiResponse({ status: 200, description: 'Return all products.' })
   findAll(@Query() query: GetProductsQueryDto, @Req() req: any) {
@@ -341,6 +357,7 @@ export class ProductController {
         description: { type: 'string' },
         stockSize: { type: 'number' },
         subCategoryId: { type: 'string' },
+        categoryId: { type: 'string' },
         companyId: { type: 'string' },
       },
     },

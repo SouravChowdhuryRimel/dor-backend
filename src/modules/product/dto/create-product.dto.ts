@@ -130,13 +130,21 @@ export class CreateProductDto {
   @Type(() => Number)
   stockSize: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID of the SubCategory',
     example: 'uuid-string',
   })
   @IsString()
-  @IsNotEmpty()
-  subCategoryId: string;
+  @IsOptional()
+  subCategoryId?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the Category (required if subCategoryId is not provided)',
+    example: 'uuid-string',
+  })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'ID of the associated company/vendor',

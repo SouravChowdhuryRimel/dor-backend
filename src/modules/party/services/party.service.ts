@@ -143,9 +143,45 @@ export class PartyService {
     });
     if (!party) throw new NotFoundException('Party not found');
 
+    const dataToUpdate: any = { ...updatePartyDto };
+
+    if (dataToUpdate.password) {
+      if (typeof dataToUpdate.password === 'string' && dataToUpdate.password.trim() !== '') {
+        dataToUpdate.password = await argon2.hash(dataToUpdate.password, {
+          type: argon2.argon2id,
+          memoryCost: 65536,
+          timeCost: 3,
+        });
+      } else {
+        delete dataToUpdate.password;
+      }
+    }
+
+    if (dataToUpdate.categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { categoryId: dataToUpdate.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID "${dataToUpdate.categoryId}" not found`,
+        );
+      }
+    }
+
+    if (dataToUpdate.companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: dataToUpdate.companyId },
+      });
+      if (!company) {
+        throw new NotFoundException(
+          `Company with ID "${dataToUpdate.companyId}" not found`,
+        );
+      }
+    }
+
     const updated = await this.prisma.party.update({
       where: { partyId: id },
-      data: updatePartyDto as any,
+      data: dataToUpdate,
       select: partyDetailsSelect,
     });
 
