@@ -8,6 +8,8 @@ model Driver {
   address              String
   district             String
   upozela              String?
+  lat                  Float?
+  long                 Float?
   truckNumber          String?         @map("truck_number")
   truckType            String?         @map("truck_type")
   loadCapacity         String?         @map("load_capacity")

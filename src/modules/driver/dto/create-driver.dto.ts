@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsArray,
   MinLength,
+  IsNumber,
 } from 'class-validator';
 
 export class CreateDriverDto {
@@ -112,4 +113,14 @@ export class CreateDriverDto {
   @IsString({ each: true })
   @IsOptional()
   driverDocument?: string[];
+
+  @ApiPropertyOptional({ description: 'Latitude of driver location', example: 23.8103 })
+  @IsNumber()
+  @IsOptional()
+  lat?: number;
+
+  @ApiPropertyOptional({ description: 'Longitude of driver location', example: 90.4125 })
+  @IsNumber()
+  @IsOptional()
+  long?: number;
 }

@@ -1,6 +1,7 @@
 model Delivery {
   deliveryId        String         @id @default(uuid()) @map("delivery_id")
   address           String
+  additionalAddress String?        @map("additional_address")
   upozela           String?
   district          String?
   lat               Float?

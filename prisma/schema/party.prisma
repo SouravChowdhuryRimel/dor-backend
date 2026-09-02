@@ -9,6 +9,9 @@ model Party {
   district      String
   upozela       String
   bazzarArea    String        @map("bazzar_area")
+  additionalAddress String?   @map("additional_address")
+  lat           Float?
+  long          Float?
   description   String
   openingDue    Float         @map("opening_due")
   creditLimit   Float         @map("credit_limit")

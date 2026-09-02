@@ -59,6 +59,14 @@ export class CreateOrderDto {
   address?: string;
 
   @ApiPropertyOptional({
+    description: 'Additional delivery address details',
+    example: 'Flat 4B, Building 2',
+  })
+  @IsString()
+  @IsOptional()
+  additionalAddress?: string;
+
+  @ApiPropertyOptional({
     description: 'Drop latitude (Float number or numeric string)',
     example: 10.00,
   })

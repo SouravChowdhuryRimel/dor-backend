@@ -76,9 +76,18 @@ function generateSuccessMessage(method: string, url: string): string {
       if (cleanPath.endsWith('/messages') || cleanPath.includes('/chat/')) {
         return 'Message sent successfully';
       }
+      if (cleanPath.endsWith('/orders') || cleanPath.endsWith('/orders/')) {
+        return 'Order created successfully';
+      }
       return `${resource} created successfully`;
     case 'PUT':
     case 'PATCH':
+      if (cleanPath.endsWith('/accept')) {
+        return 'Order accepted successfully';
+      }
+      if (cleanPath.endsWith('/location')) {
+        return 'Location updated successfully';
+      }
       return `${resource} updated successfully`;
     case 'DELETE':
       return `${resource} deleted successfully`;

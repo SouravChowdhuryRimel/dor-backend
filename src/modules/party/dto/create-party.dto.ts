@@ -124,4 +124,28 @@ export class CreatePartyDto {
   @IsString()
   @IsOptional()
   profileImage?: string;
+
+  @ApiPropertyOptional({
+    description: 'Additional address of the party',
+    example: 'Building 4, Apt 2B',
+  })
+  @IsString()
+  @IsOptional()
+  additionalAddress?: string;
+
+  @ApiPropertyOptional({
+    description: 'Latitude of party location',
+    example: 23.8103,
+  })
+  @IsNumber()
+  @IsOptional()
+  lat?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude of party location',
+    example: 90.4125,
+  })
+  @IsNumber()
+  @IsOptional()
+  long?: number;
 }

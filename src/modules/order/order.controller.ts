@@ -14,6 +14,8 @@ import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
+import { AcceptOrderDto } from './dto/accept-order.dto';
+import { GetDriverOrdersQueryDto } from './dto/get-driver-orders-query.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import {
   ApiTags,
@@ -49,17 +51,15 @@ export class OrderController {
       'Get assigned orders for a driver filtered by status type (pending, ongoing, completed)',
   })
   @ApiResponse({ status: 200, description: 'Return driver assigned orders.' })
-  @ApiQuery({
-    name: 'type',
-    required: false,
-    enum: ['pending', 'ongoing', 'completed'],
-  })
   findDriverAssignedOrders(
     @Param('driverId') driverId: string,
-    @Query('type') type?: string,
-    @Query() query?: PaginationQueryDto,
+    @Query() query: GetDriverOrdersQueryDto,
   ) {
-    return this.orderService.findDriverAssignedOrders(driverId, type, query);
+    return this.orderService.findDriverAssignedOrders(
+      driverId,
+      query.type,
+      query,
+    );
   }
 
   @Get(':id/invoice')
@@ -102,15 +102,22 @@ export class OrderController {
   @Patch(':id/accept')
   @UseGuards(RolesGuard)
   @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Accept an order (Company/Admin only)' })
+  @ApiOperation({
+    summary: 'Accept an order and assign a driver (Company/Admin only)',
+  })
+  @ApiBody({ type: AcceptOrderDto, required: false })
   @ApiResponse({ status: 200, description: 'Order successfully accepted.' })
   @ApiResponse({
     status: 400,
     description: 'Invalid order status or transition.',
   })
-  @ApiResponse({ status: 404, description: 'Order not found.' })
-  accept(@Param('id') id: string, @Req() req: any) {
-    return this.orderService.acceptOrder(id, req.user);
+  @ApiResponse({ status: 404, description: 'Order or Driver not found.' })
+  accept(
+    @Param('id') id: string,
+    @Body() acceptOrderDto: AcceptOrderDto,
+    @Req() req: any,
+  ) {
+    return this.orderService.acceptOrder(id, req.user, acceptOrderDto);
   }
 
   @Patch(':id/cancel')

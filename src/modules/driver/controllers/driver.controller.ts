@@ -25,6 +25,8 @@ import {
 } from '@nestjs/swagger';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
+import { GetNearbyDriversQueryDto } from '../dto/get-nearby-drivers-query.dto';
+import { UpdateDriverLocationDto } from '../dto/update-driver-location.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -189,6 +191,57 @@ export class DriverController {
   @ApiOperation({ summary: 'Get all drivers' })
   findAll(@Query() query: PaginationQueryDto) {
     return this.driverService.findAll(query);
+  }
+
+  @Get('nearby')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary:
+      'Search nearby drivers for Company or Admin based on location/radius/filters',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return list of nearby drivers sorted by distance.',
+  })
+  findNearby(
+    @Query() query: GetNearbyDriversQueryDto,
+    @Req() req: any,
+  ) {
+    return this.driverService.findNearbyDrivers(query, req.user);
+  }
+
+  @Patch('location')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.DRIVER)
+  @ApiOperation({
+    summary: 'Update location coordinates for logged-in driver',
+  })
+  @ApiResponse({ status: 200, description: 'Location updated successfully.' })
+  updateMyLocation(
+    @Body() updateLocationDto: UpdateDriverLocationDto,
+    @Req() req: any,
+  ) {
+    return this.driverService.updateLocation(
+      req.user.sub,
+      updateLocationDto,
+      req.user,
+    );
+  }
+
+  @Patch(':id/location')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({ summary: 'Update location coordinates for a driver by ID' })
+  @ApiResponse({ status: 200, description: 'Location updated successfully.' })
+  updateLocation(
+    @Param('id') id: string,
+    @Body() updateLocationDto: UpdateDriverLocationDto,
+    @Req() req: any,
+  ) {
+    return this.driverService.updateLocation(id, updateLocationDto, req.user);
   }
 
   @Get(':id')

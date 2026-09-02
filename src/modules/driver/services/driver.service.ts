@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
+import { GetNearbyDriversQueryDto } from '../dto/get-nearby-drivers-query.dto';
+import { UpdateDriverLocationDto } from '../dto/update-driver-location.dto';
 import * as argon2 from 'argon2';
 import { Prisma } from '@prisma/client';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
@@ -19,6 +21,8 @@ const driverDetailsSelect = {
   address: true,
   district: true,
   upozela: true,
+  lat: true,
+  long: true,
   truckNumber: true,
   truckType: true,
   loadCapacity: true,
@@ -253,6 +257,161 @@ export class DriverService {
       companies,
       parties,
     };
+  }
+
+  async findNearbyDrivers(query: GetNearbyDriversQueryDto, reqUser?: any) {
+    let baseLat = query.lat;
+    let baseLong = query.long;
+
+    // If coordinates are not provided, fallback to company coordinates if requester is a VENDOR
+    if ((baseLat === undefined || baseLong === undefined) && reqUser?.sub) {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: reqUser.sub },
+        select: { latitude: true, longitude: true },
+      });
+      if (company && company.latitude != null && company.longitude != null) {
+        baseLat = baseLat ?? company.latitude;
+        baseLong = baseLong ?? company.longitude;
+      }
+    }
+
+    const where: Prisma.DriverWhereInput = {};
+
+    if (query.district) {
+      where.district = { contains: query.district, mode: 'insensitive' };
+    }
+
+    if (query.upozela) {
+      where.upozela = { contains: query.upozela, mode: 'insensitive' };
+    }
+
+    if (query.truckType) {
+      where.truckType = { contains: query.truckType, mode: 'insensitive' };
+    }
+
+    if (query.search) {
+      where.OR = [
+        { driverName: { contains: query.search, mode: 'insensitive' } },
+        { phoneNumber: { contains: query.search, mode: 'insensitive' } },
+        { truckNumber: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const drivers = await this.prisma.driver.findMany({
+      where,
+      select: driverDetailsSelect,
+    });
+
+    const maxRadius = query.radius || 50;
+
+    let processedDrivers = drivers.map((driver) => {
+      let distanceInKm: number | null = null;
+      if (
+        baseLat !== undefined &&
+        baseLong !== undefined &&
+        driver.lat !== null &&
+        driver.long !== null
+      ) {
+        distanceInKm = this.calculateDistance(
+          baseLat,
+          baseLong,
+          driver.lat,
+          driver.long,
+        );
+        distanceInKm = Math.round(distanceInKm * 100) / 100;
+      }
+      return {
+        ...driver,
+        distanceInKm,
+      };
+    });
+
+    // If base coordinates were supplied, filter by radius and sort by distance
+    if (baseLat !== undefined && baseLong !== undefined) {
+      processedDrivers = processedDrivers
+        .filter(
+          (d) => d.distanceInKm !== null && d.distanceInKm <= maxRadius,
+        )
+        .sort((a, b) => (a.distanceInKm || 0) - (b.distanceInKm || 0));
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const total = processedDrivers.length;
+    const startIndex = (page - 1) * limit;
+    const paginatedData = processedDrivers.slice(
+      startIndex,
+      startIndex + limit,
+    );
+
+    return createPaginatedResponse(paginatedData, total, page, limit);
+  }
+
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371; // Earth radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  async updateLocation(
+    driverId: string,
+    updateLocationDto: UpdateDriverLocationDto,
+    reqUser?: any,
+  ) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId },
+    });
+    if (!driver) {
+      throw new NotFoundException(`Driver with ID "${driverId}" not found`);
+    }
+
+    const { lat, long, address } = updateLocationDto;
+
+    const updatedDriver = await this.prisma.driver.update({
+      where: { driverId },
+      data: {
+        lat,
+        long,
+        address: address || undefined,
+      },
+      select: driverDetailsSelect,
+    });
+
+    // Update active deliveries for this driver with new location coordinates
+    await this.prisma.delivery.updateMany({
+      where: {
+        driverId,
+        status: { in: ['PENDING', 'ACCEPTED', 'IN_TRANSIT', 'REACHED'] },
+      },
+      data: {
+        lat,
+        long,
+        currentLocation: address || `${lat}, ${long}`,
+      },
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'DRIVER',
+      actorId: reqUser?.sub || driverId,
+      action: 'UPDATE_LOCATION',
+      description: `Updated driver location to lat: ${lat}, long: ${long}`,
+      driverId,
+    });
+
+    return updatedDriver;
   }
 
   async remove(id: string, reqUser?: any) {

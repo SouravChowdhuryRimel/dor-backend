@@ -8,6 +8,7 @@ import { PrismaService } from 'src/core/database/database.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
+import { AcceptOrderDto } from './dto/accept-order.dto';
 import {
   createPaginatedResponse,
   PaginationQueryDto,
@@ -69,6 +70,7 @@ export class OrderService {
 
     const {
       address,
+      additionalAddress,
       lat,
       long,
       deliveryTime,
@@ -94,10 +96,11 @@ export class OrderService {
       },
     });
 
-    if (address || latFloat !== null || longFloat !== null || deliveryTime || specialNote) {
+    if (address || additionalAddress || latFloat !== null || longFloat !== null || deliveryTime || specialNote) {
       await this.prisma.delivery.create({
         data: {
           address: address || '',
+          additionalAddress: additionalAddress || null,
           upozela: latFloat !== null ? String(latFloat) : '',
           district: longFloat !== null ? String(longFloat) : '',
           lat: latFloat,
@@ -122,7 +125,7 @@ export class OrderService {
       partyId: partyId || undefined,
     });
 
-    return order;
+    return this.findOne(order.orderId, reqUser);
   }
 
   async findAll(query?: GetOrdersQueryDto, reqUser?: any) {
@@ -203,6 +206,11 @@ export class OrderService {
           company: true,
           product: true,
           party: true,
+          deliveries: {
+            include: {
+              driver: true,
+            },
+          },
         },
         orderBy,
       }),
@@ -228,8 +236,68 @@ export class OrderService {
     };
 
     const mappedData = data.map((order) => {
+      const company = order.company
+        ? {
+            companyId: order.company.companyId,
+            companyName: order.company.companyName,
+            phoneNumber: order.company.phoneNumber || '',
+            address: order.company.address || '',
+            lat: order.company.latitude ?? null,
+            long: order.company.longitude ?? null,
+          }
+        : null;
+
+      const party = order.party
+        ? {
+            partyId: order.party.partyId,
+            partyName: order.party.businessName || order.party.partyName || '',
+            phoneNumber: order.party.phoneNumber || '',
+            address: order.party.address || '',
+            additionalAddress: order.party.additionalAddress || null,
+            lat: order.party.lat ?? null,
+            long: order.party.long ?? null,
+          }
+        : null;
+
+      const activeDriver = (order as any).deliveries?.[0]?.driver || null;
+      const driver = activeDriver
+        ? {
+            driverId: activeDriver.driverId,
+            driverName: activeDriver.driverName,
+            phoneNumber: activeDriver.phoneNumber || '',
+            driverImage: activeDriver.driverImage || null,
+            truckNumber: activeDriver.truckNumber || null,
+            address: activeDriver.address || '',
+            lat: activeDriver.lat ?? null,
+            long: activeDriver.long ?? null,
+          }
+        : null;
+
+      const productDetails = order.product
+        ? {
+            productId: order.product.productId,
+            productName: order.product.productName,
+            productImage: order.product.productImage || [],
+            packagingType: order.product.packagingType,
+            unitType: order.product.unitType,
+            defaultPrice: order.product.defaultPrice,
+            minimumOrder: order.product.minimumOrder,
+            description: order.product.description,
+            companyId: order.product.companyId,
+            categoryId: order.product.categoryId,
+            quantity: order.bag,
+            totalRate: order.totalRate,
+          }
+        : null;
+
       return {
         ...order,
+        quantity: order.bag,
+        totalRate: order.totalRate,
+        company,
+        party,
+        driver,
+        productDetails,
         statusText: mapOrderStatusText(order.status),
         quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
         partyName: order.party?.businessName || order.party?.partyName || 'N/A',
@@ -338,6 +406,46 @@ export class OrderService {
       statusText: isAvailable ? 'পর্যাপ্ত' : 'অপ্রতুল',
     };
 
+    const company = order.company
+      ? {
+          companyId: order.company.companyId,
+          companyName: order.company.companyName,
+          phoneNumber: order.company.phoneNumber || '',
+          address: order.company.address || '',
+          lat: order.company.latitude ?? null,
+          long: order.company.longitude ?? null,
+        }
+      : null;
+
+    const party = order.party
+      ? {
+          partyId: order.party.partyId,
+          partyName: order.party.businessName || order.party.partyName || '',
+          phoneNumber: order.party.phoneNumber || '',
+          address: order.party.address || '',
+          additionalAddress: order.party.additionalAddress || null,
+          lat: order.party.lat ?? null,
+          long: order.party.long ?? null,
+        }
+      : null;
+
+    const productDetails = order.product
+      ? {
+          productId: order.product.productId,
+          productName: order.product.productName,
+          productImage: order.product.productImage || [],
+          packagingType: order.product.packagingType,
+          unitType: order.product.unitType,
+          defaultPrice: order.product.defaultPrice,
+          minimumOrder: order.product.minimumOrder,
+          description: order.product.description,
+          companyId: order.product.companyId,
+          categoryId: order.product.categoryId,
+          quantity: order.bag,
+          totalRate: order.totalRate,
+        }
+      : null;
+
     // Delivery and Driver Details
     const activeDelivery = order.deliveries?.[0] || null;
     let deliveryDetails = null;
@@ -349,6 +457,7 @@ export class OrderService {
       deliveryDetails = {
         deliveryId: activeDelivery.deliveryId,
         address: activeDelivery.address,
+        additionalAddress: activeDelivery.additionalAddress || null,
         upozela: activeDelivery.upozela,
         district: activeDelivery.district,
         deliveryTime: activeDelivery.deliveryTime,
@@ -357,12 +466,15 @@ export class OrderService {
         currentLocation: activeDelivery.currentLocation || null,
         driver: driver
           ? {
-            driverId: driver.driverId,
-            driverName: driver.driverName,
-            driverImage: driver.driverImage || null,
-            truckNumber: driver.truckNumber || null,
-            phoneNumber: driver.phoneNumber,
-          }
+              driverId: driver.driverId,
+              driverName: driver.driverName,
+              driverImage: driver.driverImage || null,
+              truckNumber: driver.truckNumber || null,
+              phoneNumber: driver.phoneNumber || '',
+              address: driver.address || '',
+              lat: driver.lat ?? null,
+              long: driver.long ?? null,
+            }
           : null,
       };
 
@@ -425,8 +537,28 @@ export class OrderService {
       ];
     }
 
+    const activeDriver = activeDelivery?.driver || null;
+    const driver = activeDriver
+      ? {
+          driverId: activeDriver.driverId,
+          driverName: activeDriver.driverName,
+          phoneNumber: activeDriver.phoneNumber || '',
+          driverImage: activeDriver.driverImage || null,
+          truckNumber: activeDriver.truckNumber || null,
+          address: activeDriver.address || '',
+          lat: activeDriver.lat ?? null,
+          long: activeDriver.long ?? null,
+        }
+      : null;
+
     return {
       ...order,
+      quantity: order.bag,
+      totalRate: order.totalRate,
+      company,
+      party,
+      driver,
+      productDetails,
       statusText: mapOrderStatusText(order.status),
       quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
       partyName: order.party?.businessName || order.party?.partyName || 'N/A',
@@ -586,23 +718,26 @@ export class OrderService {
         dueDate,
         status: order.status,
       },
-      seller: {
-        companyId: order.company.companyId,
-        companyName: order.company.companyName,
-        ownerName: order.company.ownerName,
-        email: order.company.email,
-        phoneNumber: order.company.phoneNumber,
-        address: `${order.company.address}, ${order.company.upozela}, ${order.company.district}`,
-      },
+      seller: order.company
+        ? {
+            companyId: order.company.companyId,
+            companyName: order.company.companyName,
+            phoneNumber: order.company.phoneNumber,
+            address: order.company.address,
+            lat: order.company.lat,
+            long: order.company.long,
+          }
+        : null,
       buyer: order.party
         ? {
-          partyId: order.party.partyId,
-          partyName: order.party.partyName,
-          businessName: order.party.businessName,
-          email: order.party.email,
-          phoneNumber: order.party.phoneNumber,
-          address: `${order.party.address}, ${order.party.upozela}, ${order.party.district}`,
-        }
+            partyId: order.party.partyId,
+            partyName: order.party.partyName,
+            phoneNumber: order.party.phoneNumber,
+            address: order.party.address,
+            additionalAddress: order.party.additionalAddress,
+            lat: order.party.lat,
+            long: order.party.long,
+          }
         : null,
       item: {
         productId: order.product.productId,
@@ -674,7 +809,7 @@ export class OrderService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async acceptOrder(id: string, reqUser: any) {
+  async acceptOrder(id: string, reqUser: any, acceptOrderDto?: AcceptOrderDto) {
     const order = await this.findOne(id, reqUser);
 
     // If requester is a VENDOR, ensure they own the order
@@ -693,10 +828,46 @@ export class OrderService {
       );
     }
 
+    const driverId = acceptOrderDto?.driverId;
+    if (driverId) {
+      const driverExists = await this.prisma.driver.findUnique({
+        where: { driverId },
+      });
+      if (!driverExists) {
+        throw new NotFoundException(`Driver with ID "${driverId}" not found`);
+      }
+    }
+
     const updatedOrder = await this.prisma.order.update({
       where: { orderId: id },
       data: { status: OrderStatus.ACCEPTED },
     });
+
+    if (driverId) {
+      const existingDelivery = await this.prisma.delivery.findFirst({
+        where: { orderId: id },
+      });
+
+      if (existingDelivery) {
+        await this.prisma.delivery.update({
+          where: { deliveryId: existingDelivery.deliveryId },
+          data: { driverId },
+        });
+      } else {
+        await this.prisma.delivery.create({
+          data: {
+            address: '',
+            upozela: '',
+            district: '',
+            description: '',
+            deliveryTime: new Date(),
+            orderId: id,
+            status: 'PENDING',
+            driverId,
+          },
+        });
+      }
+    }
 
     const actorId = reqUser?.sub || updatedOrder.companyId;
     const actorType = reqUser?.roles[0] || 'VENDOR';
@@ -704,7 +875,7 @@ export class OrderService {
       actorType,
       actorId,
       action: 'ACCEPT_ORDER',
-      description: `Accepted order ${updatedOrder.showOrderId}`,
+      description: `Accepted order ${updatedOrder.showOrderId}${driverId ? ` with driver ${driverId}` : ''}`,
       companyId: updatedOrder.companyId,
       partyId: updatedOrder.partyId,
     });
@@ -728,7 +899,7 @@ export class OrderService {
       });
     }
 
-    return updatedOrder;
+    return this.findOne(id, reqUser);
   }
 
   async cancelOrder(id: string, reqUser: any) {
