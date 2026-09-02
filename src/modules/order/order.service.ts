@@ -23,20 +23,10 @@ export class OrderService {
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
     private readonly notificationGateway: NotificationGateway,
-  ) {}
+  ) { }
 
   async create(createOrderDto: CreateOrderDto, reqUser?: any) {
-    // Verify company exists
-    const companyExists = await this.prisma.company.findUnique({
-      where: { companyId: createOrderDto.companyId },
-    });
-    if (!companyExists) {
-      throw new NotFoundException(
-        `Company with ID "${createOrderDto.companyId}" not found`,
-      );
-    }
-
-    // Verify product exists
+    // 1. Verify product exists
     const productExists = await this.prisma.product.findUnique({
       where: { productId: createOrderDto.productId },
     });
@@ -46,52 +36,72 @@ export class OrderService {
       );
     }
 
-    // Verify party exists if provided
-    if (createOrderDto.partyId) {
+    // 2. Derive companyId from product's companyId
+    const companyId = productExists.companyId;
+    const companyExists = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!companyExists) {
+      throw new NotFoundException(
+        `Company with ID "${companyId}" not found`,
+      );
+    }
+
+    // 3. Derive partyId from authenticated user (if Party)
+    let partyId: string | null = null;
+    if (reqUser?.roles?.includes(Role.PARTY)) {
+      partyId = reqUser.sub;
+    }
+    if (partyId) {
       const partyExists = await this.prisma.party.findUnique({
-        where: { partyId: createOrderDto.partyId },
+        where: { partyId },
       });
       if (!partyExists) {
         throw new NotFoundException(
-          `Party/Customer with ID "${createOrderDto.partyId}" not found`,
+          `Party/Customer with ID "${partyId}" not found`,
         );
       }
     }
 
+    // 4. Derive bag quantity & bag size
+    const bagQuantity = Number(createOrderDto.quantity || 1);
+    const bagSize = createOrderDto.packagingType || productExists.bagSize || 'BAG';
+
     const {
       address,
-      upozela,
-      district,
+      lat,
+      long,
       deliveryTime,
       specialNote,
-      discount,
-      ...orderData
     } = createOrderDto;
 
-    const showOrderId =
-      createOrderDto.showOrderId ||
-      `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const latFloat = lat !== undefined && lat !== null && !isNaN(Number(lat)) ? Number(lat) : null;
+    const longFloat = long !== undefined && long !== null && !isNaN(Number(long)) ? Number(long) : null;
+
+    const showOrderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const order = await this.prisma.order.create({
       data: {
         showOrderId,
-        companyId: orderData.companyId,
-        productId: orderData.productId,
-        bag: orderData.bag,
-        bagSize: orderData.bagSize,
-        totalRate: orderData.totalRate,
-        partyId: orderData.partyId || null,
-        discount: discount || 0,
-        status: (createOrderDto.status as OrderStatus) || OrderStatus.PENDING,
+        companyId,
+        productId: createOrderDto.productId,
+        bag: bagQuantity,
+        bagSize,
+        totalRate: createOrderDto.totalRate,
+        partyId,
+        discount: 0,
+        status: OrderStatus.PENDING,
       },
     });
 
-    if (address || district || upozela) {
+    if (address || latFloat !== null || longFloat !== null || deliveryTime || specialNote) {
       await this.prisma.delivery.create({
         data: {
           address: address || '',
-          upozela: upozela || '',
-          district: district || '',
+          upozela: latFloat !== null ? String(latFloat) : '',
+          district: longFloat !== null ? String(longFloat) : '',
+          lat: latFloat,
+          long: longFloat,
           description: specialNote || '',
           deliveryTime: deliveryTime ? new Date(deliveryTime) : new Date(),
           orderId: order.orderId,
@@ -101,17 +111,15 @@ export class OrderService {
       });
     }
 
-    const actorId =
-      reqUser?.sub || createOrderDto.partyId || createOrderDto.companyId;
-    const actorType =
-      reqUser?.roles[0] || (createOrderDto.partyId ? 'PARTY' : 'COMPANY');
+    const actorId = reqUser?.sub || partyId || companyId;
+    const actorType = reqUser?.roles?.[0] || (partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'CREATE_ORDER',
-      description: `Created order ${showOrderId} for party ${createOrderDto.partyId || 'N/A'} and company ${createOrderDto.companyId}`,
-      companyId: createOrderDto.companyId,
-      partyId: createOrderDto.partyId,
+      description: `Created order ${showOrderId} for party ${partyId || 'N/A'} and company ${companyId}`,
+      companyId,
+      partyId: partyId || undefined,
     });
 
     return order;
@@ -349,12 +357,12 @@ export class OrderService {
         currentLocation: activeDelivery.currentLocation || null,
         driver: driver
           ? {
-              driverId: driver.driverId,
-              driverName: driver.driverName,
-              driverImage: driver.driverImage || null,
-              truckNumber: driver.truckNumber || null,
-              phoneNumber: driver.phoneNumber,
-            }
+            driverId: driver.driverId,
+            driverName: driver.driverName,
+            driverImage: driver.driverImage || null,
+            truckNumber: driver.truckNumber || null,
+            phoneNumber: driver.phoneNumber,
+          }
           : null,
       };
 
@@ -588,13 +596,13 @@ export class OrderService {
       },
       buyer: order.party
         ? {
-            partyId: order.party.partyId,
-            partyName: order.party.partyName,
-            businessName: order.party.businessName,
-            email: order.party.email,
-            phoneNumber: order.party.phoneNumber,
-            address: `${order.party.address}, ${order.party.upozela}, ${order.party.district}`,
-          }
+          partyId: order.party.partyId,
+          partyName: order.party.partyName,
+          businessName: order.party.businessName,
+          email: order.party.email,
+          phoneNumber: order.party.phoneNumber,
+          address: `${order.party.address}, ${order.party.upozela}, ${order.party.district}`,
+        }
         : null,
       item: {
         productId: order.product.productId,

@@ -1,9 +1,11 @@
 model Delivery {
   deliveryId        String         @id @default(uuid()) @map("delivery_id")
   address           String
-  upozela           String
-  district          String
-  description       String
+  upozela           String?
+  district          String?
+  lat               Float?
+  long              Float?
+  description       String?
   deliveryTime      DateTime       @map("delivery_time")
   status            DeliveryStatus @default(PENDING)
   pickupProof       String?        @map("pickup_proof")

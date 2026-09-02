@@ -84,6 +84,8 @@ async function main() {
       ownerName: 'Seed Company Owner',
       district: 'Dhaka',
       upozela: 'Mirpur',
+      latitude: 23.8103,
+      longitude: 90.4125,
       address: 'Mirpur, Dhaka',
       categoryId: category.categoryId,
       isVerified: true,

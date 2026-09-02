@@ -23,6 +23,12 @@ export class UserInfoDto {
   @ApiPropertyOptional({ example: 'Acme Business', nullable: true })
   businessName: string | null;
 
+  @ApiPropertyOptional({ example: 23.8103, nullable: true })
+  latitude?: number | null;
+
+  @ApiPropertyOptional({ example: 90.4125, nullable: true })
+  longitude?: number | null;
+
   @ApiPropertyOptional({ example: 'Dhaka', nullable: true })
   district: string | null;
 
@@ -64,11 +70,17 @@ export class CompanyInfoDto {
   @ApiProperty({ example: 'company@example.com' })
   email: string;
 
-  @ApiProperty({ example: 'Dhaka' })
-  district: string;
+  @ApiPropertyOptional({ example: 23.8103, nullable: true })
+  latitude?: number | null;
 
-  @ApiProperty({ example: 'Mirpur' })
-  upozela: string;
+  @ApiPropertyOptional({ example: 90.4125, nullable: true })
+  longitude?: number | null;
+
+  @ApiPropertyOptional({ example: 'Dhaka', nullable: true })
+  district?: string | null;
+
+  @ApiPropertyOptional({ example: 'Mirpur', nullable: true })
+  upozela?: string | null;
 
   @ApiProperty({ example: '123 Main St' })
   address: string;

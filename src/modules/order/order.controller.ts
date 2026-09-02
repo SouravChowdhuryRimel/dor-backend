@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../../common/guards/access-token.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -36,6 +37,7 @@ export class OrderController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new order' })
+  @ApiBody({ type: CreateOrderDto })
   @ApiResponse({ status: 201, description: 'Order successfully created.' })
   create(@Body() createOrderDto: CreateOrderDto, @Req() req: any) {
     return this.orderService.create(createOrderDto, req.user);

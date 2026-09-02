@@ -6,50 +6,39 @@ import {
   IsOptional,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class CreateOrderDto {
-  @ApiPropertyOptional({
-    description:
-      'Unique friendly order ID. If not provided, it will be auto-generated.',
-    example: 'ORD-88422',
-  })
-  @IsString()
-  @IsOptional()
-  showOrderId?: string;
-
-  @ApiProperty({
-    description: 'ID of the associated company/vendor',
-    example: 'company-uuid-string',
-  })
-  @IsString()
-  @IsNotEmpty()
-  companyId: string;
-
   @ApiProperty({
     description: 'ID of the product being ordered',
-    example: 'product-uuid-string',
+    example: '0463454b-2844-4514-8124-ed07edbb50af',
   })
   @IsString()
   @IsNotEmpty()
   productId: string;
 
-  @ApiProperty({
-    description: 'Number of bags ordered',
-    example: 100,
-  })
-  @IsNumber()
-  @Min(1)
-  @Type(() => Number)
-  bag: number;
-
-  @ApiProperty({
-    description: 'Size of each bag',
-    example: '50kg',
+  @ApiPropertyOptional({
+    description: 'Packaging type for the order',
+    example: 'BAG',
   })
   @IsString()
+  @IsOptional()
+  packagingType?: string;
+
+  @ApiProperty({
+    description: 'Quantity ordered',
+    example: 50,
+  })
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? typeof value === 'string'
+        ? parseFloat(value)
+        : value
+      : undefined,
+  )
+  @IsNumber()
   @IsNotEmpty()
-  bagSize: string;
+  quantity: number;
 
   @ApiProperty({
     description: 'Total rate/price for the order',
@@ -58,43 +47,11 @@ export class CreateOrderDto {
   @IsNumber()
   @Min(0)
   @Type(() => Number)
+  @IsNotEmpty()
   totalRate: number;
 
   @ApiPropertyOptional({
-    description: 'ID of the customer/party placing the order',
-    example: 'party-uuid-string',
-  })
-  @IsString()
-  @IsOptional()
-  partyId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Status of the order',
-    enum: [
-      'PENDING',
-      'ACCEPTED',
-      'PROCESSING',
-      'DISPATCHED',
-      'DELIVERED',
-      'CANCELLED',
-    ],
-    example: 'PENDING',
-  })
-  @IsString()
-  @IsOptional()
-  status?: string;
-
-  @ApiPropertyOptional({
-    description: 'Discount amount for the order',
-    example: 6000,
-  })
-  @IsNumber()
-  @IsOptional()
-  @Type(() => Number)
-  discount?: number;
-
-  @ApiPropertyOptional({
-    description: 'Full delivery address',
+    description: 'Full delivery address (drop location)',
     example: 'Road 5, Holding 24, Savar',
   })
   @IsString()
@@ -102,20 +59,34 @@ export class CreateOrderDto {
   address?: string;
 
   @ApiPropertyOptional({
-    description: 'Upazila/Upozela for delivery',
-    example: 'Savar',
+    description: 'Drop latitude (Float number or numeric string)',
+    example: 10.00,
   })
-  @IsString()
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? typeof value === 'string'
+        ? parseFloat(value)
+        : value
+      : undefined,
+  )
+  @IsNumber()
   @IsOptional()
-  upozela?: string;
+  lat?: number;
 
   @ApiPropertyOptional({
-    description: 'District for delivery',
-    example: 'Dhaka',
+    description: 'Drop longitude (Float number or numeric string)',
+    example: 100.0,
   })
-  @IsString()
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? typeof value === 'string'
+        ? parseFloat(value)
+        : value
+      : undefined,
+  )
+  @IsNumber()
   @IsOptional()
-  district?: string;
+  long?: number;
 
   @ApiPropertyOptional({
     description: 'Scheduled delivery date/time (ISO string)',

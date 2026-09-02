@@ -6,7 +6,9 @@ import {
   IsString,
   MinLength,
   IsArray,
+  IsNumber,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateCompanyDto {
   @ApiProperty({
@@ -53,20 +55,30 @@ export class CreateCompanyDto {
   email: string;
 
   @ApiProperty({
-    description: 'District for the company location',
-    example: 'Dhaka',
+    description: 'Latitude for the company location',
+    example: 23.8103,
   })
-  @IsString()
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? parseFloat(value)
+      : undefined,
+  )
+  @IsNumber()
   @IsNotEmpty()
-  district: string;
+  latitude: number;
 
   @ApiProperty({
-    description: 'Upozela for the company location',
-    example: 'Mirpur',
+    description: 'Longitude for the company location',
+    example: 90.4125,
   })
-  @IsString()
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? parseFloat(value)
+      : undefined,
+  )
+  @IsNumber()
   @IsNotEmpty()
-  upozela: string;
+  longitude: number;
 
   @ApiProperty({
     description: 'Detailed address for the company',
