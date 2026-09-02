@@ -37,7 +37,7 @@ async function main() {
 
   // 2. Create Admin (User with ADMIN/SUPER_ADMIN roles)
   console.log('Upserting Admin user...');
-  await prisma.user.upsert({
+  const adminUser = await prisma.user.upsert({
     where: { phoneNumber: '01600000000' },
     update: {
       password: hashedPassword,
@@ -50,6 +50,21 @@ async function main() {
       name: 'Seed Admin',
       roles: [Role.ADMIN, Role.SUPER_ADMIN],
       isActive: true,
+    },
+  });
+
+  // Assign Category to Admin
+  await prisma.adminCategory.upsert({
+    where: {
+      userId_categoryId: {
+        userId: adminUser.id,
+        categoryId: category.categoryId,
+      },
+    },
+    update: {},
+    create: {
+      userId: adminUser.id,
+      categoryId: category.categoryId,
     },
   });
 
