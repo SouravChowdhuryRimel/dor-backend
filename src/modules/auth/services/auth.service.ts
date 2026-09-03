@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -131,6 +132,8 @@ export class AuthService {
 
   async signIn(loginDto: LoginDto) {
     try {
+      const incomingFcmToken = loginDto.fcmToken;
+
       // 1. Check User table
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
       if (user) {
@@ -143,6 +146,13 @@ export class AuthService {
           loginDto.password,
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        if (incomingFcmToken) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
 
         const tokens = await this.getTokens(user.id, user.email, user.roles);
         await this.storeSession(user.id, tokens.refreshToken);
@@ -166,6 +176,7 @@ export class AuthService {
             roles: user.roles,
             categoryId: catInfo.categoryId,
             categoryIds: catInfo.categoryIds,
+            fcmToken: incomingFcmToken || user.fcmToken || null,
             businessName: null,
             district: null,
             upozela: null,
@@ -192,6 +203,13 @@ export class AuthService {
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
+        if (incomingFcmToken) {
+          await this.prisma.company.update({
+            where: { companyId: company.companyId },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
+
         const tokens = await this.getTokens(company.companyId, company.email, [
           Role.VENDOR,
         ]);
@@ -213,6 +231,7 @@ export class AuthService {
             name: company.ownerName,
             roles: [Role.VENDOR],
             categoryId: company.categoryId,
+            fcmToken: incomingFcmToken || company.fcmToken || null,
             businessName: company.companyName,
             latitude: company.latitude,
             longitude: company.longitude,
@@ -237,6 +256,13 @@ export class AuthService {
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
+        if (incomingFcmToken) {
+          await this.prisma.party.update({
+            where: { partyId: party.partyId },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
+
         const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
           Role.PARTY,
         ]);
@@ -258,6 +284,7 @@ export class AuthService {
             name: party.partyName,
             roles: [Role.PARTY],
             categoryId: party.categoryId,
+            fcmToken: incomingFcmToken || party.fcmToken || null,
             businessName: party.businessName,
             district: party.district,
             upozela: party.upozela,
@@ -280,6 +307,13 @@ export class AuthService {
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
+        if (incomingFcmToken) {
+          await this.prisma.driver.update({
+            where: { driverId: driver.driverId },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
+
         const tokens = await this.getTokens(driver.driverId, driver.email, [
           Role.DRIVER,
         ]);
@@ -301,6 +335,7 @@ export class AuthService {
             name: driver.driverName,
             roles: [Role.DRIVER],
             categoryId: null,
+            fcmToken: incomingFcmToken || driver.fcmToken || null,
             businessName: null,
             district: driver.district,
             upozela: driver.upozela,
@@ -326,6 +361,7 @@ export class AuthService {
 
   async signInCompany(loginDto: LoginDto) {
     try {
+      const incomingFcmToken = loginDto.fcmToken;
       const company = await this.companyService.findByPhone(
         loginDto.phoneNumber,
       );
@@ -336,6 +372,13 @@ export class AuthService {
         loginDto.password,
       );
       if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+      if (incomingFcmToken) {
+        await this.prisma.company.update({
+          where: { companyId: company.companyId },
+          data: { fcmToken: incomingFcmToken },
+        });
+      }
 
       // Issue token with VENDOR role for companies
       const tokens = await this.getTokens(company.companyId, company.email, [
@@ -360,6 +403,7 @@ export class AuthService {
           name: company.ownerName,
           roles: [Role.VENDOR],
           categoryId: company.categoryId,
+          fcmToken: incomingFcmToken || company.fcmToken || null,
           businessName: company.companyName,
           latitude: company.latitude,
           longitude: company.longitude,
@@ -384,6 +428,7 @@ export class AuthService {
 
   async signInParty(partyLoginDto: PartyLoginDto) {
     try {
+      const incomingFcmToken = partyLoginDto.fcmToken;
       const party = await this.partyService.findByPhone(
         partyLoginDto.phoneNumber,
       );
@@ -396,6 +441,13 @@ export class AuthService {
       );
       if (!passwordMatches)
         throw new UnauthorizedException('Access Denied: Incorrect Password');
+
+      if (incomingFcmToken) {
+        await this.prisma.party.update({
+          where: { partyId: party.partyId },
+          data: { fcmToken: incomingFcmToken },
+        });
+      }
 
       // Issue token with PARTY role for independent party users
       const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
@@ -420,6 +472,7 @@ export class AuthService {
           name: party.partyName,
           roles: [Role.PARTY],
           categoryId: party.categoryId,
+          fcmToken: incomingFcmToken || party.fcmToken || null,
           businessName: party.businessName,
           district: party.district,
           upozela: party.upozela,
@@ -913,6 +966,63 @@ export class AuthService {
       this.logger.error(
         `Failed to sign JWT tokens for user ${userId}: ${error.message}`,
         error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async removeFcmToken(userId: string) {
+    try {
+      // 1. Check User
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      // 2. Check Company
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        await this.prisma.company.update({
+          where: { companyId: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      // 3. Check Party
+      const party = await this.prisma.party.findUnique({
+        where: { partyId: userId },
+      });
+      if (party) {
+        await this.prisma.party.update({
+          where: { partyId: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      // 4. Check Driver
+      const driver = await this.prisma.driver.findUnique({
+        where: { driverId: userId },
+      });
+      if (driver) {
+        await this.prisma.driver.update({
+          where: { driverId: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      throw new NotFoundException('User entity not found');
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove FCM token for user ${userId}: ${error.message}`,
       );
       throw error;
     }

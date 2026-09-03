@@ -15,6 +15,7 @@ import {
 } from '../../shared/pagination/pagination.util';
 import { NotificationGateway } from '../notification/notification.gateway';
 import { ActivityLogService } from '../activity-log/activity-log.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class ProductService {
@@ -22,6 +23,7 @@ export class ProductService {
     private readonly prisma: PrismaService,
     private readonly notificationGateway: NotificationGateway,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(createProductDto: CreateProductDto, reqUser?: any) {
@@ -96,6 +98,27 @@ export class ProductService {
       description: `Created product: ${product.productName} for company ${companyId}`,
       companyId,
     });
+
+    // Notify parties registered under this company or category in Bangla
+    const targetParties = await this.prisma.party.findMany({
+      where: {
+        OR: [{ companyId }, { categoryId }],
+      },
+      select: { partyId: true },
+    });
+
+    for (const p of targetParties) {
+      await this.notificationService.sendNotification({
+        title: 'নতুন প্রোডাক্ট যুক্ত হয়েছে',
+        message: `কোম্পানি "${company.companyName}" একটি নতুন প্রোডাক্ট যুক্ত করেছে: "${product.productName}"`,
+        partyId: p.partyId,
+        data: {
+          type: 'NEW_PRODUCT',
+          productId: product.productId,
+          companyId,
+        },
+      });
+    }
 
     return product;
   }
@@ -604,23 +627,15 @@ export class ProductService {
       },
     });
 
-    const notifTitle = 'বিশেষ মূল্য অফার (Special Price Offer)';
-    const notifMessage = `আপনাকে "${product.productName}" পণ্যের জন্য একটি বিশেষ কাস্টম মূল্য (${dto.rate} টাকা) অফার করা হয়েছে।`;
-
-    await this.prisma.notification.create({
+    await this.notificationService.sendNotification({
+      title: 'বিশেষ মূল্য অফার',
+      message: `আপনাকে "${product.productName}" পণ্যের জন্য একটি বিশেষ কাস্টম মূল্য (${dto.rate} টাকা) অফার করা হয়েছে।`,
+      partyId: dto.partyId,
       data: {
-        title: notifTitle,
-        message: notifMessage,
-        partyId: dto.partyId,
+        type: 'SPECIAL_PRICE_OFFER',
+        productId: dto.productId,
+        rate: String(dto.rate),
       },
-    });
-
-    this.notificationGateway.sendNotificationToParty(dto.partyId, {
-      title: notifTitle,
-      message: notifMessage,
-      productId: dto.productId,
-      rate: dto.rate,
-      createdAt: new Date(),
     });
 
     await this.activityLogService.log({

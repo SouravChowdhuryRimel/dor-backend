@@ -1,18 +1,20 @@
 model User {
-  id               String    @id @default(uuid())
-  email            String?   @unique
-  phoneNumber      String    @unique @map("phone_number")
+  id               String          @id @default(uuid())
+  email            String?         @unique
+  phoneNumber      String          @unique @map("phone_number")
   password         String
   name             String?
-  isActive         Boolean   @default(true) @map("is_active")
-  profileImage     String?   @map("profile_image")
-  roles            Role[]    @default([USER])
+  isActive         Boolean         @default(true) @map("is_active")
+  profileImage     String?         @map("profile_image")
+  roles            Role[]          @default([USER])
   refreshToken     String?
+  fcmToken         String?         @map("fcm_token")
   managedCompanies Company[]
   adminCategories  AdminCategory[]
   activityLogs     ActivityLog[]
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  notifications    Notification[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@index([roles], type: Gin)
   @@map("users")

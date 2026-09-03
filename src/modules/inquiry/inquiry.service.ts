@@ -8,13 +8,13 @@ import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { UpdateInquiryDto } from './dto/update-inquiry.dto';
 import { GetInquiriesQueryDto } from './dto/get-inquiries-query.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
-import { NotificationGateway } from '../notification/notification.gateway';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class InquiryService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationGateway: NotificationGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(partyId: string, createInquiryDto: CreateInquiryDto) {
@@ -69,24 +69,16 @@ export class InquiryService {
 
     // 3. Automatically dispatch notification to those companies
     if (companies.length > 0) {
-      await this.prisma.notification.createMany({
-        data: companies.map((company) => ({
-          title: 'নতুন ইনকোয়ারি (New Inquiry)',
+      for (const company of companies) {
+        await this.notificationService.sendNotification({
+          title: 'নতুন ইনকোয়ারি પ્રાપ્ત হয়েছে',
           message: `আপনার ক্যাটাগরিতে একটি নতুন ইনকোয়ারি জমা হয়েছে: "${inquiry.title}"`,
           companyId: company.companyId,
           inquiryId: inquiry.inquiryId,
-        })),
-      });
-
-      // Emit WebSocket real-time events to all companies in the category
-      for (const company of companies) {
-        this.notificationGateway.sendNotificationToCompany(company.companyId, {
-          title: 'নতুন ইনকোয়ারি (New Inquiry)',
-          message: `আপনার ক্যাটাগরিতে একটি নতুন ইনকোয়ারি জমা হয়েছে: "${inquiry.title}"`,
-          inquiryId: inquiry.inquiryId,
-          inquiry,
-          createdAt: new Date(),
-          isRead: false,
+          data: {
+            type: 'NEW_INQUIRY',
+            inquiryId: inquiry.inquiryId,
+          },
         });
       }
     }

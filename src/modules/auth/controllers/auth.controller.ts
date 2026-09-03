@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Req, UseGuards, Get } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  Get,
+  Delete,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -205,5 +213,47 @@ export class AuthController {
     const refreshToken = req.user['refreshToken'];
     const tokenType = req.user['tokenType'];
     return this.authService.refreshTokens(userId, refreshToken, tokenType);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Delete('fcm-token')
+  @ApiOperation({
+    summary: 'Remove FCM token of logged in user',
+    description:
+      'Clears/removes the stored FCM token for the currently authenticated user, company, party, or driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token removed successfully.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Access token is missing or invalid.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  removeFcmToken(@Req() req: any) {
+    return this.authService.removeFcmToken(req.user['sub']);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Post('remove-fcm-token')
+  @ApiOperation({
+    summary: 'Remove FCM token of logged in user (POST alias)',
+    description:
+      'Clears/removes the stored FCM token for the currently authenticated user, company, party, or driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token removed successfully.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Access token is missing or invalid.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  removeFcmTokenPost(@Req() req: any) {
+    return this.authService.removeFcmToken(req.user['sub']);
   }
 }

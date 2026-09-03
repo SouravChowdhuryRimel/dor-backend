@@ -10,6 +10,9 @@ import {
 } from '../../../shared/pagination/pagination.util';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
 
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationGateway } from '../../notification/notification.gateway';
+
 const companyDetailsSelect = {
   companyId: true,
   phoneNumber: true,
@@ -42,6 +45,8 @@ export class CompanyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async register(createCompanyDto: CreateCompanyDto) {
@@ -89,6 +94,38 @@ export class CompanyService {
       actorId: company.companyId,
       action: 'REGISTER_COMPANY',
       description: `Registered new company: ${company.companyName}`,
+    });
+
+    // Notify all Admins in Bangla
+    const adminUsers = await this.prisma.user.findMany({
+      where: {
+        roles: {
+          hasSome: ['ADMIN', 'SUPER_ADMIN'],
+        },
+      },
+      select: { id: true },
+    });
+
+    const notifTitle = 'নতুন কোম্পানি নিবন্ধন';
+    const notifMessage = `নতুন কোম্পানি "${company.companyName}" নিবন্ধনের জন্য আবেদন করেছে। (ফোন: ${company.phoneNumber})`;
+
+    for (const admin of adminUsers) {
+      await this.notificationService.sendNotification({
+        title: notifTitle,
+        message: notifMessage,
+        userId: admin.id,
+        data: {
+          type: 'NEW_COMPANY_REGISTERED',
+          companyId: company.companyId,
+        },
+      });
+    }
+
+    this.notificationGateway.sendNotificationToAdmin({
+      title: notifTitle,
+      message: notifMessage,
+      companyId: company.companyId,
+      createdAt: new Date(),
     });
 
     return company;

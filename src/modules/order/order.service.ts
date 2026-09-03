@@ -15,7 +15,7 @@ import {
 } from '../../shared/pagination/pagination.util';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { OrderStatus } from '@prisma/client';
-import { NotificationGateway } from '../notification/notification.gateway';
+import { NotificationService } from '../notification/notification.service';
 import { Role } from '../../common/constants/role.enum';
 
 @Injectable()
@@ -23,7 +23,7 @@ export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
-    private readonly notificationGateway: NotificationGateway,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async create(createOrderDto: CreateOrderDto, reqUser?: any) {
@@ -123,6 +123,18 @@ export class OrderService {
       description: `Created order ${showOrderId} for party ${partyId || 'N/A'} and company ${companyId}`,
       companyId,
       partyId: partyId || undefined,
+    });
+
+    // Notify Company about the new order in Bangla
+    await this.notificationService.sendNotification({
+      title: 'নতুন অর্ডার প্রাপ্তি',
+      message: `আপনার প্রতিষ্ঠানে একটি নতুন অর্ডার জমা হয়েছে। (অর্ডার আইডি: #${showOrderId})`,
+      companyId,
+      data: {
+        type: 'NEW_ORDER',
+        orderId: order.orderId,
+        showOrderId,
+      },
     });
 
     return this.findOne(order.orderId, reqUser);
@@ -880,22 +892,31 @@ export class OrderService {
       partyId: updatedOrder.partyId,
     });
 
-    // Create notification and send via WebSockets if party is associated
-    if (updatedOrder.partyId) {
-      const notification = await this.prisma.notification.create({
+    // Create notification and send via WebSockets & FCM if driver assigned
+    if (driverId) {
+      await this.notificationService.sendNotification({
+        title: 'নতুন ডেলিভারি নির্ধারিত',
+        message: `আপনাকে অর্ডার ${updatedOrder.showOrderId}-এর ডেলিভারির দায়িত্ব প্রদান করা হয়েছে।`,
+        driverId,
         data: {
-          title: 'অর্ডার গৃহীত (Order Accepted)',
-          message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) কোম্পানি দ্বারা গৃহীত হয়েছে।`,
-          partyId: updatedOrder.partyId,
+          type: 'DRIVER_ASSIGNED',
+          orderId: id,
+          showOrderId: updatedOrder.showOrderId,
         },
       });
+    }
 
-      this.notificationGateway.sendNotificationToParty(updatedOrder.partyId, {
-        notificationId: notification.notificationId,
-        title: notification.title,
-        message: notification.message,
-        createdAt: notification.createdAt,
-        isRead: false,
+    // Create notification and send via WebSockets & FCM if party is associated
+    if (updatedOrder.partyId) {
+      await this.notificationService.sendNotification({
+        title: 'অর্ডার গৃহীত হয়েছে',
+        message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) কোম্পানি কর্তৃক সফলভাবে গৃহীত হয়েছে।`,
+        partyId: updatedOrder.partyId,
+        data: {
+          type: 'ORDER_ACCEPTED',
+          orderId: id,
+          showOrderId: updatedOrder.showOrderId,
+        },
       });
     }
 
@@ -940,22 +961,17 @@ export class OrderService {
       partyId: updatedOrder.partyId,
     });
 
-    // Create notification and send via WebSockets if party is associated
+    // Create notification and send via WebSockets & FCM if party is associated
     if (updatedOrder.partyId) {
-      const notification = await this.prisma.notification.create({
+      await this.notificationService.sendNotification({
+        title: 'অর্ডার বাতিল করা হয়েছে',
+        message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) বাতিল করা হয়েছে।`,
+        partyId: updatedOrder.partyId,
         data: {
-          title: 'অর্ডার বাতিল (Order Cancelled)',
-          message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) বাতিল করা হয়েছে।`,
-          partyId: updatedOrder.partyId,
+          type: 'ORDER_CANCELLED',
+          orderId: id,
+          showOrderId: updatedOrder.showOrderId,
         },
-      });
-
-      this.notificationGateway.sendNotificationToParty(updatedOrder.partyId, {
-        notificationId: notification.notificationId,
-        title: notification.title,
-        message: notification.message,
-        createdAt: notification.createdAt,
-        isRead: false,
       });
     }
 

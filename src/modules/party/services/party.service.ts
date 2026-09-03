@@ -46,11 +46,16 @@ const partyDetailsSelect = {
   },
 } satisfies Prisma.PartySelect;
 
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationGateway } from '../../notification/notification.gateway';
+
 @Injectable()
 export class PartyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(createPartyDto: CreatePartyDto, reqUser?: any) {
@@ -83,6 +88,38 @@ export class PartyService {
       action: 'REGISTER_PARTY',
       description: `Registered new party: ${party.partyName}`,
       partyId: party.partyId,
+    });
+
+    // Notify all Admins in Bangla
+    const adminUsers = await this.prisma.user.findMany({
+      where: {
+        roles: {
+          hasSome: ['ADMIN', 'SUPER_ADMIN'],
+        },
+      },
+      select: { id: true },
+    });
+
+    const notifTitle = 'নতুন কাস্টমার/পার্টি নিবন্ধন';
+    const notifMessage = `নতুন কাস্টমার/পার্টি "${party.partyName}" নিবন্ধিত হয়েছে। (ফোন: ${party.phoneNumber})`;
+
+    for (const admin of adminUsers) {
+      await this.notificationService.sendNotification({
+        title: notifTitle,
+        message: notifMessage,
+        userId: admin.id,
+        data: {
+          type: 'NEW_PARTY_REGISTERED',
+          partyId: party.partyId,
+        },
+      });
+    }
+
+    this.notificationGateway.sendNotificationToAdmin({
+      title: notifTitle,
+      message: notifMessage,
+      partyId: party.partyId,
+      createdAt: new Date(),
     });
 
     return party;

@@ -75,6 +75,14 @@ export class NotificationGateway
             `Driver connected: ${driverId} joined room: ${roomName}`,
           );
         }
+        if (payload.roles.includes(Role.USER)) {
+          const userId = payload.sub;
+          const roomName = `user_${userId}`;
+          await client.join(roomName);
+          this.logger.log(
+            `User connected: ${userId} joined room: ${roomName}`,
+          );
+        }
         if (
           payload.roles.includes(Role.ADMIN) ||
           payload.roles.includes(Role.SUPER_ADMIN)
@@ -101,12 +109,24 @@ export class NotificationGateway
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
+  sendNotificationToUser(userId: string, notification: any) {
+    const roomName = `user_${userId}`;
+    this.logger.log(
+      `Sending real-time notification to user ${userId} via room ${roomName}`,
+    );
+    if (this.server) {
+      this.server.to(roomName).emit('notification', notification);
+    }
+  }
+
   sendNotificationToCompany(companyId: string, notification: any) {
     const roomName = `company_${companyId}`;
     this.logger.log(
       `Sending real-time notification to company ${companyId} via room ${roomName}`,
     );
-    this.server.to(roomName).emit('notification', notification);
+    if (this.server) {
+      this.server.to(roomName).emit('notification', notification);
+    }
   }
 
   sendNotificationToParty(partyId: string, notification: any) {
@@ -114,7 +134,9 @@ export class NotificationGateway
     this.logger.log(
       `Sending real-time notification to party ${partyId} via room ${roomName}`,
     );
-    this.server.to(roomName).emit('notification', notification);
+    if (this.server) {
+      this.server.to(roomName).emit('notification', notification);
+    }
   }
 
   sendNotificationToDriver(driverId: string, notification: any) {
@@ -122,7 +144,9 @@ export class NotificationGateway
     this.logger.log(
       `Sending real-time notification to driver ${driverId} via room ${roomName}`,
     );
-    this.server.to(roomName).emit('notification', notification);
+    if (this.server) {
+      this.server.to(roomName).emit('notification', notification);
+    }
   }
 
   sendNotificationToAdmin(notification: any) {
@@ -130,6 +154,8 @@ export class NotificationGateway
     this.logger.log(
       `Sending real-time notification to admins via room ${roomName}`,
     );
-    this.server.to(roomName).emit('notification', notification);
+    if (this.server) {
+      this.server.to(roomName).emit('notification', notification);
+    }
   }
 }
