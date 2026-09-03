@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { Role, Prisma } from '@prisma/client';
+import { SearchChatUsersQueryDto } from './dto/search-chat-users-query.dto';
+import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 
 export interface ParticipantProfile {
   id: string;
@@ -465,5 +467,260 @@ export class ChatService {
       receiverId: otherId,
       receiverRole: otherRole,
     };
+  }
+
+  /**
+   * Search users/contacts for chat based on role permissions and unified participant schema.
+   */
+  async searchChatUsers(
+    userId: string,
+    senderRole: Role,
+    query: SearchChatUsersQueryDto,
+  ) {
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const search = query.search?.trim();
+
+    // 1. Determine allowed target roles for the sender role
+    let allowedTargetRoles: Role[] = [];
+    if (senderRole === Role.SUPER_ADMIN) {
+      allowedTargetRoles = [Role.ADMIN];
+    } else if (senderRole === Role.ADMIN) {
+      allowedTargetRoles = [Role.VENDOR, Role.DRIVER];
+    } else if (senderRole === Role.VENDOR) {
+      allowedTargetRoles = [Role.PARTY, Role.DRIVER];
+    } else if (senderRole === Role.PARTY) {
+      allowedTargetRoles = [Role.VENDOR, Role.DRIVER];
+    } else if (senderRole === Role.DRIVER) {
+      allowedTargetRoles = [Role.VENDOR, Role.PARTY];
+    }
+
+    // Filter by query.targetRole if provided and allowed
+    if (query.targetRole) {
+      if (allowedTargetRoles.includes(query.targetRole)) {
+        allowedTargetRoles = [query.targetRole];
+      } else {
+        return createPaginatedResponse([], 0, page, limit);
+      }
+    }
+
+    const candidateResults: Array<{
+      id: string;
+      name: string;
+      picture: string | null;
+      phoneNumber: string;
+      email: string | null;
+      role: Role;
+    }> = [];
+
+    // 2. Fetch candidates for each target role
+    for (const targetRole of allowedTargetRoles) {
+      if (targetRole === Role.ADMIN) {
+        const whereClause: Prisma.UserWhereInput = {
+          roles: { has: Role.ADMIN },
+          id: { not: userId },
+        };
+        if (search) {
+          whereClause.OR = [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+        const users = await this.prisma.user.findMany({
+          where: whereClause,
+        });
+        for (const u of users) {
+          candidateResults.push({
+            id: u.id,
+            name: u.name || 'Admin',
+            picture: u.profileImage,
+            phoneNumber: u.phoneNumber || '',
+            email: u.email || null,
+            role: Role.ADMIN,
+          });
+        }
+      } else if (targetRole === Role.VENDOR) {
+        const whereClause: Prisma.CompanyWhereInput = {
+          companyId: { not: userId },
+        };
+        if (search) {
+          whereClause.OR = [
+            { companyName: { contains: search, mode: 'insensitive' } },
+            { ownerName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+        if (senderRole === Role.ADMIN) {
+          const adminCategories = await this.prisma.adminCategory.findMany({
+            where: { userId },
+          });
+          const catIds = adminCategories.map((ac) => ac.categoryId);
+          if (catIds.length > 0) {
+            whereClause.categoryId = { in: catIds };
+          }
+        }
+        const companies = await this.prisma.company.findMany({
+          where: whereClause,
+        });
+        for (const c of companies) {
+          candidateResults.push({
+            id: c.companyId,
+            name: c.companyName,
+            picture: c.companyImage,
+            phoneNumber: c.phoneNumber || '',
+            email: c.email || null,
+            role: Role.VENDOR,
+          });
+        }
+      } else if (targetRole === Role.PARTY) {
+        const whereClause: Prisma.PartyWhereInput = {
+          partyId: { not: userId },
+        };
+        if (search) {
+          whereClause.OR = [
+            { partyName: { contains: search, mode: 'insensitive' } },
+            { businessName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+        if (senderRole === Role.VENDOR) {
+          const company = await this.prisma.company.findUnique({
+            where: { companyId: userId },
+          });
+          if (company) {
+            const filters: Prisma.PartyWhereInput[] = [
+              { companyId: userId },
+              { categoryId: company.categoryId },
+            ];
+            if (whereClause.OR) {
+              whereClause.AND = [
+                { OR: whereClause.OR },
+                { OR: filters },
+              ];
+              delete whereClause.OR;
+            } else {
+              whereClause.OR = filters;
+            }
+          }
+        }
+        const parties = await this.prisma.party.findMany({
+          where: whereClause,
+        });
+        for (const p of parties) {
+          candidateResults.push({
+            id: p.partyId,
+            name: p.businessName || p.partyName,
+            picture: p.profileImage,
+            phoneNumber: p.phoneNumber || '',
+            email: p.email || null,
+            role: Role.PARTY,
+          });
+        }
+      } else if (targetRole === Role.DRIVER) {
+        const whereClause: Prisma.DriverWhereInput = {
+          driverId: { not: userId },
+        };
+        if (search) {
+          whereClause.OR = [
+            { driverName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search, mode: 'insensitive' } },
+            { truckNumber: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+        const drivers = await this.prisma.driver.findMany({
+          where: whereClause,
+        });
+        for (const d of drivers) {
+          candidateResults.push({
+            id: d.driverId,
+            name: d.driverName,
+            picture: d.driverImage,
+            phoneNumber: d.phoneNumber || '',
+            email: d.email || null,
+            role: Role.DRIVER,
+          });
+        }
+      }
+    }
+
+    const total = candidateResults.length;
+    const skip = (page - 1) * limit;
+    const paginatedCandidates = candidateResults.slice(skip, skip + limit);
+
+    // 3. Attach conversation metadata for each candidate
+    const data = [];
+    for (const candidate of paginatedCandidates) {
+      let p1Id = userId;
+      let p1Role = senderRole;
+      let p2Id = candidate.id;
+      let p2Role = candidate.role;
+
+      if (userId > candidate.id) {
+        p1Id = candidate.id;
+        p1Role = candidate.role;
+        p2Id = userId;
+        p2Role = senderRole;
+      }
+
+      const conversation = await this.prisma.conversation.findUnique({
+        where: {
+          participant1Id_participant1Role_participant2Id_participant2Role: {
+            participant1Id: p1Id,
+            participant1Role: p1Role,
+            participant2Id: p2Id,
+            participant2Role: p2Role,
+          },
+        },
+      });
+
+      let conversationId: string | null = null;
+      let lastMessage: any = null;
+      let unreadCount = 0;
+
+      if (conversation) {
+        conversationId = conversation.id;
+        const msg = await this.prisma.chatMessage.findFirst({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (msg) {
+          lastMessage = {
+            messageId: msg.messageId,
+            message: msg.message,
+            file: msg.file,
+            image: msg.image,
+            senderId: msg.senderId,
+            senderRole: msg.senderRole,
+            isRead: msg.isRead,
+            createdAt: msg.createdAt,
+          };
+        }
+        unreadCount = await this.prisma.chatMessage.count({
+          where: {
+            conversationId: conversation.id,
+            senderId: { not: userId },
+            isRead: false,
+          },
+        });
+      }
+
+      data.push({
+        id: candidate.id,
+        name: candidate.name,
+        picture: candidate.picture,
+        phoneNumber: candidate.phoneNumber,
+        email: candidate.email,
+        role: candidate.role,
+        conversationId,
+        lastMessage,
+        unreadCount,
+      });
+    }
+
+    return createPaginatedResponse(data, total, page, limit);
   }
 }

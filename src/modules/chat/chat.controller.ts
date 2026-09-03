@@ -27,6 +27,7 @@ import { AccessTokenGuard } from 'src/common/guards/access-token.guard';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { SearchChatUsersQueryDto } from './dto/search-chat-users-query.dto';
 import { Role } from '@prisma/client';
 
 export interface RequestWithUser {
@@ -46,6 +47,30 @@ export class ChatController {
     private readonly chatService: ChatService,
     private readonly chatGateway: ChatGateway,
   ) {}
+
+  @Get('search-users')
+  @ApiOperation({
+    summary: 'Search users/contacts for chat based on role permissions and query filter',
+  })
+  async searchUsers(
+    @Req() req: RequestWithUser,
+    @Query() query: SearchChatUsersQueryDto,
+  ) {
+    const { sub: userId, roles = [] } = req.user;
+    let senderRole = (roles[0] || Role.USER) as Role;
+    if (roles.includes(Role.SUPER_ADMIN)) {
+      senderRole = Role.SUPER_ADMIN;
+    } else if (roles.includes(Role.ADMIN)) {
+      senderRole = Role.ADMIN;
+    } else if (roles.includes(Role.VENDOR)) {
+      senderRole = Role.VENDOR;
+    } else if (roles.includes(Role.PARTY)) {
+      senderRole = Role.PARTY;
+    } else if (roles.includes(Role.DRIVER)) {
+      senderRole = Role.DRIVER;
+    }
+    return this.chatService.searchChatUsers(userId, senderRole, query);
+  }
 
   @Post('conversations')
   @ApiOperation({
