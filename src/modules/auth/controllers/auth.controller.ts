@@ -20,6 +20,7 @@ import { PartyLoginDto } from '../dto/party-login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RefreshTokenGuard } from '../../../common/guards/refresh-token.guard';
 import {
@@ -145,6 +146,33 @@ export class AuthController {
 
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
+  @Post('change-password')
+  @ApiOperation({
+    summary: 'Change password for currently authenticated user',
+    description:
+      'Changes password for the currently logged-in account (User, Admin, Company, Party, or Driver) by verifying current password.',
+  })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiResponse({ status: 200, description: 'Password changed successfully.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request. Incorrect current password or validation error.',
+    type: BadRequestErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Access token missing or invalid.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  changePassword(
+    @Req() req: any,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(req.user['sub'], changePasswordDto);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
   @Get('logout')
   @ApiOperation({
     summary: 'Log out a user',
@@ -255,5 +283,58 @@ export class AuthController {
   })
   removeFcmTokenPost(@Req() req: any) {
     return this.authService.removeFcmToken(req.user['sub']);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Delete('delete-account')
+  @ApiOperation({
+    summary: 'Delete logged in user profile (Soft delete)',
+    description:
+      'Soft-deletes the profile for the currently logged-in account (User, Admin, Company, Party, or Driver) and invalidates active session.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account soft-deleted successfully.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Access token missing or invalid.',
+    type: UnauthorizedErrorResponseDto,
+  })
+  deleteAccount(@Req() req: any) {
+    return this.authService.softDeleteAccount(req.user['sub']);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Delete('me')
+  @ApiOperation({
+    summary: 'Delete logged in user profile (Soft delete - alias me)',
+    description:
+      'Soft-deletes the profile for the currently logged-in account and invalidates active session.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account soft-deleted successfully.',
+  })
+  deleteMe(@Req() req: any) {
+    return this.authService.softDeleteAccount(req.user['sub']);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Delete('delete-user')
+  @ApiOperation({
+    summary: 'Delete logged in user profile (Soft delete - alias delete-user)',
+    description:
+      'Soft-deletes the profile for the currently logged-in account and invalidates active session.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account soft-deleted successfully.',
+  })
+  deleteUser(@Req() req: any) {
+    return this.authService.softDeleteAccount(req.user['sub']);
   }
 }

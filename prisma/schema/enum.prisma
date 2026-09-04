@@ -77,3 +77,9 @@ enum UnitType {
   BUNDLE
 }
 
+enum InquiryStatus {
+  OPEN
+  CLOSED
+}
+
+

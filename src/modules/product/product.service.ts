@@ -212,6 +212,7 @@ export class ProductService {
         select: {
           companyName: true,
           ownerName: true,
+          phoneNumber: true,
           category: {
             select: {
               categoryName: true,
@@ -268,6 +269,7 @@ export class ProductService {
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyCategoryName: p.company?.category?.categoryName || null,
         companyName: p.company?.companyName || null,
+        companyPhone: p.company?.phoneNumber || null,
         categoryName: p.category?.categoryName || null,
         subCategoryName: p.subCategory?.title || null,
         status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
@@ -293,6 +295,7 @@ export class ProductService {
         select: {
           companyName: true,
           ownerName: true,
+          phoneNumber: true,
           category: {
             select: {
               categoryName: true,
@@ -370,6 +373,7 @@ export class ProductService {
       stockStatusText: product.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
       companyCategoryName: pAny.company?.category?.categoryName || null,
       companyName: pAny.company?.companyName || null,
+      companyPhone: pAny.company?.phoneNumber || null,
       categoryName: pAny.category?.categoryName || null,
       subCategoryName: pAny.subCategory?.title || null,
       status: product.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
@@ -557,6 +561,7 @@ export class ProductService {
             select: {
               companyName: true,
               ownerName: true,
+              phoneNumber: true,
             },
           },
         },
@@ -571,6 +576,7 @@ export class ProductService {
       stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
       stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
       companyName: p.company?.companyName || null,
+      companyPhone: p.company?.phoneNumber || null,
       categoryName: p.category?.categoryName || null,
       subCategoryName: p.subCategory?.title || null,
       status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',

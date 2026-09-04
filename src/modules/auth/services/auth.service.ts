@@ -15,12 +15,13 @@ import { RedisService } from '../../../core/cache/redis.service';
 import { LoginDto } from '../dto/login.dto';
 import { PartyLoginDto } from '../dto/party-login.dto';
 import { RegisterDto } from '../dto/register.dto';
-import { Role } from '@prisma/client';
+import { Role, CompanyStatus } from '@prisma/client';
 import { CompanyService } from '../../company/services/company.service';
 import { PartyService } from '../../party/services/party.service';
 import { DriverService } from '../../driver/services/driver.service';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import * as nodemailer from 'nodemailer';
 import { randomBytes } from 'crypto';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
@@ -197,6 +198,10 @@ export class AuthService {
         loginDto.phoneNumber,
       );
       if (company) {
+        if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED || !company.isVerified) {
+          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        }
+
         const passwordMatches = await argon2.verify(
           company.password,
           loginDto.password,
@@ -250,6 +255,10 @@ export class AuthService {
       // 3. Check Party table
       const party = await this.partyService.findByPhone(loginDto.phoneNumber);
       if (party) {
+        if (party.status === 'INACTIVE') {
+          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        }
+
         const passwordMatches = await argon2.verify(
           party.password,
           loginDto.password,
@@ -301,6 +310,9 @@ export class AuthService {
       // 4. Check Driver table
       const driver = await this.driverService.findByPhone(loginDto.phoneNumber);
       if (driver) {
+        if (!driver.isVerified) {
+          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        }
         const passwordMatches = await argon2.verify(
           driver.password,
           loginDto.password,
@@ -366,6 +378,10 @@ export class AuthService {
         loginDto.phoneNumber,
       );
       if (!company) throw new UnauthorizedException('Access Denied');
+
+      if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED || !company.isVerified) {
+        throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+      }
 
       const passwordMatches = await argon2.verify(
         company.password,
@@ -434,6 +450,10 @@ export class AuthService {
       );
       if (!party)
         throw new UnauthorizedException('Access Denied: Party not found');
+
+      if (party.status === 'INACTIVE') {
+        throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+      }
 
       const passwordMatches = await argon2.verify(
         party.password,
@@ -623,6 +643,152 @@ export class AuthService {
 
     await this.redisService.del(`session:${account.id}`);
     return { message: 'Password reset successfully. Please sign in again.' };
+  }
+
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+    const { currentPassword, newPassword } = changePasswordDto;
+
+    let storedHashedPassword = '';
+    let accountType: 'user' | 'company' | 'party' | 'driver' = 'user';
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      storedHashedPassword = user.password;
+      accountType = 'user';
+    } else {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        storedHashedPassword = company.password;
+        accountType = 'company';
+      } else {
+        const party = await this.prisma.party.findUnique({
+          where: { partyId: userId },
+        });
+        if (party) {
+          storedHashedPassword = party.password;
+          accountType = 'party';
+        } else {
+          const driver = await this.prisma.driver.findUnique({
+            where: { driverId: userId },
+          });
+          if (driver) {
+            storedHashedPassword = driver.password;
+            accountType = 'driver';
+          }
+        }
+      }
+    }
+
+    if (!storedHashedPassword) {
+      throw new NotFoundException('Account not found');
+    }
+
+    const isMatch = await argon2.verify(storedHashedPassword, currentPassword);
+    if (!isMatch) {
+      throw new BadRequestException('Incorrect current password');
+    }
+
+    switch (accountType) {
+      case 'user':
+        await this.usersService.updatePassword(userId, newPassword);
+        break;
+      case 'company':
+        await this.companyService.updatePassword(userId, newPassword);
+        break;
+      case 'party':
+        await this.partyService.updatePassword(userId, newPassword);
+        break;
+      case 'driver':
+        await this.driverService.updatePassword(userId, newPassword);
+        break;
+    }
+
+    await this.activityLogService.log({
+      actorType: accountType.toUpperCase(),
+      actorId: userId,
+      action: 'CHANGE_PASSWORD',
+      description: `${accountType.toUpperCase()} changed password successfully`,
+    });
+
+    return {
+      message: 'Password changed successfully',
+    };
+  }
+
+  async softDeleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { isActive: false },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: user.roles[0] || 'USER',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `User account soft-deleted: ${user.phoneNumber}`,
+      });
+      return { success: true, message: 'User profile soft-deleted successfully' };
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { companyId: userId },
+    });
+    if (company) {
+      await this.prisma.company.update({
+        where: { companyId: userId },
+        data: { status: CompanyStatus.BLOCKED, isVerified: false },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: 'COMPANY',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `Company account soft-deleted: ${company.companyName}`,
+      });
+      return { success: true, message: 'Company profile soft-deleted successfully' };
+    }
+
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: userId },
+    });
+    if (party) {
+      await this.prisma.party.update({
+        where: { partyId: userId },
+        data: { status: 'INACTIVE' },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: 'PARTY',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `Party account soft-deleted: ${party.partyName}`,
+      });
+      return { success: true, message: 'Party profile soft-deleted successfully' };
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: userId },
+    });
+    if (driver) {
+      await this.prisma.driver.update({
+        where: { driverId: userId },
+        data: { isVerified: false },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: 'DRIVER',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `Driver account soft-deleted: ${driver.driverName}`,
+      });
+      return { success: true, message: 'Driver profile soft-deleted successfully' };
+    }
+
+    throw new NotFoundException('Account not found');
   }
 
   async logout(userId: string) {

@@ -265,13 +265,133 @@ export class DriverController {
   @Patch(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'driverDocument', maxCount: 10 },
+        { name: 'driverImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req, file, callback) => {
+            const path = './uploads/documents';
+            try {
+              if (!fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
+              }
+              callback(null, path);
+            } catch (error) {
+              callback(error as Error, path);
+            }
+          },
+          filename: (req, file, callback) => {
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const ext = extname(file.originalname);
+            const prefix =
+              file.fieldname === 'driverImage' ? 'driver-img' : 'driver-doc';
+            callback(null, `${prefix}-${uniqueSuffix}${ext}`);
+          },
+        }),
+      },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', format: 'email', description: 'Email address' },
+        driverImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'Driver Profile Image file or string URL',
+        },
+        driverName: { type: 'string', description: 'Driver Name' },
+        address: { type: 'string', description: 'Address' },
+        district: { type: 'string', description: 'District of the driver' },
+        loadCapacity: { type: 'string', description: 'Load Capacity' },
+        drivingLicenceNumber: {
+          type: 'string',
+          description: 'Driving Licence Number',
+        },
+        nidNumber: { type: 'string', description: 'NID Number' },
+        driverDocument: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          description: 'Driver documents files or string URLs',
+        },
+        lat: { type: 'number', example: 23.8103, description: 'Latitude' },
+        long: { type: 'number', example: 90.4125, description: 'Longitude' },
+        upozela: { type: 'string', description: 'Upozela' },
+        upazela: { type: 'string', description: 'Upazela (alias for upozela)' },
+        truckNumber: { type: 'string', description: 'Truck Number' },
+        truckType: { type: 'string', description: 'Truck Type' },
+      },
+    },
+  })
   @ApiOperation({ summary: 'Update a driver' })
   update(
     @Param('id') id: string,
     @Body() updateDriverDto: UpdateDriverDto,
-    @Req() req: any,
+    @UploadedFiles()
+    files?: {
+      driverDocument?: Express.Multer.File[];
+      driverImage?: Express.Multer.File[];
+    },
+    @Req() req?: any,
   ) {
-    return this.driverService.update(id, updateDriverDto, req.user);
+    let existingDocs: string[] = [];
+    if (updateDriverDto.driverDocument) {
+      if (Array.isArray(updateDriverDto.driverDocument)) {
+        existingDocs = updateDriverDto.driverDocument;
+      } else if (typeof updateDriverDto.driverDocument === 'string') {
+        existingDocs = [updateDriverDto.driverDocument];
+      }
+    }
+
+    let uploadedDocs: string[] = [];
+    if (files?.driverDocument && files.driverDocument.length > 0) {
+      uploadedDocs = files.driverDocument.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
+    }
+
+    if (uploadedDocs.length > 0 || existingDocs.length > 0) {
+      updateDriverDto.driverDocument = [...existingDocs, ...uploadedDocs];
+    }
+
+    if (files?.driverImage && files.driverImage.length > 0) {
+      updateDriverDto.driverImage = `/uploads/documents/${files.driverImage[0].filename}`;
+    }
+
+    const district =
+      updateDriverDto.district || (updateDriverDto as any).districs;
+    const upozela =
+      updateDriverDto.upozela || (updateDriverDto as any).upazela;
+    const truckNumber =
+      updateDriverDto.truckNumber || (updateDriverDto as any).trackNumber;
+    const truckType =
+      updateDriverDto.truckType || (updateDriverDto as any).trackType;
+
+    const normalizedDto: any = {
+      ...updateDriverDto,
+    };
+
+    if (district !== undefined) normalizedDto.district = district;
+    if (upozela !== undefined) normalizedDto.upozela = upozela;
+    if (truckNumber !== undefined) normalizedDto.truckNumber = truckNumber;
+    if (truckType !== undefined) normalizedDto.truckType = truckType;
+
+    delete normalizedDto.districs;
+    delete normalizedDto.upazela;
+    delete normalizedDto.trackNumber;
+    delete normalizedDto.trackType;
+
+    return this.driverService.update(id, normalizedDto, req?.user);
   }
 
   @Get(':id/associations')

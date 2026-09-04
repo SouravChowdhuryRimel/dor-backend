@@ -182,6 +182,11 @@ export class PartyService {
 
     const dataToUpdate: any = { ...updatePartyDto };
 
+    delete dataToUpdate.bazzar;
+    delete dataToUpdate.area;
+    delete dataToUpdate.latitude;
+    delete dataToUpdate.longitude;
+
     if (dataToUpdate.password) {
       if (typeof dataToUpdate.password === 'string' && dataToUpdate.password.trim() !== '') {
         dataToUpdate.password = await argon2.hash(dataToUpdate.password, {

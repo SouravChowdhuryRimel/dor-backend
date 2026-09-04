@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsArray } from 'class-validator';
 
 export class UpdateInquiryDto {
   @ApiPropertyOptional({
@@ -11,6 +11,14 @@ export class UpdateInquiryDto {
   title?: string;
 
   @ApiPropertyOptional({
+    description: 'Name of the product requested',
+    example: 'Supercrete Portland Composite Cement',
+  })
+  @IsString()
+  @IsOptional()
+  productName?: string;
+
+  @ApiPropertyOptional({
     description: 'Detailed description of the inquiry (optional)',
     example:
       'We need high quality premium concrete cement for building foundation.',
@@ -18,6 +26,22 @@ export class UpdateInquiryDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Quantity required (e.g. 500 Bags / 10 Ton)',
+    example: '500 Bags',
+  })
+  @IsString()
+  @IsOptional()
+  quantity?: string;
+
+  @ApiPropertyOptional({
+    description: 'Deadline by when product is required',
+    example: '2026-09-15',
+  })
+  @IsString()
+  @IsOptional()
+  deadline?: string;
 
   @ApiPropertyOptional({
     description: 'Category ID of the inquiry (optional)',
@@ -28,11 +52,10 @@ export class UpdateInquiryDto {
   categoryId?: string;
 
   @ApiPropertyOptional({
-    description: 'Product image (uploaded file URL - optional)',
-    type: 'string',
-    format: 'binary',
+    description: 'Product images (uploaded file URLs - optional)',
+    type: [String],
   })
-  @IsString()
+  @IsArray()
   @IsOptional()
-  imageUrl?: string;
+  imageUrls?: string[];
 }

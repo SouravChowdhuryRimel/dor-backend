@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../core/database/database.service';
-import { Prisma, User, Role } from '@prisma/client';
+import { Prisma, User, Role, CompanyStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { CreateAdminDto } from '../dto/create-admin.dto';
 import { AdminStatusFilter } from '../dto/admin-status-filter.dto';
@@ -380,5 +380,51 @@ export class UsersService implements OnApplicationBootstrap {
       where: { id: userId },
       data: { password: hashedPassword },
     });
+  }
+
+  async softDeleteUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { isActive: false },
+      });
+      return { success: true, message: 'User profile soft-deleted successfully' };
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { companyId: userId },
+    });
+    if (company) {
+      await this.prisma.company.update({
+        where: { companyId: userId },
+        data: { status: CompanyStatus.BLOCKED, isVerified: false },
+      });
+      return { success: true, message: 'Company profile soft-deleted successfully' };
+    }
+
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: userId },
+    });
+    if (party) {
+      await this.prisma.party.update({
+        where: { partyId: userId },
+        data: { status: 'INACTIVE' },
+      });
+      return { success: true, message: 'Party profile soft-deleted successfully' };
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: userId },
+    });
+    if (driver) {
+      await this.prisma.driver.update({
+        where: { driverId: userId },
+        data: { isVerified: false },
+      });
+      return { success: true, message: 'Driver profile soft-deleted successfully' };
+    }
+
+    throw new NotFoundException('Account not found');
   }
 }

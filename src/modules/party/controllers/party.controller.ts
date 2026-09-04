@@ -81,12 +81,14 @@ export class PartyController {
         phoneNumber: { type: 'string' },
         email: { type: 'string', format: 'email' },
         password: { type: 'string' },
-        address: { type: 'string' },
+        address: { type: 'string', example: 'Kaligonj, Lalmonirhat' },
         district: { type: 'string' },
         upozela: { type: 'string' },
         bazzarArea: { type: 'string', description: 'Bazzar/Area' },
         bazzar: { type: 'string', description: 'Bazzar (alias)' },
         area: { type: 'string', description: 'Area (alias)' },
+        latitude: { type: 'number', example: 23.8103 },
+        longitude: { type: 'number', example: 90.4125 },
         description: { type: 'string' },
         categoryId: { type: 'string' },
         treadLicense: { type: 'string' },
@@ -158,9 +160,20 @@ export class PartyController {
       creditLimit: isNaN(creditLimit) ? 0 : creditLimit,
     };
 
+    const latValue = createPartyDto.latitude ?? createPartyDto.lat;
+    if (latValue !== undefined && !isNaN(Number(latValue))) {
+      normalizedDto.lat = Number(latValue);
+    }
+    const longValue = createPartyDto.longitude ?? createPartyDto.long;
+    if (longValue !== undefined && !isNaN(Number(longValue))) {
+      normalizedDto.long = Number(longValue);
+    }
+
     // Remove alias properties
     delete normalizedDto.bazzar;
     delete normalizedDto.area;
+    delete normalizedDto.latitude;
+    delete normalizedDto.longitude;
 
     return this.partyService.create(normalizedDto, req?.user);
   }
@@ -224,39 +237,41 @@ export class PartyController {
     schema: {
       type: 'object',
       properties: {
-        partyName: { type: 'string' },
-        businessName: { type: 'string' },
-        phoneNumber: { type: 'string' },
-        email: { type: 'string', format: 'email' },
-        password: { type: 'string' },
-        address: { type: 'string' },
-        district: { type: 'string' },
-        upozela: { type: 'string' },
-        bazzarArea: { type: 'string', description: 'Bazzar/Area' },
-        bazzar: { type: 'string', description: 'Bazzar (alias)' },
-        area: { type: 'string', description: 'Area (alias)' },
-        description: { type: 'string' },
-        companyId: { type: 'string' },
-        categoryId: { type: 'string' },
-        treadLicense: { type: 'string' },
-        openingDue: { type: 'number' },
-        creditLimit: { type: 'number' },
-        status: {
-          type: 'string',
-          description: 'Status of the party (ACTIVE/INACTIVE)',
-        },
         partyDocument: {
           type: 'array',
           items: {
             type: 'string',
             format: 'binary',
           },
+          description: 'Party document files or URL strings',
         },
+        creditLimit: { type: 'number', description: 'Credit limit amount' },
+        businessName: { type: 'string', description: 'Business Name' },
+        area: { type: 'string', description: 'Area (alias for bazzarArea)' },
+        district: { type: 'string', description: 'District' },
+        bazzar: { type: 'string', description: 'Bazzar (alias for bazzarArea)' },
+        partyName: { type: 'string', description: 'Party Name' },
         profileImage: {
           type: 'string',
           format: 'binary',
-          description: 'profile image of the party',
+          description: 'Profile image file or URL string',
         },
+        status: {
+          type: 'string',
+          description: 'Status of the party (ACTIVE/INACTIVE)',
+        },
+        upozela: { type: 'string', description: 'Upozela' },
+        latitude: { type: 'number', example: 23.8103, description: 'Latitude' },
+        longitude: { type: 'number', example: 90.4125, description: 'Longitude' },
+        address: { type: 'string', description: 'Address' },
+        bazzarArea: { type: 'string', description: 'Bazzar/Area' },
+        treadLicense: { type: 'string', description: 'Trade License' },
+        phoneNumber: { type: 'string', description: 'Phone Number' },
+        companyId: { type: 'string', description: 'Company ID' },
+        categoryId: { type: 'string', description: 'Category ID' },
+        openingDue: { type: 'number', description: 'Opening Due' },
+        email: { type: 'string', format: 'email', description: 'Email address' },
+        description: { type: 'string', description: 'Description' },
       },
     },
   })
@@ -265,7 +280,7 @@ export class PartyController {
     @Param('id') id: string,
     @Body() updatePartyDto: UpdatePartyDto,
     @UploadedFiles()
-    files: {
+    files?: {
       partyDocument?: Express.Multer.File[];
       profileImage?: Express.Multer.File[];
     },
@@ -273,15 +288,28 @@ export class PartyController {
   ) {
     const dataToUpdate: any = { ...updatePartyDto };
 
-    if (files) {
-      if (files.partyDocument && files.partyDocument.length > 0) {
-        dataToUpdate.partyDocument = files.partyDocument.map(
-          (file) => `/uploads/documents/${file.filename}`,
-        );
+    let existingDocs: string[] = [];
+    if (updatePartyDto.partyDocument) {
+      if (Array.isArray(updatePartyDto.partyDocument)) {
+        existingDocs = updatePartyDto.partyDocument;
+      } else if (typeof updatePartyDto.partyDocument === 'string') {
+        existingDocs = [updatePartyDto.partyDocument];
       }
-      if (files.profileImage && files.profileImage.length > 0) {
-        dataToUpdate.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
-      }
+    }
+
+    let uploadedDocs: string[] = [];
+    if (files?.partyDocument && files.partyDocument.length > 0) {
+      uploadedDocs = files.partyDocument.map(
+        (file) => `/uploads/documents/${file.filename}`,
+      );
+    }
+
+    if (uploadedDocs.length > 0 || existingDocs.length > 0) {
+      dataToUpdate.partyDocument = [...existingDocs, ...uploadedDocs];
+    }
+
+    if (files?.profileImage && files.profileImage.length > 0) {
+      dataToUpdate.profileImage = `/uploads/documents/${files.profileImage[0].filename}`;
     }
 
     // Normalize bazzarArea
@@ -291,32 +319,22 @@ export class PartyController {
       dataToUpdate.bazzarArea = bazzarAreaValue;
     }
 
+    // Normalize lat & long
+    const latValue = updatePartyDto.latitude ?? updatePartyDto.lat;
+    if (latValue !== undefined && !isNaN(latValue)) {
+      dataToUpdate.lat = latValue;
+    }
+
+    const longValue = updatePartyDto.longitude ?? updatePartyDto.long;
+    if (longValue !== undefined && !isNaN(longValue)) {
+      dataToUpdate.long = longValue;
+    }
+
     // Remove alias properties
     delete dataToUpdate.bazzar;
     delete dataToUpdate.area;
-
-    // Convert openingDue and creditLimit to numbers in case they were sent as strings in form-data
-    if (dataToUpdate.openingDue !== undefined && dataToUpdate.openingDue !== null && (dataToUpdate.openingDue as any) !== '') {
-      const openingDue = Number(dataToUpdate.openingDue);
-      if (!isNaN(openingDue)) {
-        dataToUpdate.openingDue = openingDue;
-      } else {
-        delete dataToUpdate.openingDue;
-      }
-    } else {
-      delete dataToUpdate.openingDue;
-    }
-
-    if (dataToUpdate.creditLimit !== undefined && dataToUpdate.creditLimit !== null && (dataToUpdate.creditLimit as any) !== '') {
-      const creditLimit = Number(dataToUpdate.creditLimit);
-      if (!isNaN(creditLimit)) {
-        dataToUpdate.creditLimit = creditLimit;
-      } else {
-        delete dataToUpdate.creditLimit;
-      }
-    } else {
-      delete dataToUpdate.creditLimit;
-    }
+    delete dataToUpdate.latitude;
+    delete dataToUpdate.longitude;
 
     // Clean up undefined properties
     Object.keys(dataToUpdate).forEach((key) => {

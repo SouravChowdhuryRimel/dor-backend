@@ -22,6 +22,7 @@ model Product {
   orders        Order[]
   partyRates    PartyProductRate[]
   complaints    Complaint[]
+  inquiryResponses InquiryResponse[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

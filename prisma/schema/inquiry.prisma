@@ -1,12 +1,17 @@
 model Inquiry {
-  inquiryId     String         @id @default(uuid()) @map("inquiry_id")
+  inquiryId     String            @id @default(uuid()) @map("inquiry_id")
   title         String
+  productName   String?           @map("product_name")
   description   String
-  imageUrl      String?        @map("image_url")
-  partyId       String         @map("party_id")
-  party         Party          @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
-  categoryId    String         @map("category_id")
-  category      Category       @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  imageUrls     String[]          @map("image_urls")
+  quantity      String?
+  deadline      DateTime?
+  status        InquiryStatus     @default(OPEN)
+  partyId       String            @map("party_id")
+  party         Party             @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
+  categoryId    String            @map("category_id")
+  category      Category          @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  responses     InquiryResponse[]
   notifications Notification[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -15,4 +20,24 @@ model Inquiry {
   @@index([partyId])
   @@index([categoryId])
   @@map("inquiries")
+}
+
+model InquiryResponse {
+  responseId   String   @id @default(uuid()) @map("response_id")
+  inquiryId    String   @map("inquiry_id")
+  inquiry      Inquiry  @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade)
+  companyId    String   @map("company_id")
+  company      Company  @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  comment      String?
+  offeredPrice Float?   @map("offered_price")
+  productId    String?  @map("product_id")
+  product      Product? @relation(fields: [productId], references: [productId], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([inquiryId, companyId])
+  @@index([inquiryId])
+  @@index([companyId])
+  @@map("inquiry_responses")
 }

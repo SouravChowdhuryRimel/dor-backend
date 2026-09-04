@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Patch,
   Body,
+  Delete,
   UseInterceptors,
   UploadedFiles,
 } from '@nestjs/common';
@@ -463,6 +464,15 @@ export class UserController {
         updateData.bazzarArea = bazzarAreaValue;
       }
 
+      const latVal = body.latitude ?? body.lat;
+      if (latVal !== undefined && !isNaN(Number(latVal))) {
+        updateData.lat = Number(latVal);
+      }
+      const longVal = body.longitude ?? body.long;
+      if (longVal !== undefined && !isNaN(Number(longVal))) {
+        updateData.long = Number(longVal);
+      }
+
       if (body.description !== undefined)
         updateData.description = body.description;
 
@@ -526,5 +536,33 @@ export class UserController {
     }
 
     throw new NotFoundException('Profile role not matched');
+  }
+
+  @Delete('profile')
+  @ApiOperation({
+    summary: 'Delete currently logged-in user profile (Soft delete)',
+    description:
+      'Soft-deletes the profile for the authenticated User, Vendor, Party, or Driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile soft-deleted successfully.',
+  })
+  async deleteProfile(@Req() req: any) {
+    return this.usersService.softDeleteUser(req.user['sub']);
+  }
+
+  @Delete('me')
+  @ApiOperation({
+    summary: 'Delete currently logged-in user profile (Soft delete alias me)',
+    description:
+      'Soft-deletes the profile for the authenticated User, Vendor, Party, or Driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile soft-deleted successfully.',
+  })
+  async deleteMe(@Req() req: any) {
+    return this.usersService.softDeleteUser(req.user['sub']);
   }
 }

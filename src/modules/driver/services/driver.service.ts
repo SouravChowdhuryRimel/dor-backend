@@ -157,14 +157,58 @@ export class DriverService {
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
-    const dataToUpdate = { ...updateDriverDto };
-    if (dataToUpdate.password) {
-      dataToUpdate.password = await argon2.hash(dataToUpdate.password);
+    const { companyIds, partyIds, ...driverData } = updateDriverDto as any;
+
+    if (driverData.password) {
+      driverData.password = await argon2.hash(driverData.password);
+    }
+
+    delete driverData.districs;
+    delete driverData.upazela;
+    delete driverData.trackNumber;
+    delete driverData.trackType;
+
+    const updateInput: Prisma.DriverUpdateInput = {
+      ...driverData,
+    };
+
+    if (companyIds !== undefined && Array.isArray(companyIds)) {
+      if (companyIds.length > 0) {
+        const companyCount = await this.prisma.company.count({
+          where: { companyId: { in: companyIds } },
+        });
+        if (companyCount !== new Set(companyIds).size) {
+          throw new NotFoundException('One or more companies were not found');
+        }
+      }
+      updateInput.companyDrivers = {
+        deleteMany: {},
+        create: [...new Set(companyIds as string[])].map((companyId) => ({
+          companyId,
+        })),
+      };
+    }
+
+    if (partyIds !== undefined && Array.isArray(partyIds)) {
+      if (partyIds.length > 0) {
+        const partyCount = await this.prisma.party.count({
+          where: { partyId: { in: partyIds } },
+        });
+        if (partyCount !== new Set(partyIds).size) {
+          throw new NotFoundException('One or more parties were not found');
+        }
+      }
+      updateInput.partyDrivers = {
+        deleteMany: {},
+        create: [...new Set(partyIds as string[])].map((partyId) => ({
+          partyId,
+        })),
+      };
     }
 
     const updated = await this.prisma.driver.update({
       where: { driverId: id },
-      data: dataToUpdate as any,
+      data: updateInput,
       select: driverDetailsSelect,
     });
 

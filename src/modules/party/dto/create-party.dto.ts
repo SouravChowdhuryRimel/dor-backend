@@ -139,10 +139,26 @@ export class CreatePartyDto {
   })
   @IsNumber()
   @IsOptional()
-  lat?: number;
+  latitude?: number;
 
   @ApiPropertyOptional({
     description: 'Longitude of party location',
+    example: 90.4125,
+  })
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Latitude of party location (alias lat)',
+    example: 23.8103,
+  })
+  @IsNumber()
+  @IsOptional()
+  lat?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude of party location (alias long)',
     example: 90.4125,
   })
   @IsNumber()

@@ -39,11 +39,20 @@ function generateSuccessMessage(method: string, url: string): string {
   if (cleanPath.includes('/auth/refresh')) {
     return 'Token refreshed successfully';
   }
+  if (cleanPath.includes('/auth/change-password')) {
+    return 'Password changed successfully';
+  }
   if (
     cleanPath.includes('/auth/password/reset') ||
     cleanPath.includes('/auth/forgot-password')
   ) {
     return 'Password reset action completed successfully';
+  }
+  if (
+    cleanPath.includes('/delete-account') ||
+    cleanPath.includes('/delete-user')
+  ) {
+    return 'Account soft-deleted successfully';
   }
 
   // Extract the first segment after /api/v1/
