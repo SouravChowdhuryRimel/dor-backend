@@ -259,8 +259,18 @@ export class ProductService {
         effectivePrice = p.regularPrice;
       }
 
+      const companyObj = p.company
+        ? {
+            companyName: p.company.companyName,
+            ownerName: p.company.ownerName,
+            companyPhone: p.company.phoneNumber || null,
+            category: p.company.category,
+          }
+        : null;
+
       return {
         ...p,
+        company: companyObj,
         effectivePrice,
         hasSpecialPrice,
         specialPrice,
@@ -363,8 +373,18 @@ export class ProductService {
       effectivePrice = product.regularPrice;
     }
 
+    const companyObj = pAny.company
+      ? {
+          companyName: pAny.company.companyName,
+          ownerName: pAny.company.ownerName,
+          companyPhone: pAny.company.phoneNumber || null,
+          category: pAny.company.category,
+        }
+      : null;
+
     return {
       ...product,
+      company: companyObj,
       effectivePrice,
       hasSpecialPrice,
       specialPrice,
@@ -571,20 +591,31 @@ export class ProductService {
       }),
     ]);
 
-    const mappedData = data.map((p) => ({
-      ...p,
-      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyName: p.company?.companyName || null,
-      companyPhone: p.company?.phoneNumber || null,
-      categoryName: p.category?.categoryName || null,
-      subCategoryName: p.subCategory?.title || null,
-      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
-      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
-      unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
-      stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
-      minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
-    }));
+    const mappedData = data.map((p: any) => {
+      const companyObj = p.company
+        ? {
+            companyName: p.company.companyName,
+            ownerName: p.company.ownerName,
+            companyPhone: p.company.phoneNumber || null,
+          }
+        : null;
+
+      return {
+        ...p,
+        company: companyObj,
+        stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+        companyName: p.company?.companyName || null,
+        companyPhone: p.company?.phoneNumber || null,
+        categoryName: p.category?.categoryName || null,
+        subCategoryName: p.subCategory?.title || null,
+        status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+        statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+        unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
+        stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
+        minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
+      };
+    });
 
     return createPaginatedResponse(mappedData, total, page, limit);
   }
