@@ -701,7 +701,11 @@ export class ProductService {
         if (partyId !== reqUser.sub) {
           throw new ForbiddenException(`You do not have permission to view other parties' rates`);
         }
-        where.companyId = party.companyId || 'none';
+        if (companyId) {
+          where.companyId = companyId;
+        } else if (party.companyId) {
+          where.companyId = party.companyId;
+        }
       } else if (reqUser.roles.includes('VENDOR')) {
         where.companyId = reqUser.sub;
       } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
@@ -710,6 +714,10 @@ export class ProductService {
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         where.categoryId = { in: categoryIds };
+        if (companyId) {
+          where.companyId = companyId;
+        }
+      } else if (reqUser.roles.includes('SUPER_ADMIN')) {
         if (companyId) {
           where.companyId = companyId;
         }

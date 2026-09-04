@@ -26,6 +26,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { AccessTokenGuard } from 'src/common/guards/access-token.guard';
 import { OptionalAccessTokenGuard } from 'src/common/guards/optional-access-token.guard';
@@ -166,6 +167,12 @@ export class ProductController {
   @UseGuards(AccessTokenGuard)
   @ApiOperation({
     summary: 'Get customized rates list of all products for a specific party',
+  })
+  @ApiQuery({
+    name: 'companyId',
+    required: false,
+    type: String,
+    description: 'Filter party rates by specific company ID (Optional)',
   })
   @ApiResponse({ status: 200, description: 'Return rates list.' })
   getPartyRates(
