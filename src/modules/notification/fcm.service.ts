@@ -69,13 +69,23 @@ export class FcmService implements OnModuleInit {
     }
 
     try {
+      // Ensure all values in data dictionary are strings
+      const safeData: Record<string, string> = {};
+      if (data) {
+        Object.entries(data).forEach(([key, val]) => {
+          if (val !== undefined && val !== null) {
+            safeData[key] = String(val);
+          }
+        });
+      }
+
       const message: Message = {
         token: fcmToken,
         notification: {
           title,
           body,
         },
-        data: data || {},
+        data: safeData,
       };
 
       const response = await getMessaging(this.firebaseApp).send(message);

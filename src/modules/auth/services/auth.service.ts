@@ -1137,6 +1137,63 @@ export class AuthService {
     }
   }
 
+  async updateFcmToken(userId: string, fcmToken: string) {
+    try {
+      // 1. Check User
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      // 2. Check Company
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        await this.prisma.company.update({
+          where: { companyId: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      // 3. Check Party
+      const party = await this.prisma.party.findUnique({
+        where: { partyId: userId },
+      });
+      if (party) {
+        await this.prisma.party.update({
+          where: { partyId: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      // 4. Check Driver
+      const driver = await this.prisma.driver.findUnique({
+        where: { driverId: userId },
+      });
+      if (driver) {
+        await this.prisma.driver.update({
+          where: { driverId: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      throw new NotFoundException('User entity not found');
+    } catch (error) {
+      this.logger.error(
+        `Failed to update FCM token for ${userId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
   async removeFcmToken(userId: string) {
     try {
       // 1. Check User

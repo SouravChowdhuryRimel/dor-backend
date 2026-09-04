@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   Req,
   UseGuards,
@@ -21,6 +22,7 @@ import { RegisterDto } from '../dto/register.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
+import { UpdateFcmTokenDto } from '../dto/update-fcm-token.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RefreshTokenGuard } from '../../../common/guards/refresh-token.guard';
 import {
@@ -241,6 +243,38 @@ export class AuthController {
     const refreshToken = req.user['refreshToken'];
     const tokenType = req.user['tokenType'];
     return this.authService.refreshTokens(userId, refreshToken, tokenType);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Post('fcm-token')
+  @ApiOperation({
+    summary: 'Update/Save FCM token of logged in user (POST)',
+    description:
+      'Saves or updates the FCM push notification token for the authenticated user, company, party, or driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token updated successfully.',
+  })
+  updateFcmTokenPost(@Req() req: any, @Body() dto: UpdateFcmTokenDto) {
+    return this.authService.updateFcmToken(req.user['sub'], dto.fcmToken);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Patch('fcm-token')
+  @ApiOperation({
+    summary: 'Update/Save FCM token of logged in user (PATCH)',
+    description:
+      'Saves or updates the FCM push notification token for the authenticated user, company, party, or driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token updated successfully.',
+  })
+  updateFcmTokenPatch(@Req() req: any, @Body() dto: UpdateFcmTokenDto) {
+    return this.authService.updateFcmToken(req.user['sub'], dto.fcmToken);
   }
 
   @ApiBearerAuth()
