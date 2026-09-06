@@ -151,8 +151,8 @@ export class ProductService {
         });
         if (party && party.companyId) {
           where.companyId = party.companyId;
-        } else {
-          where.companyId = 'none';
+        } else if (query?.companyId) {
+          where.companyId = query.companyId;
         }
       } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
         const adminCategories = await this.prisma.adminCategory.findMany({
@@ -209,15 +209,8 @@ export class ProductService {
       category: true,
       subCategory: true,
       company: {
-        select: {
-          companyName: true,
-          ownerName: true,
-          phoneNumber: true,
-          category: {
-            select: {
-              categoryName: true,
-            },
-          },
+        include: {
+          category: true,
         },
       },
     };
@@ -225,6 +218,13 @@ export class ProductService {
     if (partyId) {
       includeQuery.partyRates = {
         where: { partyId },
+      };
+      includeQuery.offers = {
+        where: {
+          partyId,
+          status: 'ACTIVE',
+          endDate: { gte: new Date() },
+        },
       };
     }
 
@@ -239,58 +239,116 @@ export class ProductService {
       }),
     ]);
 
-    const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
-      let hasSpecialPrice = false;
-      let specialPrice = null;
-
-      if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
-        hasSpecialPrice = true;
-        specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
-      }
-
-      const companyObj = p.company
-        ? {
-            companyName: p.company.companyName,
-            ownerName: p.company.ownerName,
-            companyPhone: p.company.phoneNumber || null,
-            category: p.company.category,
-          }
-        : null;
-
-      return {
-        ...p,
-        company: companyObj,
-        effectivePrice,
-        hasSpecialPrice,
-        specialPrice,
-        activePrice: effectivePrice,
-        stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-        stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-        companyCategoryName: p.company?.category?.categoryName || null,
-        companyName: p.company?.companyName || null,
-        companyPhone: p.company?.phoneNumber || null,
-        categoryName: p.category?.categoryName || null,
-        subCategoryName: p.subCategory?.title || null,
-        status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
-        statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
-        unitText: p.unit ? 'প্রতি ' + p.unit : 'প্রতি ব্যাগ',
-        stockText: `${p.stockSize} ${p.unit || 'ব্যাগ'}`,
-        minOrderText: `সর্বনিম্ন অর্ডার: ${p.minimumOrder}`,
-      };
-    });
+    const mappedData = data.map((p: any) => this.formatProductDetails(p, partyId));
 
     return createPaginatedResponse(mappedData, total, page, limit);
+  }
+
+  private formatProductDetails(p: any, partyId?: string | null) {
+    const customRateObj = p.partyRates?.[0];
+    const activeOfferObj = p.offers?.find(
+      (o: any) => o.status === 'ACTIVE' && new Date(o.endDate) >= new Date(),
+    ) || p.offers?.[0];
+
+    const regularPrice = p.regularPrice ?? p.defaultPrice ?? 0;
+    const defaultPrice = p.defaultPrice ?? 0;
+    const offerPrice = p.offerPrice ?? 0;
+
+    let effectivePrice = regularPrice || defaultPrice;
+    let hasSpecialPrice = false;
+    let specialPrice: number | null = null;
+    let hasActiveOffer = false;
+    let activeOffer: any = null;
+    let appliedPricingType = 'REGULAR_PRICE';
+    let appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
+
+    if (customRateObj && customRateObj.rate !== undefined && customRateObj.rate !== null) {
+      effectivePrice = customRateObj.rate;
+      hasSpecialPrice = true;
+      specialPrice = customRateObj.rate;
+      appliedPricingType = 'SPECIAL_PRICE';
+      appliedPricingReason = 'পার্টির জন্য স্পেশাল রেট প্রযোজ্য';
+    } else if (activeOfferObj && activeOfferObj.offerPrice > 0) {
+      effectivePrice = activeOfferObj.offerPrice;
+      hasActiveOffer = true;
+      activeOffer = activeOfferObj;
+      appliedPricingType = 'OFFER_PRICE';
+      appliedPricingReason = 'চলমান অফার মূল্য প্রযোজ্য';
+    } else if (offerPrice > 0) {
+      effectivePrice = offerPrice;
+      hasActiveOffer = true;
+      appliedPricingType = 'OFFER_PRICE';
+      appliedPricingReason = 'প্রোডাক্টের অফার মূল্য প্রযোজ্য';
+    } else {
+      effectivePrice = regularPrice || defaultPrice;
+      appliedPricingType = 'REGULAR_PRICE';
+      appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
+    }
+
+    const discountAmount = regularPrice > effectivePrice ? Math.round((regularPrice - effectivePrice) * 100) / 100 : 0;
+    const discountPercentage = regularPrice > 0 && regularPrice > effectivePrice
+      ? Math.round(((regularPrice - effectivePrice) / regularPrice) * 100)
+      : 0;
+
+    const unitText = p.unit ? `প্রতি ${p.unit} ${p.unitType || ''}`.trim() : `প্রতি ${p.unitType || 'ব্যাগ'}`;
+    const stockText = `${p.stockSize} ${p.unitType || p.unit || 'ব্যাগ'}`;
+    const minOrderText = `সর্বনিম্ন অর্ডার: ${p.minimumOrder} ${p.unitType || p.unit || 'ব্যাগ'}`;
+
+    return {
+      productId: p.productId,
+      productName: p.productName,
+      productImage: Array.isArray(p.productImage) ? p.productImage : (p.productImage ? [p.productImage] : []),
+      description: p.description || '',
+      unit: p.unit,
+      unitType: p.unitType,
+      unitText,
+      bagSize: p.bagSize,
+      packagingType: p.packagingType,
+      packagingTypeText: p.packagingType || 'ব্যাগ',
+      stockSize: p.stockSize,
+      stockText,
+      stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+      stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
+      minimumOrder: p.minimumOrder,
+      minOrderText,
+      status: p.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
+      statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
+
+      // Pricing details
+      defaultPrice,
+      regularPrice,
+      offerPrice,
+      specialPrice,
+      specialRate: specialPrice,
+      customPrice: specialPrice,
+      hasSpecialPrice,
+      hasActiveOffer,
+      activeOffer: activeOffer || null,
+      activePrice: effectivePrice,
+      effectivePrice,
+      appliedPricingType,
+      appliedPricingReason,
+      discountAmount,
+      discountPercentage,
+
+      // Relations & Metadata
+      categoryId: p.categoryId,
+      categoryName: p.category?.categoryName || null,
+      category: p.category || null,
+      subCategoryId: p.subCategoryId || null,
+      subCategoryName: p.subCategory?.title || null,
+      subCategory: p.subCategory || null,
+      companyId: p.companyId,
+      companyName: p.company?.companyName || null,
+      companyPhone: p.company?.phoneNumber || null,
+      company: p.company || null,
+      partyRates: p.partyRates || [],
+      partyRate: customRateObj || null,
+      offers: p.offers || [],
+
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    };
   }
 
   async findOne(id: string, reqUser?: any) {
@@ -302,15 +360,8 @@ export class ProductService {
       category: true,
       subCategory: true,
       company: {
-        select: {
-          companyName: true,
-          ownerName: true,
-          phoneNumber: true,
-          category: {
-            select: {
-              categoryName: true,
-            },
-          },
+        include: {
+          category: true,
         },
       },
     };
@@ -318,6 +369,13 @@ export class ProductService {
     if (partyId) {
       includeQuery.partyRates = {
         where: { partyId },
+      };
+      includeQuery.offers = {
+        where: {
+          partyId,
+          status: 'ACTIVE',
+          endDate: { gte: new Date() },
+        },
       };
     }
 
@@ -339,7 +397,7 @@ export class ProductService {
           where: { partyId: reqUser.sub },
           select: { companyId: true },
         });
-        if (!party || party.companyId !== product.companyId) {
+        if (party && party.companyId && party.companyId !== product.companyId) {
           throw new ForbiddenException(`You do not have permission to access this product`);
         }
       } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
@@ -353,55 +411,7 @@ export class ProductService {
       }
     }
 
-    let effectivePrice =
-      product.offerPrice || product.regularPrice || product.defaultPrice || 0;
-    let hasSpecialPrice = false;
-    let specialPrice = null;
-
-    const pAny = product as any;
-    if (pAny.partyRates && pAny.partyRates.length > 0) {
-      effectivePrice = pAny.partyRates[0].rate;
-      hasSpecialPrice = true;
-      specialPrice = pAny.partyRates[0].rate;
-    } else if (
-      product.offerPrice !== undefined &&
-      product.offerPrice !== null &&
-      product.offerPrice > 0
-    ) {
-      effectivePrice = product.offerPrice;
-    } else {
-      effectivePrice = product.regularPrice;
-    }
-
-    const companyObj = pAny.company
-      ? {
-          companyName: pAny.company.companyName,
-          ownerName: pAny.company.ownerName,
-          companyPhone: pAny.company.phoneNumber || null,
-          category: pAny.company.category,
-        }
-      : null;
-
-    return {
-      ...product,
-      company: companyObj,
-      effectivePrice,
-      hasSpecialPrice,
-      specialPrice,
-      activePrice: effectivePrice,
-      stockStatus: product.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
-      stockStatusText: product.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
-      companyCategoryName: pAny.company?.category?.categoryName || null,
-      companyName: pAny.company?.companyName || null,
-      companyPhone: pAny.company?.phoneNumber || null,
-      categoryName: pAny.category?.categoryName || null,
-      subCategoryName: pAny.subCategory?.title || null,
-      status: product.stockSize > 0 ? 'ACTIVE' : 'INACTIVE',
-      statusText: product.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
-      unitText: product.unit ? 'প্রতি ' + product.unit : 'প্রতি ব্যাগ',
-      stockText: `${product.stockSize} ${product.unit || 'ব্যাগ'}`,
-      minOrderText: `সর্বনিম্ন অর্ডার: ${product.minimumOrder}`,
-    };
+    return this.formatProductDetails(product, partyId);
   }
 
   async update(id: string, updateProductDto: UpdateProductDto, reqUser?: any) {
@@ -729,31 +739,30 @@ export class ProductService {
     const products = await this.prisma.product.findMany({
       where,
       include: {
+        category: true,
+        subCategory: true,
+        company: {
+          include: {
+            category: true,
+          },
+        },
         partyRates: {
           where: { partyId },
         },
+        offers: {
+          where: {
+            partyId,
+            status: 'ACTIVE',
+            endDate: { gte: new Date() },
+          },
+        },
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    return products.map((product) => {
-      const customRateObj = product.partyRates[0];
-      return {
-        productId: product.productId,
-        productName: product.productName,
-        productImage: product.productImage,
-        unit: product.unit,
-        bagSize: product.bagSize,
-        defaultPrice: product.defaultPrice,
-        customPrice: customRateObj ? customRateObj.rate : null,
-        activePrice: customRateObj ? customRateObj.rate : product.defaultPrice,
-        minimumOrder: product.minimumOrder,
-        description: product.description,
-        stockSize: product.stockSize,
-        subCategoryId: product.subCategoryId,
-        createdAt: product.createdAt,
-        updatedAt: product.updatedAt,
-      };
-    });
+    return products.map((product: any) =>
+      this.formatProductDetails(product, partyId),
+    );
   }
 
   async getProductPartyRates(productId: string, reqUser?: any) {

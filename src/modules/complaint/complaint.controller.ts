@@ -86,7 +86,7 @@ export class ComplaintController {
       required: ['title', 'description', 'partyId', 'companyId'],
     },
   })
-  create(
+  async create(
     @Body() createComplaintDto: CreateComplaintDto,
     @UploadedFiles() files: Express.Multer.File[],
     @Req() req: any,
@@ -98,7 +98,11 @@ export class ComplaintController {
     } else {
       createComplaintDto.attachments = [];
     }
-    return this.complaintService.create(createComplaintDto, req.user);
+    const complaint = await this.complaintService.create(createComplaintDto, req.user);
+    return {
+      message: 'Complaint submitted successfully',
+      data: complaint,
+    };
   }
 
   @Get()
@@ -149,7 +153,7 @@ export class ComplaintController {
       required: ['senderId', 'senderRole', 'senderName', 'message'],
     },
   })
-  addReply(
+  async addReply(
     @Param('id') id: string,
     @Body() createComplaintReplyDto: CreateComplaintReplyDto,
     @UploadedFiles() files: Express.Multer.File[],
@@ -162,11 +166,15 @@ export class ComplaintController {
     } else {
       createComplaintReplyDto.attachments = [];
     }
-    return this.complaintService.addReply(
+    const reply = await this.complaintService.addReply(
       id,
       createComplaintReplyDto,
       req.user,
     );
+    return {
+      message: 'Reply posted successfully',
+      data: reply,
+    };
   }
 
   @Patch(':id/status')
@@ -178,15 +186,19 @@ export class ComplaintController {
     description: 'Complaint status successfully updated.',
   })
   @ApiResponse({ status: 404, description: 'Complaint not found.' })
-  updateStatus(
+  async updateStatus(
     @Param('id') id: string,
     @Body() updateComplaintStatusDto: UpdateComplaintStatusDto,
     @Req() req: any,
   ) {
-    return this.complaintService.updateStatus(
+    const updated = await this.complaintService.updateStatus(
       id,
       updateComplaintStatusDto.status,
       req.user,
     );
+    return {
+      message: 'Complaint status updated successfully',
+      data: updated,
+    };
   }
 }

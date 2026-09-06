@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { Role } from '../../common/constants/role.enum';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateComplaintDto } from './dto/create-complaint.dto';
@@ -7,90 +7,181 @@ import { GetComplaintsQueryDto } from './dto/get-complaints-query.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { ComplaintStatus } from '@prisma/client';
 import { ActivityLogService } from '../activity-log/activity-log.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGateway } from '../notification/notification.gateway';
 
 @Injectable()
 export class ComplaintService {
+  private readonly logger = new Logger(ComplaintService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(createComplaintDto: CreateComplaintDto, reqUser?: any) {
+    const partyId = createComplaintDto.partyId?.trim();
+    const companyId = createComplaintDto.companyId?.trim();
+    const orderId = createComplaintDto.orderId?.trim() || null;
+    const driverId = createComplaintDto.driverId?.trim() || null;
+    const productId = createComplaintDto.productId?.trim() || null;
+    const title = createComplaintDto.title?.trim();
+    const description = createComplaintDto.description?.trim();
+    const attachments = Array.isArray(createComplaintDto.attachments)
+      ? createComplaintDto.attachments
+      : [];
+
     // Verify party exists
     const partyExists = await this.prisma.party.findUnique({
-      where: { partyId: createComplaintDto.partyId },
+      where: { partyId },
     });
     if (!partyExists) {
       throw new NotFoundException(
-        `Party with ID "${createComplaintDto.partyId}" not found`,
+        `Party with ID "${partyId}" not found`,
       );
     }
 
     // Verify company exists
     const companyExists = await this.prisma.company.findUnique({
-      where: { companyId: createComplaintDto.companyId },
+      where: { companyId },
     });
     if (!companyExists) {
       throw new NotFoundException(
-        `Company with ID "${createComplaintDto.companyId}" not found`,
+        `Company with ID "${companyId}" not found`,
       );
     }
 
     // Verify order exists if orderId is provided
-    if (createComplaintDto.orderId) {
+    if (orderId) {
       const orderExists = await this.prisma.order.findUnique({
-        where: { orderId: createComplaintDto.orderId },
+        where: { orderId },
       });
       if (!orderExists) {
         throw new NotFoundException(
-          `Order with ID "${createComplaintDto.orderId}" not found`,
+          `Order with ID "${orderId}" not found`,
         );
       }
     }
 
     // Verify driver exists if driverId is provided
-    if (createComplaintDto.driverId) {
+    if (driverId) {
       const driverExists = await this.prisma.driver.findUnique({
-        where: { driverId: createComplaintDto.driverId },
+        where: { driverId },
       });
       if (!driverExists) {
         throw new NotFoundException(
-          `Driver with ID "${createComplaintDto.driverId}" not found`,
+          `Driver with ID "${driverId}" not found`,
         );
       }
     }
 
     // Verify product exists if productId is provided
-    if (createComplaintDto.productId) {
+    if (productId) {
       const productExists = await this.prisma.product.findUnique({
-        where: { productId: createComplaintDto.productId },
+        where: { productId },
       });
       if (!productExists) {
         throw new NotFoundException(
-          `Product with ID "${createComplaintDto.productId}" not found`,
+          `Product with ID "${productId}" not found`,
         );
       }
     }
 
     const showComplaintId =
-      createComplaintDto.showComplaintId ||
+      createComplaintDto.showComplaintId?.trim() ||
       `CMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const complaint = await this.prisma.complaint.create({
       data: {
-        ...createComplaintDto,
+        title,
+        description,
+        partyId,
+        companyId,
+        orderId,
+        driverId,
+        productId,
         showComplaintId,
+        attachments,
+      },
+      include: {
+        party: true,
+        company: true,
+        order: true,
+        driver: true,
+        product: true,
       },
     });
 
-    const actorId = reqUser?.sub || createComplaintDto.partyId;
+    const actorId = reqUser?.sub || partyId;
     const actorType = reqUser?.roles[0] || 'PARTY';
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'CREATE_COMPLAINT',
-      description: `Filed complaint ${showComplaintId}: ${createComplaintDto.title}`,
+      description: `Filed complaint ${showComplaintId}: ${title}`,
     });
+
+    // Send notifications to Company, Driver (if any), and Admins
+    try {
+      const partyName = partyExists.partyName || partyExists.businessName || 'A party';
+
+      // 1. Notify Company (Vendor)
+      await this.notificationService.sendNotification({
+        title: `New Complaint: ${showComplaintId}`,
+        message: `${partyName} filed a complaint: "${title}"`,
+        companyId,
+        data: {
+          complaintId: complaint.complaintId,
+          showComplaintId,
+          type: 'COMPLAINT_CREATED',
+        },
+      });
+
+      // 2. Notify Driver if assigned to complaint
+      if (driverId) {
+        await this.notificationService.sendNotification({
+          title: `Complaint Filed: ${showComplaintId}`,
+          message: `A complaint regarding delivery was filed: "${title}"`,
+          driverId,
+          data: {
+            complaintId: complaint.complaintId,
+            showComplaintId,
+            type: 'COMPLAINT_CREATED',
+          },
+        });
+      }
+
+      // 3. Notify Admins
+      const adminUsers = await this.prisma.user.findMany({
+        where: { roles: { hasSome: [Role.ADMIN, Role.SUPER_ADMIN] } },
+        select: { id: true },
+      });
+      for (const admin of adminUsers) {
+        await this.notificationService.sendNotification({
+          title: `New Complaint: ${showComplaintId}`,
+          message: `${partyName} filed a complaint against ${companyExists.companyName}: "${title}"`,
+          userId: admin.id,
+          data: {
+            complaintId: complaint.complaintId,
+            showComplaintId,
+            type: 'COMPLAINT_CREATED',
+          },
+        });
+      }
+
+      // 4. Real-time broadcast to Admin WebSocket Room
+      this.notificationGateway.sendNotificationToAdmin({
+        title: `New Complaint: ${showComplaintId}`,
+        message: `${partyName} filed a complaint against ${companyExists.companyName}: "${title}"`,
+        complaintId: complaint.complaintId,
+        showComplaintId,
+        type: 'COMPLAINT_CREATED',
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to send complaint notifications: ${err.message}`, err.stack);
+    }
 
     return complaint;
   }
@@ -102,22 +193,100 @@ export class ComplaintService {
   ) {
     const complaint = await this.findOne(complaintId, reqUser);
 
+    const senderId = createComplaintReplyDto.senderId?.trim();
+    const senderRole = createComplaintReplyDto.senderRole;
+    const senderName = createComplaintReplyDto.senderName?.trim();
+    const message = createComplaintReplyDto.message?.trim();
+    const attachments = Array.isArray(createComplaintReplyDto.attachments)
+      ? createComplaintReplyDto.attachments
+      : [];
+
     const reply = await this.prisma.complaintMessage.create({
       data: {
-        ...createComplaintReplyDto,
         complaintId,
+        senderId,
+        senderRole,
+        senderName,
+        message,
+        attachments,
       },
     });
 
-    const actorId = reqUser?.sub || createComplaintReplyDto.senderId;
+    const actorId = reqUser?.sub || senderId;
     const actorType =
-      reqUser?.roles[0] || createComplaintReplyDto.senderRole || 'USER';
+      reqUser?.roles[0] || senderRole || 'USER';
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'REPLY_COMPLAINT',
       description: `Posted reply to complaint ${complaint.showComplaintId}`,
     });
+
+    // Notify thread participants
+    try {
+      const shortMsg = message.length > 80 ? `${message.substring(0, 80)}...` : message;
+      const isParty = complaint.partyId === senderId || actorType === 'PARTY';
+      const isCompany = complaint.companyId === senderId || actorType === 'VENDOR';
+
+      if (isParty) {
+        // Party replied -> Notify Company
+        await this.notificationService.sendNotification({
+          title: `Reply on Complaint: ${complaint.showComplaintId}`,
+          message: `${senderName}: "${shortMsg}"`,
+          companyId: complaint.companyId,
+          data: {
+            complaintId: complaint.complaintId,
+            showComplaintId: complaint.showComplaintId,
+            type: 'COMPLAINT_REPLIED',
+          },
+        });
+      } else if (isCompany) {
+        // Company replied -> Notify Party
+        await this.notificationService.sendNotification({
+          title: `Reply on Complaint: ${complaint.showComplaintId}`,
+          message: `${senderName}: "${shortMsg}"`,
+          partyId: complaint.partyId,
+          data: {
+            complaintId: complaint.complaintId,
+            showComplaintId: complaint.showComplaintId,
+            type: 'COMPLAINT_REPLIED',
+          },
+        });
+      } else {
+        // Admin or other replied -> Notify both Party & Company
+        await this.notificationService.sendNotification({
+          title: `Admin Reply on Complaint: ${complaint.showComplaintId}`,
+          message: `${senderName}: "${shortMsg}"`,
+          partyId: complaint.partyId,
+          data: {
+            complaintId: complaint.complaintId,
+            showComplaintId: complaint.showComplaintId,
+            type: 'COMPLAINT_REPLIED',
+          },
+        });
+        await this.notificationService.sendNotification({
+          title: `Admin Reply on Complaint: ${complaint.showComplaintId}`,
+          message: `${senderName}: "${shortMsg}"`,
+          companyId: complaint.companyId,
+          data: {
+            complaintId: complaint.complaintId,
+            showComplaintId: complaint.showComplaintId,
+            type: 'COMPLAINT_REPLIED',
+          },
+        });
+      }
+
+      // Also alert Admins
+      this.notificationGateway.sendNotificationToAdmin({
+        title: `Reply on Complaint: ${complaint.showComplaintId}`,
+        message: `${senderName} (${senderRole}): "${shortMsg}"`,
+        complaintId: complaint.complaintId,
+        showComplaintId: complaint.showComplaintId,
+        type: 'COMPLAINT_REPLIED',
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to send reply notifications: ${err.message}`, err.stack);
+    }
 
     return reply;
   }
@@ -127,17 +296,17 @@ export class ComplaintService {
     if (query?.status) {
       where.status = query.status;
     }
-    if (query?.partyId) {
-      where.partyId = query.partyId;
+    if (query?.partyId?.trim()) {
+      where.partyId = query.partyId.trim();
     }
-    if (query?.companyId) {
-      where.companyId = query.companyId;
+    if (query?.companyId?.trim()) {
+      where.companyId = query.companyId.trim();
     }
-    if (query?.driverId) {
-      where.driverId = query.driverId;
+    if (query?.driverId?.trim()) {
+      where.driverId = query.driverId.trim();
     }
-    if (query?.productId) {
-      where.productId = query.productId;
+    if (query?.productId?.trim()) {
+      where.productId = query.productId.trim();
     }
 
     if (reqUser && reqUser.roles) {
@@ -252,6 +421,12 @@ export class ComplaintService {
     const updated = await this.prisma.complaint.update({
       where: { complaintId },
       data: { status },
+      include: {
+        party: true,
+        company: true,
+        order: true,
+        driver: true,
+      },
     });
 
     const actorId = reqUser?.sub || updated.partyId;
@@ -262,6 +437,55 @@ export class ComplaintService {
       action: 'UPDATE_COMPLAINT_STATUS',
       description: `Updated complaint ${complaint.showComplaintId} status to ${status}`,
     });
+
+    // Notify Party and Company of status update
+    try {
+      const statusTitle = `Complaint ${complaint.showComplaintId} Status Updated`;
+      const statusMessage = `Complaint ${complaint.showComplaintId} has been updated to "${status}".`;
+
+      // 1. Notify Party
+      await this.notificationService.sendNotification({
+        title: statusTitle,
+        message: statusMessage,
+        partyId: updated.partyId,
+        data: {
+          complaintId: updated.complaintId,
+          showComplaintId: complaint.showComplaintId,
+          status,
+          type: 'COMPLAINT_STATUS_UPDATED',
+        },
+      });
+
+      // 2. Notify Company
+      await this.notificationService.sendNotification({
+        title: statusTitle,
+        message: statusMessage,
+        companyId: updated.companyId,
+        data: {
+          complaintId: updated.complaintId,
+          showComplaintId: complaint.showComplaintId,
+          status,
+          type: 'COMPLAINT_STATUS_UPDATED',
+        },
+      });
+
+      // 3. Notify Driver if attached
+      if (updated.driverId) {
+        await this.notificationService.sendNotification({
+          title: statusTitle,
+          message: statusMessage,
+          driverId: updated.driverId,
+          data: {
+            complaintId: updated.complaintId,
+            showComplaintId: complaint.showComplaintId,
+            status,
+            type: 'COMPLAINT_STATUS_UPDATED',
+          },
+        });
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to send status update notification: ${err.message}`, err.stack);
+    }
 
     return updated;
   }

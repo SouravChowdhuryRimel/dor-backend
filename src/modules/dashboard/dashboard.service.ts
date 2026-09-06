@@ -5,7 +5,15 @@ import {
   ComplaintStatus,
   DeliveryStatus,
   OrderStatus,
+  Role,
 } from '@prisma/client';
+
+const ACCEPTED_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.ACCEPTED,
+  OrderStatus.PROCESSING,
+  OrderStatus.DISPATCHED,
+  OrderStatus.DELIVERED,
+];
 
 @Injectable()
 export class DashboardService {
@@ -73,7 +81,10 @@ export class DashboardService {
     const totalParties = await this.prisma.party.count({ where: partyWhere });
 
     const totalOrderValueAggregate = await this.prisma.order.aggregate({
-      where: orderWhere,
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       _sum: { totalRate: true, bag: true },
     });
     const totalOrderValue = totalOrderValueAggregate._sum.totalRate || 0;
@@ -127,6 +138,7 @@ export class DashboardService {
           gte: startOfTrend,
         },
         ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: {
         createdAt: true,
@@ -163,7 +175,10 @@ export class DashboardService {
 
     // Top performers
     const productOrdersGroup = await this.prisma.order.groupBy({
-      where: orderWhere,
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['productId'],
       _count: { _all: true },
       _sum: { bag: true, totalRate: true },
@@ -191,7 +206,10 @@ export class DashboardService {
     });
 
     const companyOrdersGroup = await this.prisma.order.groupBy({
-      where: orderWhere,
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['companyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -220,7 +238,10 @@ export class DashboardService {
     });
 
     const partyOrdersGroup = await this.prisma.order.groupBy({
-      where: orderWhere,
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['partyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -346,7 +367,10 @@ export class DashboardService {
     });
 
     const orderValueAggregate = await this.prisma.order.aggregate({
-      where: { companyId },
+      where: {
+        companyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       _sum: { totalRate: true, bag: true },
     });
     const totalOrderValue = orderValueAggregate._sum.totalRate || 0;
@@ -403,6 +427,7 @@ export class DashboardService {
       where: {
         companyId,
         createdAt: { gte: startOfTrend },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: { createdAt: true, totalRate: true },
     });
@@ -449,6 +474,7 @@ export class DashboardService {
       where: {
         companyId,
         createdAt: { gte: startOf6MonthTrend },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: { createdAt: true, totalRate: true, bag: true },
     });
@@ -483,7 +509,10 @@ export class DashboardService {
 
     // Top Parties
     const partyOrdersGroup = await this.prisma.order.groupBy({
-      where: { companyId },
+      where: {
+        companyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['partyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -514,7 +543,10 @@ export class DashboardService {
 
     // Top Products
     const productOrdersGroup = await this.prisma.order.groupBy({
-      where: { companyId },
+      where: {
+        companyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['productId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -658,6 +690,7 @@ export class DashboardService {
       where: {
         companyId,
         createdAt: { gte: startOfThisMonth },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       _sum: { totalRate: true },
     });
@@ -670,6 +703,7 @@ export class DashboardService {
           gte: startOfLastMonth,
           lte: endOfLastMonth,
         },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       _sum: { totalRate: true },
     });
@@ -844,7 +878,10 @@ export class DashboardService {
     });
 
     const orderValueAggregate = await this.prisma.order.aggregate({
-      where: { partyId },
+      where: {
+        partyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       _sum: { totalRate: true, bag: true },
     });
     const totalOrderValue = orderValueAggregate._sum.totalRate || 0;
@@ -864,6 +901,7 @@ export class DashboardService {
       where: {
         partyId,
         createdAt: { gte: startOfTrend },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: { createdAt: true, totalRate: true },
     });
@@ -897,7 +935,10 @@ export class DashboardService {
 
     // Top Products
     const productOrdersGroup = await this.prisma.order.groupBy({
-      where: { partyId },
+      where: {
+        partyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['productId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },

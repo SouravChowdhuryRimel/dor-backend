@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { Role } from '../../common/constants/role.enum';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
@@ -7,12 +12,16 @@ import { GetDeliveriesQueryDto } from './dto/get-deliveries-query.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { DeliveryStatus } from '@prisma/client';
 import { ActivityLogService } from '../activity-log/activity-log.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class DeliveryService {
+  private readonly logger = new Logger(DeliveryService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(createDeliveryDto: CreateDeliveryDto, reqUser?: any) {
@@ -70,6 +79,30 @@ export class DeliveryService {
       partyId: orderExists?.partyId,
     });
 
+    // Send notification only to the assigned driver
+    if (delivery.driverId) {
+      const orderShowId = orderExists?.showOrderId
+        ? `#${orderExists.showOrderId}`
+        : '';
+      try {
+        await this.notificationService.sendNotification({
+          title: 'নতুন ডেলিভারি নির্ধারিত',
+          message: `আপনাকে অর্ডার ${orderShowId}-এর ডেলিভারির দায়িত্ব প্রদান করা হয়েছে।`,
+          driverId: delivery.driverId,
+          data: {
+            type: 'DRIVER_ASSIGNED',
+            deliveryId: delivery.deliveryId,
+            orderId: delivery.orderId || '',
+            showOrderId: orderExists?.showOrderId || '',
+          },
+        });
+      } catch (notifErr) {
+        this.logger.error(
+          `Failed to send driver notification on create: ${(notifErr as Error).message}`,
+        );
+      }
+    }
+
     return delivery;
   }
 
@@ -89,7 +122,10 @@ export class DeliveryService {
         where.order = { partyId: reqUser.sub };
       } else if (reqUser.roles.includes(Role.DRIVER)) {
         where.driverId = reqUser.sub;
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -145,23 +181,38 @@ export class DeliveryService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes(Role.VENDOR)) {
         if (delivery.order && delivery.order.companyId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to access this delivery`);
+          throw new ForbiddenException(
+            `You do not have permission to access this delivery`,
+          );
         }
       } else if (reqUser.roles.includes(Role.PARTY)) {
         if (delivery.order && delivery.order.partyId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to access this delivery`);
+          throw new ForbiddenException(
+            `You do not have permission to access this delivery`,
+          );
         }
       } else if (reqUser.roles.includes(Role.DRIVER)) {
         if (delivery.driverId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to access this delivery`);
+          throw new ForbiddenException(
+            `You do not have permission to access this delivery`,
+          );
         }
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
-        if (delivery.order && delivery.order.product && !categoryIds.includes(delivery.order.product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to access this delivery`);
+        if (
+          delivery.order &&
+          delivery.order.product &&
+          !categoryIds.includes(delivery.order.product.categoryId)
+        ) {
+          throw new ForbiddenException(
+            `You do not have permission to access this delivery`,
+          );
         }
       }
     }
@@ -241,6 +292,31 @@ export class DeliveryService {
       partyId: order?.partyId,
     });
 
+    // If a new driver is assigned in update, notify only the newly assigned driver
+    if (
+      updateDeliveryDto.driverId &&
+      updateDeliveryDto.driverId !== delivery.driverId
+    ) {
+      const orderShowId = order?.showOrderId ? `#${order.showOrderId}` : '';
+      try {
+        await this.notificationService.sendNotification({
+          title: 'নতুন ডেলিভারি নির্ধারিত',
+          message: `আপনাকে অর্ডার ${orderShowId}-এর ডেলিভারির দায়িত্ব প্রদান করা হয়েছে।`,
+          driverId: updateDeliveryDto.driverId,
+          data: {
+            type: 'DRIVER_ASSIGNED',
+            deliveryId: updatedDelivery.deliveryId,
+            orderId: updatedDelivery.orderId || '',
+            showOrderId: order?.showOrderId || '',
+          },
+        });
+      } catch (notifErr) {
+        this.logger.error(
+          `Failed to send driver notification on update: ${(notifErr as Error).message}`,
+        );
+      }
+    }
+
     return updatedDelivery;
   }
 
@@ -283,6 +359,12 @@ export class DeliveryService {
         })
       : null;
 
+    const driver = updated.driverId
+      ? await this.prisma.driver.findUnique({
+          where: { driverId: updated.driverId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
@@ -292,6 +374,52 @@ export class DeliveryService {
       partyId: order?.partyId,
       driverId: updated.driverId,
     });
+
+    const driverName = driver?.driverName || 'ড্রাইভার';
+    const orderShowId = order?.showOrderId ? `#${order.showOrderId}` : '';
+
+    // Notify Company
+    if (order?.companyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ড্রাইভার ডেলিভারি গ্রহণ করেছে',
+          message: `${driverName} অর্ডার ${orderShowId}-এর ডেলিভারি গ্রহণ করেছে।`,
+          companyId: order.companyId,
+          data: {
+            type: 'DELIVERY_ACCEPTED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify company on delivery accept: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // Notify Party
+    if (order?.partyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ড্রাইভার ডেলিভারি গ্রহণ করেছে',
+          message: `আপনার অর্ডার ${orderShowId}-এর ডেলিভারি দায়িত্ব ড্রাইভার (${driverName}) গ্রহণ করেছে।`,
+          partyId: order.partyId,
+          data: {
+            type: 'DELIVERY_ACCEPTED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify party on delivery accept: ${(err as Error).message}`,
+        );
+      }
+    }
+
     return updated;
   }
 
@@ -308,6 +436,12 @@ export class DeliveryService {
         })
       : null;
 
+    const driver = updated.driverId
+      ? await this.prisma.driver.findUnique({
+          where: { driverId: updated.driverId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
@@ -317,6 +451,52 @@ export class DeliveryService {
       partyId: order?.partyId,
       driverId: updated.driverId,
     });
+
+    const driverName = driver?.driverName || 'ড্রাইভার';
+    const orderShowId = order?.showOrderId ? `#${order.showOrderId}` : '';
+
+    // Notify Company
+    if (order?.companyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ড্রাইভার ডেলিভারি প্রত্যাখ্যান করেছে',
+          message: `${driverName} অর্ডার ${orderShowId}-এর ডেলিভারি প্রত্যাখ্যান করেছে। অনুগ্রহ করে নতুন ড্রাইভার নির্ধারণ করুন।`,
+          companyId: order.companyId,
+          data: {
+            type: 'DELIVERY_REJECTED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify company on delivery reject: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // Notify Party
+    if (order?.partyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ডেলিভারি আপডেট',
+          message: `আপনার অর্ডার ${orderShowId}-এর ডেলিভারি দায়িত্ব ড্রাইভার প্রত্যাখ্যান করেছে। কোম্পানি নতুন ড্রাইভার নির্ধারণ করছে।`,
+          partyId: order.partyId,
+          data: {
+            type: 'DELIVERY_REJECTED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify party on delivery reject: ${(err as Error).message}`,
+        );
+      }
+    }
+
     return updated;
   }
 
@@ -344,6 +524,12 @@ export class DeliveryService {
         })
       : null;
 
+    const driver = updated.driverId
+      ? await this.prisma.driver.findUnique({
+          where: { driverId: updated.driverId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
@@ -353,6 +539,52 @@ export class DeliveryService {
       partyId: order?.partyId,
       driverId: updated.driverId,
     });
+
+    const driverName = driver?.driverName || 'ড্রাইভার';
+    const orderShowId = order?.showOrderId ? `#${order.showOrderId}` : '';
+
+    // Notify Company
+    if (order?.companyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'পণ্য পিকআপ সম্পন্ন',
+          message: `${driverName} অর্ডার ${orderShowId}-এর পণ্য পিকআপ করেছে।`,
+          companyId: order.companyId,
+          data: {
+            type: 'DELIVERY_PICKUP',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify company on delivery pickup: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // Notify Party
+    if (order?.partyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'পণ্য পিকআপ সম্পন্ন',
+          message: `আপনার অর্ডার ${orderShowId}-এর পণ্য ড্রাইভার পিকআপ করেছে এবং ডেলিভারি শুরু হয়েছে।`,
+          partyId: order.partyId,
+          data: {
+            type: 'DELIVERY_PICKUP',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify party on delivery pickup: ${(err as Error).message}`,
+        );
+      }
+    }
+
     return updated;
   }
 
@@ -369,6 +601,12 @@ export class DeliveryService {
         })
       : null;
 
+    const driver = updated.driverId
+      ? await this.prisma.driver.findUnique({
+          where: { driverId: updated.driverId },
+        })
+      : null;
+
     await this.activityLogService.log({
       actorType: reqUser?.roles[0] || 'DRIVER',
       actorId: reqUser?.sub || updated.driverId,
@@ -378,6 +616,52 @@ export class DeliveryService {
       partyId: order?.partyId,
       driverId: updated.driverId,
     });
+
+    const driverName = driver?.driverName || 'ড্রাইভার';
+    const orderShowId = order?.showOrderId ? `#${order.showOrderId}` : '';
+
+    // Notify Party
+    if (order?.partyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ড্রাইভার গন্তব্যে পৌঁছেছে',
+          message: `ড্রাইভার (${driverName}) আপনার অর্ডার ${orderShowId} নিয়ে গন্তব্যে পৌঁছেছে।`,
+          partyId: order.partyId,
+          data: {
+            type: 'DELIVERY_REACHED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify party on delivery reached: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // Notify Company
+    if (order?.companyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ড্রাইভার গন্তব্যে পৌঁছেছে',
+          message: `${driverName} অর্ডার ${orderShowId} নিয়ে ডেলিভারি গন্তব্যে পৌঁছেছে।`,
+          companyId: order.companyId,
+          data: {
+            type: 'DELIVERY_REACHED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify company on delivery reached: ${(err as Error).message}`,
+        );
+      }
+    }
+
     return updated;
   }
 
@@ -413,6 +697,50 @@ export class DeliveryService {
         where: { orderId: updated.orderId },
         data: { status: 'DELIVERED' },
       });
+    }
+
+    const orderShowId = order?.showOrderId ? `#${order.showOrderId}` : '';
+
+    // Notify Company
+    if (order?.companyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ডেলিভারি সম্পন্ন হয়েছে',
+          message: `অর্ডার ${orderShowId} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে।`,
+          companyId: order.companyId,
+          data: {
+            type: 'DELIVERY_COMPLETED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify company on delivery complete: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // Notify Party
+    if (order?.partyId) {
+      try {
+        await this.notificationService.sendNotification({
+          title: 'ডেলিভারি সম্পন্ন হয়েছে',
+          message: `আপনার অর্ডার ${orderShowId} সফলভাবে ডেলিভারি সম্পন্ন হয়েছে।`,
+          partyId: order.partyId,
+          data: {
+            type: 'DELIVERY_COMPLETED',
+            deliveryId: id,
+            orderId: order.orderId,
+            showOrderId: order.showOrderId || '',
+          },
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to notify party on delivery complete: ${(err as Error).message}`,
+        );
+      }
     }
 
     return updated;

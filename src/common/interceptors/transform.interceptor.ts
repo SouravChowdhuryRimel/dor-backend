@@ -88,6 +88,12 @@ function generateSuccessMessage(method: string, url: string): string {
       if (cleanPath.endsWith('/orders') || cleanPath.endsWith('/orders/')) {
         return 'Order created successfully';
       }
+      if (cleanPath.endsWith('/complaints') || cleanPath.endsWith('/complaints/')) {
+        return 'Complaint submitted successfully';
+      }
+      if (cleanPath.includes('/complaints/') && cleanPath.endsWith('/reply')) {
+        return 'Reply posted successfully';
+      }
       return `${resource} created successfully`;
     case 'PUT':
     case 'PATCH':
@@ -96,6 +102,9 @@ function generateSuccessMessage(method: string, url: string): string {
       }
       if (cleanPath.endsWith('/location')) {
         return 'Location updated successfully';
+      }
+      if (cleanPath.includes('/complaints/') && cleanPath.endsWith('/status')) {
+        return 'Complaint status updated successfully';
       }
       return `${resource} updated successfully`;
     case 'DELETE':

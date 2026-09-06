@@ -8,6 +8,7 @@ import { PrismaService } from 'src/core/database/database.service';
 import { Role, Prisma } from '@prisma/client';
 import { SearchChatUsersQueryDto } from './dto/search-chat-users-query.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
+import { NotificationService } from '../notification/notification.service';
 
 export interface ParticipantProfile {
   id: string;
@@ -23,7 +24,10 @@ export interface ParticipantProfile {
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   /**
    * Validate if two roles are allowed to chat per the business logic Chat Matrix.
@@ -362,6 +366,59 @@ export class ChatService {
     const otherRole = isP1
       ? conversation.participant2Role
       : conversation.participant1Role;
+
+    // Send notification to the receiver
+    try {
+      const senderProfile = await this.getParticipantProfile(
+        senderId,
+        senderRole,
+      );
+      const senderName = senderProfile?.name || 'ব্যবহারকারী';
+      const notificationTitle = `নতুন বার্তা: ${senderName}`;
+      let notificationMessage = messageText || '';
+      if (!notificationMessage) {
+        if (image) {
+          notificationMessage = '[ছবি পাঠানো হয়েছে]';
+        } else if (file) {
+          notificationMessage = '[ফাইল পাঠানো হয়েছে]';
+        } else {
+          notificationMessage = 'আপনাকে একটি নতুন বার্তা পাঠিয়েছেন';
+        }
+      } else if (notificationMessage.length > 100) {
+        notificationMessage = notificationMessage.substring(0, 97) + '...';
+      }
+
+      const notifPayload: any = {
+        title: notificationTitle,
+        message: notificationMessage,
+        data: {
+          type: 'CHAT_MESSAGE',
+          conversationId,
+          senderId,
+          messageId: chatMessage.messageId,
+        },
+      };
+
+      if (
+        otherRole === Role.SUPER_ADMIN ||
+        otherRole === Role.ADMIN ||
+        otherRole === Role.USER
+      ) {
+        notifPayload.userId = otherId;
+      } else if (otherRole === Role.VENDOR) {
+        notifPayload.companyId = otherId;
+      } else if (otherRole === Role.PARTY) {
+        notifPayload.partyId = otherId;
+      } else if (otherRole === Role.DRIVER) {
+        notifPayload.driverId = otherId;
+      }
+
+      await this.notificationService.sendNotification(notifPayload);
+    } catch (notifErr) {
+      this.logger.error(
+        `Failed to send chat notification to ${otherId}: ${(notifErr as Error).message}`,
+      );
+    }
 
     return {
       chatMessage,
