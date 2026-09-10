@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -14,15 +15,17 @@ import { RedisService } from '../../../core/cache/redis.service';
 import { LoginDto } from '../dto/login.dto';
 import { PartyLoginDto } from '../dto/party-login.dto';
 import { RegisterDto } from '../dto/register.dto';
-import { Role } from '@prisma/client';
+import { Role, CompanyStatus } from '@prisma/client';
 import { CompanyService } from '../../company/services/company.service';
 import { PartyService } from '../../party/services/party.service';
 import { DriverService } from '../../driver/services/driver.service';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import * as nodemailer from 'nodemailer';
 import { randomBytes } from 'crypto';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
+import { PrismaService } from 'src/core/database/database.service';
 
 type PasswordResetAccount = {
   id: string;
@@ -43,11 +46,25 @@ export class AuthService {
     private configService: ConfigService,
     private redisService: RedisService,
     private activityLogService: ActivityLogService,
+    private prisma: PrismaService,
   ) {}
+
+  private async getAdminCategoryInfo(userId: string) {
+    const adminCategories = await this.prisma.adminCategory.findMany({
+      where: { userId },
+    });
+    const categoryIds = adminCategories.map((ac) => ac.categoryId);
+    return {
+      categoryId: categoryIds[0] || null,
+      categoryIds,
+    };
+  }
 
   async signUp(registerDto: RegisterDto) {
     try {
-      const userExists = await this.usersService.findByPhone(registerDto.phoneNumber);
+      const userExists = await this.usersService.findByPhone(
+        registerDto.phoneNumber,
+      );
       if (userExists) {
         throw new BadRequestException('User already exists');
       }
@@ -80,6 +97,8 @@ export class AuthService {
         description: `Registered new user account: ${newUser.name || newUser.email || newUser.phoneNumber}`,
       });
 
+      const catInfo = await this.getAdminCategoryInfo(newUser.id);
+
       return {
         ...tokens,
         user: {
@@ -88,15 +107,18 @@ export class AuthService {
           phoneNumber: newUser.phoneNumber,
           name: newUser.name,
           roles: newUser.roles,
-            categoryId: newUser.categoryId,
-            businessName: null,
-            district: null,
-            upozela: null,
-            address: null,
-            bazzarArea: null,
-            createdAt: newUser.createdAt,
+          categoryId: catInfo.categoryId,
+          categoryIds: catInfo.categoryIds,
+          businessName: null,
+          district: null,
+          upozela: null,
+          address: null,
+          bazzarArea: null,
+          createdAt: newUser.createdAt,
           updatedAt: newUser.updatedAt,
-          isVerified: newUser.roles.includes(Role.SUPER_ADMIN) || newUser.roles.includes(Role.ADMIN),
+          isVerified:
+            newUser.roles.includes(Role.SUPER_ADMIN) ||
+            newUser.roles.includes(Role.ADMIN),
           status: 'APPROVED',
         },
       };
@@ -111,6 +133,8 @@ export class AuthService {
 
   async signIn(loginDto: LoginDto) {
     try {
+      const incomingFcmToken = loginDto.fcmToken;
+
       // 1. Check User table
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
       if (user) {
@@ -124,6 +148,13 @@ export class AuthService {
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
 
+        if (incomingFcmToken) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
+
         const tokens = await this.getTokens(user.id, user.email, user.roles);
         await this.storeSession(user.id, tokens.refreshToken);
 
@@ -134,6 +165,8 @@ export class AuthService {
           description: `User/Admin logged in: ${user.name || user.email || user.phoneNumber}`,
         });
 
+        const catInfo = await this.getAdminCategoryInfo(user.id);
+
         return {
           ...tokens,
           user: {
@@ -142,7 +175,9 @@ export class AuthService {
             phoneNumber: user.phoneNumber,
             name: user.name,
             roles: user.roles,
-            categoryId: user.categoryId,
+            categoryId: catInfo.categoryId,
+            categoryIds: catInfo.categoryIds,
+            fcmToken: incomingFcmToken || user.fcmToken || null,
             businessName: null,
             district: null,
             upozela: null,
@@ -150,20 +185,35 @@ export class AuthService {
             bazzarArea: null,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-            isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
+            isVerified:
+              user.roles.includes(Role.SUPER_ADMIN) ||
+              user.roles.includes(Role.ADMIN),
             status: 'APPROVED',
           },
         };
       }
 
       // 2. Check Company table
-      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
+      const company = await this.companyService.findByPhone(
+        loginDto.phoneNumber,
+      );
       if (company) {
+        if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED || !company.isVerified) {
+          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        }
+
         const passwordMatches = await argon2.verify(
           company.password,
           loginDto.password,
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        if (incomingFcmToken) {
+          await this.prisma.company.update({
+            where: { companyId: company.companyId },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
 
         const tokens = await this.getTokens(company.companyId, company.email, [
           Role.VENDOR,
@@ -186,7 +236,10 @@ export class AuthService {
             name: company.ownerName,
             roles: [Role.VENDOR],
             categoryId: company.categoryId,
+            fcmToken: incomingFcmToken || company.fcmToken || null,
             businessName: company.companyName,
+            latitude: company.latitude,
+            longitude: company.longitude,
             district: company.district,
             upozela: company.upozela,
             address: company.address,
@@ -202,11 +255,22 @@ export class AuthService {
       // 3. Check Party table
       const party = await this.partyService.findByPhone(loginDto.phoneNumber);
       if (party) {
+        if (party.status === 'INACTIVE') {
+          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        }
+
         const passwordMatches = await argon2.verify(
           party.password,
           loginDto.password,
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        if (incomingFcmToken) {
+          await this.prisma.party.update({
+            where: { partyId: party.partyId },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
 
         const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
           Role.PARTY,
@@ -229,6 +293,7 @@ export class AuthService {
             name: party.partyName,
             roles: [Role.PARTY],
             categoryId: party.categoryId,
+            fcmToken: incomingFcmToken || party.fcmToken || null,
             businessName: party.businessName,
             district: party.district,
             upozela: party.upozela,
@@ -245,11 +310,21 @@ export class AuthService {
       // 4. Check Driver table
       const driver = await this.driverService.findByPhone(loginDto.phoneNumber);
       if (driver) {
+        if (!driver.isVerified) {
+          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        }
         const passwordMatches = await argon2.verify(
           driver.password,
           loginDto.password,
         );
         if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+        if (incomingFcmToken) {
+          await this.prisma.driver.update({
+            where: { driverId: driver.driverId },
+            data: { fcmToken: incomingFcmToken },
+          });
+        }
 
         const tokens = await this.getTokens(driver.driverId, driver.email, [
           Role.DRIVER,
@@ -271,7 +346,8 @@ export class AuthService {
             phoneNumber: driver.phoneNumber,
             name: driver.driverName,
             roles: [Role.DRIVER],
-            categoryId: driver.categoryId,
+            categoryId: null,
+            fcmToken: incomingFcmToken || driver.fcmToken || null,
             businessName: null,
             district: driver.district,
             upozela: driver.upozela,
@@ -297,14 +373,28 @@ export class AuthService {
 
   async signInCompany(loginDto: LoginDto) {
     try {
-      const company = await this.companyService.findByPhone(loginDto.phoneNumber);
+      const incomingFcmToken = loginDto.fcmToken;
+      const company = await this.companyService.findByPhone(
+        loginDto.phoneNumber,
+      );
       if (!company) throw new UnauthorizedException('Access Denied');
+
+      if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED || !company.isVerified) {
+        throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+      }
 
       const passwordMatches = await argon2.verify(
         company.password,
         loginDto.password,
       );
       if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+
+      if (incomingFcmToken) {
+        await this.prisma.company.update({
+          where: { companyId: company.companyId },
+          data: { fcmToken: incomingFcmToken },
+        });
+      }
 
       // Issue token with VENDOR role for companies
       const tokens = await this.getTokens(company.companyId, company.email, [
@@ -329,7 +419,10 @@ export class AuthService {
           name: company.ownerName,
           roles: [Role.VENDOR],
           categoryId: company.categoryId,
+          fcmToken: incomingFcmToken || company.fcmToken || null,
           businessName: company.companyName,
+          latitude: company.latitude,
+          longitude: company.longitude,
           district: company.district,
           upozela: company.upozela,
           address: company.address,
@@ -351,11 +444,16 @@ export class AuthService {
 
   async signInParty(partyLoginDto: PartyLoginDto) {
     try {
+      const incomingFcmToken = partyLoginDto.fcmToken;
       const party = await this.partyService.findByPhone(
         partyLoginDto.phoneNumber,
       );
       if (!party)
         throw new UnauthorizedException('Access Denied: Party not found');
+
+      if (party.status === 'INACTIVE') {
+        throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+      }
 
       const passwordMatches = await argon2.verify(
         party.password,
@@ -363,6 +461,13 @@ export class AuthService {
       );
       if (!passwordMatches)
         throw new UnauthorizedException('Access Denied: Incorrect Password');
+
+      if (incomingFcmToken) {
+        await this.prisma.party.update({
+          where: { partyId: party.partyId },
+          data: { fcmToken: incomingFcmToken },
+        });
+      }
 
       // Issue token with PARTY role for independent party users
       const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
@@ -387,6 +492,7 @@ export class AuthService {
           name: party.partyName,
           roles: [Role.PARTY],
           categoryId: party.categoryId,
+          fcmToken: incomingFcmToken || party.fcmToken || null,
           businessName: party.businessName,
           district: party.district,
           upozela: party.upozela,
@@ -413,9 +519,11 @@ export class AuthService {
       forgotPasswordDto.role,
     );
 
+    let token = '';
+
     // Always return the same response to avoid email-account enumeration.
     if (account) {
-      const token = randomBytes(32).toString('hex');
+      token = randomBytes(32).toString('hex');
       const ttlSeconds = 15 * 60;
 
       await this.redisService.setJson(
@@ -423,29 +531,95 @@ export class AuthService {
         account,
         ttlSeconds,
       );
-      await this.sendPasswordResetEmail(account.email, token);
+
+      try {
+        await this.sendPasswordResetEmail(account.email, token);
+      } catch (error) {
+        this.logger.error(`Failed to send password-reset email: ${error.message}`);
+        // Do not throw the error if SMTP is not configured or in non-production environments
+        const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+        const hasSmtp = !!this.configService.get<string>('SMTP_HOST');
+        if (isProd && hasSmtp) {
+          throw error;
+        }
+      }
     }
 
-    return {
+    const response: any = {
       message:
         'If an account exists for this email, a password-reset token has been sent.',
     };
+
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+    const hasSmtp = !!this.configService.get<string>('SMTP_HOST');
+    if (account && (!isProd || !hasSmtp)) {
+      response.token = token;
+    }
+
+    return response;
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    let account: PasswordResetAccount | null = null;
     const key = `password-reset:${resetPasswordDto.token}`;
-    const account = await this.redisService.getJson<PasswordResetAccount>(key);
+
+    // 1. Try to find the token in Redis first (standard hex token flow)
+    account = await this.redisService.getJson<PasswordResetAccount>(key);
+
+    if (account) {
+      // Consume the token before updating the password so it cannot be reused.
+      await this.redisService.del(key);
+    } else {
+      // 2. Fallback to JWT verification if token is a JWT
+      try {
+        let payload: any = null;
+        // Try verifying with JWT_SECRET (Access Token)
+        try {
+          payload = await this.jwtService.verifyAsync(resetPasswordDto.token, {
+            secret: this.configService.get<string>('JWT_SECRET'),
+          });
+        } catch (accessErr) {
+          // If access token verification fails, try with JWT_REFRESH_SECRET (Refresh Token)
+          payload = await this.jwtService.verifyAsync(resetPasswordDto.token, {
+            secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          });
+        }
+
+        if (payload && payload.sub) {
+          const roles = payload.roles || [];
+          let accountType: 'user' | 'company' | 'party' | 'driver' = 'user';
+
+          if (roles.includes(Role.VENDOR)) {
+            accountType = 'company';
+          } else if (roles.includes(Role.PARTY)) {
+            accountType = 'party';
+          } else if (roles.includes(Role.DRIVER)) {
+            accountType = 'driver';
+          }
+
+          account = {
+            id: payload.sub,
+            email: payload.email || '',
+            accountType,
+          };
+        }
+      } catch (jwtError) {
+        this.logger.error(
+          `Failed to verify password-reset token as JWT: ${jwtError.message}`,
+        );
+      }
+    }
 
     if (!account) {
       throw new BadRequestException('Invalid or expired password-reset token');
     }
 
-    // Consume the token before updating the password so it cannot be reused.
-    await this.redisService.del(key);
-
     switch (account.accountType) {
       case 'user':
-        await this.usersService.updatePassword(account.id, resetPasswordDto.password);
+        await this.usersService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
         break;
       case 'company':
         await this.companyService.updatePassword(
@@ -454,7 +628,10 @@ export class AuthService {
         );
         break;
       case 'party':
-        await this.partyService.updatePassword(account.id, resetPasswordDto.password);
+        await this.partyService.updatePassword(
+          account.id,
+          resetPasswordDto.password,
+        );
         break;
       case 'driver':
         await this.driverService.updatePassword(
@@ -466,6 +643,152 @@ export class AuthService {
 
     await this.redisService.del(`session:${account.id}`);
     return { message: 'Password reset successfully. Please sign in again.' };
+  }
+
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+    const { currentPassword, newPassword } = changePasswordDto;
+
+    let storedHashedPassword = '';
+    let accountType: 'user' | 'company' | 'party' | 'driver' = 'user';
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      storedHashedPassword = user.password;
+      accountType = 'user';
+    } else {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        storedHashedPassword = company.password;
+        accountType = 'company';
+      } else {
+        const party = await this.prisma.party.findUnique({
+          where: { partyId: userId },
+        });
+        if (party) {
+          storedHashedPassword = party.password;
+          accountType = 'party';
+        } else {
+          const driver = await this.prisma.driver.findUnique({
+            where: { driverId: userId },
+          });
+          if (driver) {
+            storedHashedPassword = driver.password;
+            accountType = 'driver';
+          }
+        }
+      }
+    }
+
+    if (!storedHashedPassword) {
+      throw new NotFoundException('Account not found');
+    }
+
+    const isMatch = await argon2.verify(storedHashedPassword, currentPassword);
+    if (!isMatch) {
+      throw new BadRequestException('Incorrect current password');
+    }
+
+    switch (accountType) {
+      case 'user':
+        await this.usersService.updatePassword(userId, newPassword);
+        break;
+      case 'company':
+        await this.companyService.updatePassword(userId, newPassword);
+        break;
+      case 'party':
+        await this.partyService.updatePassword(userId, newPassword);
+        break;
+      case 'driver':
+        await this.driverService.updatePassword(userId, newPassword);
+        break;
+    }
+
+    await this.activityLogService.log({
+      actorType: accountType.toUpperCase(),
+      actorId: userId,
+      action: 'CHANGE_PASSWORD',
+      description: `${accountType.toUpperCase()} changed password successfully`,
+    });
+
+    return {
+      message: 'Password changed successfully',
+    };
+  }
+
+  async softDeleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { isActive: false },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: user.roles[0] || 'USER',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `User account soft-deleted: ${user.phoneNumber}`,
+      });
+      return { success: true, message: 'User profile soft-deleted successfully' };
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { companyId: userId },
+    });
+    if (company) {
+      await this.prisma.company.update({
+        where: { companyId: userId },
+        data: { status: CompanyStatus.BLOCKED, isVerified: false },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: 'COMPANY',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `Company account soft-deleted: ${company.companyName}`,
+      });
+      return { success: true, message: 'Company profile soft-deleted successfully' };
+    }
+
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: userId },
+    });
+    if (party) {
+      await this.prisma.party.update({
+        where: { partyId: userId },
+        data: { status: 'INACTIVE' },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: 'PARTY',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `Party account soft-deleted: ${party.partyName}`,
+      });
+      return { success: true, message: 'Party profile soft-deleted successfully' };
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: userId },
+    });
+    if (driver) {
+      await this.prisma.driver.update({
+        where: { driverId: userId },
+        data: { isVerified: false },
+      });
+      await this.redisService.del(`session:${userId}`);
+      await this.activityLogService.log({
+        actorType: 'DRIVER',
+        actorId: userId,
+        action: 'DELETE_ACCOUNT',
+        description: `Driver account soft-deleted: ${driver.driverName}`,
+      });
+      return { success: true, message: 'Driver profile soft-deleted successfully' };
+    }
+
+    throw new NotFoundException('Account not found');
   }
 
   async logout(userId: string) {
@@ -483,7 +806,9 @@ export class AuthService {
           if (p) {
             actorType = 'PARTY';
           } else {
-            const d = await this.driverService.findOne(userId).catch(() => null);
+            const d = await this.driverService
+              .findOne(userId)
+              .catch(() => null);
             if (d) {
               actorType = 'DRIVER';
             }
@@ -510,48 +835,160 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(userId: string, refreshToken: string) {
+  async refreshTokens(
+    userId: string,
+    refreshToken: string,
+    tokenType?: string,
+  ) {
     try {
       const activeSessionToken = await this.redisService.get(
         `session:${userId}`,
       );
-      if (!activeSessionToken || activeSessionToken !== refreshToken) {
-        throw new ForbiddenException(
-          'Access Denied - Session Expired or Revoked',
-        );
+
+      if (tokenType !== 'access') {
+        if (!activeSessionToken || activeSessionToken !== refreshToken) {
+          throw new ForbiddenException(
+            'Access Denied - Session Expired or Revoked',
+          );
+        }
+      } else {
+        if (!activeSessionToken) {
+          throw new ForbiddenException(
+            'Access Denied - Session Expired or Revoked',
+          );
+        }
       }
 
+      // 1. Check User table
       const user = await this.usersService.findById(userId);
-      if (!user) throw new ForbiddenException('Access Denied');
-      if (!user.isActive) {
-        throw new ForbiddenException('Access Denied: Account is inactive');
+      if (user) {
+        if (!user.isActive) {
+          throw new ForbiddenException('Access Denied: Account is inactive');
+        }
+
+        const tokens = await this.getTokens(user.id, user.email, user.roles);
+        await this.storeSession(user.id, tokens.refreshToken);
+
+        const catInfo = await this.getAdminCategoryInfo(user.id);
+
+        return {
+          ...tokens,
+          user: {
+            id: user.id,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            name: user.name,
+            roles: user.roles,
+            categoryId: catInfo.categoryId,
+            categoryIds: catInfo.categoryIds,
+            businessName: null,
+            district: null,
+            upozela: null,
+            address: null,
+            bazzarArea: null,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            isVerified:
+              user.roles.includes(Role.SUPER_ADMIN) ||
+              user.roles.includes(Role.ADMIN),
+            status: 'APPROVED',
+          },
+        };
       }
 
-      const tokens = await this.getTokens(user.id, user.email, user.roles);
+      // 2. Check Company table
+      const company = await this.companyService
+        .findOne(userId)
+        .catch(() => null);
+      if (company) {
+        const tokens = await this.getTokens(company.companyId, company.email, [
+          Role.VENDOR,
+        ]);
+        await this.storeSession(company.companyId, tokens.refreshToken);
 
-      // Rotate refresh tokens dynamically to prevent token replay hijacking
-      await this.storeSession(user.id, tokens.refreshToken);
+        return {
+          ...tokens,
+          user: {
+            id: company.companyId,
+            email: company.email,
+            phoneNumber: company.phoneNumber,
+            name: company.ownerName,
+            roles: [Role.VENDOR],
+            categoryId: company.categoryId,
+            businessName: company.companyName,
+            district: company.district,
+            upozela: company.upozela,
+            address: company.address,
+            bazzarArea: null,
+            createdAt: company.createdAt,
+            updatedAt: company.updatedAt,
+            isVerified: company.isVerified,
+            status: company.status,
+          },
+        };
+      }
 
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-          roles: user.roles,
-          categoryId: user.categoryId,
-          businessName: null,
-          district: null,
-          upozela: null,
-          address: null,
-          bazzarArea: null,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-          isVerified: user.roles.includes(Role.SUPER_ADMIN) || user.roles.includes(Role.ADMIN),
-          status: 'APPROVED',
-        },
-      };
+      // 3. Check Party table
+      const party = await this.partyService.findOne(userId).catch(() => null);
+      if (party) {
+        const tokens = await this.getTokens(party.partyId, party.phoneNumber, [
+          Role.PARTY,
+        ]);
+        await this.storeSession(party.partyId, tokens.refreshToken);
+
+        return {
+          ...tokens,
+          user: {
+            id: party.partyId,
+            email: party.email,
+            phoneNumber: party.phoneNumber,
+            name: party.partyName,
+            roles: [Role.PARTY],
+            categoryId: party.categoryId,
+            businessName: party.businessName,
+            district: party.district,
+            upozela: party.upozela,
+            address: party.address,
+            bazzarArea: party.bazzarArea,
+            createdAt: party.createdAt,
+            updatedAt: party.updatedAt,
+            isVerified: party.isVerified,
+            status: party.status,
+          },
+        };
+      }
+
+      // 4. Check Driver table
+      const driver = await this.driverService.findOne(userId).catch(() => null);
+      if (driver) {
+        const tokens = await this.getTokens(driver.driverId, driver.email, [
+          Role.DRIVER,
+        ]);
+        await this.storeSession(driver.driverId, tokens.refreshToken);
+
+        return {
+          ...tokens,
+          user: {
+            id: driver.driverId,
+            email: driver.email,
+            phoneNumber: driver.phoneNumber,
+            name: driver.driverName,
+            roles: [Role.DRIVER],
+            categoryId: null,
+            businessName: null,
+            district: driver.district,
+            upozela: driver.upozela,
+            address: driver.address,
+            bazzarArea: null,
+            createdAt: driver.createdAt,
+            updatedAt: driver.updatedAt,
+            isVerified: driver.isVerified,
+            status: 'APPROVED',
+          },
+        };
+      }
+
+      throw new ForbiddenException('Access Denied');
     } catch (error) {
       this.logger.error(
         `Failed to refresh session tokens for user ${userId}: ${error.message}`,
@@ -695,6 +1132,120 @@ export class AuthService {
       this.logger.error(
         `Failed to sign JWT tokens for user ${userId}: ${error.message}`,
         error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async updateFcmToken(userId: string, fcmToken: string) {
+    try {
+      // 1. Check User
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      // 2. Check Company
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        await this.prisma.company.update({
+          where: { companyId: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      // 3. Check Party
+      const party = await this.prisma.party.findUnique({
+        where: { partyId: userId },
+      });
+      if (party) {
+        await this.prisma.party.update({
+          where: { partyId: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      // 4. Check Driver
+      const driver = await this.prisma.driver.findUnique({
+        where: { driverId: userId },
+      });
+      if (driver) {
+        await this.prisma.driver.update({
+          where: { driverId: userId },
+          data: { fcmToken },
+        });
+        return { message: 'FCM token updated successfully', fcmToken };
+      }
+
+      throw new NotFoundException('User entity not found');
+    } catch (error) {
+      this.logger.error(
+        `Failed to update FCM token for ${userId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  async removeFcmToken(userId: string) {
+    try {
+      // 1. Check User
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      // 2. Check Company
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        await this.prisma.company.update({
+          where: { companyId: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      // 3. Check Party
+      const party = await this.prisma.party.findUnique({
+        where: { partyId: userId },
+      });
+      if (party) {
+        await this.prisma.party.update({
+          where: { partyId: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      // 4. Check Driver
+      const driver = await this.prisma.driver.findUnique({
+        where: { driverId: userId },
+      });
+      if (driver) {
+        await this.prisma.driver.update({
+          where: { driverId: userId },
+          data: { fcmToken: null },
+        });
+        return { message: 'FCM token removed successfully' };
+      }
+
+      throw new NotFoundException('User entity not found');
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove FCM token for user ${userId}: ${error.message}`,
       );
       throw error;
     }

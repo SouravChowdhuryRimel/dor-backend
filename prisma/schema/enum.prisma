@@ -20,9 +20,11 @@ enum CategoryStatus {
 }
 
 enum DeliveryStatus {
-  VAN_COMING
-  TRANSFER_IN_PROGRESS
-  NEAREST_TRANSFER
+  PENDING
+  ACCEPTED
+  REJECTED
+  IN_TRANSIT
+  REACHED
   DELIVERED
 }
 
@@ -42,3 +44,42 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
 }
+
+enum ComplaintType {
+  COMPANY
+  DRIVER
+  BOTH
+}
+
+enum PackagingType {
+  BAG
+  CARTON
+  BOX
+  BOTTLE
+  DRUM
+  CONTAINER
+  BUNDLE
+  PACK
+  PIECE
+}
+
+enum UnitType {
+  GRAM
+  KILOGRAM
+  TON
+  MILLILITER
+  LITER
+  PIECE
+  PACK
+  DOZEN
+  PAIR
+  SET
+  BUNDLE
+}
+
+enum InquiryStatus {
+  OPEN
+  CLOSED
+}
+
+

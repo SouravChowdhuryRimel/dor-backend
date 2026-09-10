@@ -5,9 +5,10 @@ model Category {
   status            CategoryStatus @default(ACTIVE)
   companies         Company[]
   parties           Party[]
-  drivers           Driver[]
-  admins            User[]
+  adminCategories   AdminCategory[]
   inquiries         Inquiry[]
+  subCategories     SubCategory[]
+  products          Product[]
 
   @@map("categories")
 }

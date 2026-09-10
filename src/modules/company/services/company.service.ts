@@ -4,7 +4,14 @@ import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
 import * as argon2 from 'argon2';
 import { CompanyStatus, Prisma } from '@prisma/client';
-import { createPaginatedResponse, PaginationQueryDto } from '../../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../../shared/pagination/pagination.util';
+import { ActivityLogService } from '../../activity-log/activity-log.service';
+
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationGateway } from '../../notification/notification.gateway';
 
 const companyDetailsSelect = {
   companyId: true,
@@ -12,6 +19,8 @@ const companyDetailsSelect = {
   companyName: true,
   ownerName: true,
   email: true,
+  latitude: true,
+  longitude: true,
   district: true,
   upozela: true,
   address: true,
@@ -19,8 +28,8 @@ const companyDetailsSelect = {
   isVerified: true,
   incomeTax: true,
   companyDocument: true,
+  companyImage: true,
   categoryId: true,
-  adminId: true,
   createdAt: true,
   updatedAt: true,
   category: {
@@ -29,26 +38,25 @@ const companyDetailsSelect = {
       categoryName: true,
     },
   },
-  admin: {
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phoneNumber: true,
-    },
-  },
 } satisfies Prisma.CompanySelect;
 
 @Injectable()
 export class CompanyService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
+  ) {}
 
   async register(createCompanyDto: CreateCompanyDto) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: createCompanyDto.categoryId },
     });
     if (!category) {
-      throw new NotFoundException(`Category with ID "${createCompanyDto.categoryId}" not found. Create a category first.`);
+      throw new NotFoundException(
+        `Category with ID "${createCompanyDto.categoryId}" not found. Create a category first.`,
+      );
     }
 
     const hashedPassword = await argon2.hash(createCompanyDto.password, {
@@ -57,7 +65,7 @@ export class CompanyService {
       timeCost: 3,
     });
 
-    return this.prisma.company.create({
+    const company = await this.prisma.company.create({
       data: {
         ...createCompanyDto,
         password: hashedPassword,
@@ -69,13 +77,58 @@ export class CompanyService {
         phoneNumber: true,
         companyName: true,
         ownerName: true,
+        latitude: true,
+        longitude: true,
         status: true,
         isVerified: true,
         incomeTax: true,
+        companyDocument: true,
+        companyImage: true,
         categoryId: true,
         createdAt: true,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: 'COMPANY',
+      actorId: company.companyId,
+      action: 'REGISTER_COMPANY',
+      description: `Registered new company: ${company.companyName}`,
+    });
+
+    // Notify all Admins in Bangla
+    const adminUsers = await this.prisma.user.findMany({
+      where: {
+        roles: {
+          hasSome: ['ADMIN', 'SUPER_ADMIN'],
+        },
+      },
+      select: { id: true },
+    });
+
+    const notifTitle = 'নতুন কোম্পানি নিবন্ধন';
+    const notifMessage = `নতুন কোম্পানি "${company.companyName}" নিবন্ধনের জন্য আবেদন করেছে। (ফোন: ${company.phoneNumber})`;
+
+    for (const admin of adminUsers) {
+      await this.notificationService.sendNotification({
+        title: notifTitle,
+        message: notifMessage,
+        userId: admin.id,
+        data: {
+          type: 'NEW_COMPANY_REGISTERED',
+          companyId: company.companyId,
+        },
+      });
+    }
+
+    this.notificationGateway.sendNotificationToAdmin({
+      title: notifTitle,
+      message: notifMessage,
+      companyId: company.companyId,
+      createdAt: new Date(),
+    });
+
+    return company;
   }
 
   async findPending(query?: PaginationQueryDto) {
@@ -99,6 +152,8 @@ export class CompanyService {
           status: true,
           isVerified: true,
           incomeTax: true,
+          companyDocument: true,
+          companyImage: true,
           createdAt: true,
         },
       }),
@@ -126,13 +181,13 @@ export class CompanyService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async approve(companyId: string, adminId: string) {
+  async approve(companyId: string, adminId: string, reqUser?: any) {
     const company = await this.prisma.company.findUnique({
       where: { companyId },
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    return this.prisma.company.update({
+    const updatedCompany = await this.prisma.company.update({
       where: { companyId },
       data: {
         status: CompanyStatus.APPROVED,
@@ -147,6 +202,16 @@ export class CompanyService {
         isVerified: true,
       },
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'ADMIN',
+      actorId: adminId,
+      action: 'APPROVE_COMPANY',
+      description: `Approved company registration: ${company.companyName}`,
+      companyId,
+    });
+
+    return updatedCompany;
   }
 
   async findAll(query?: PaginationQueryDto) {
@@ -175,31 +240,49 @@ export class CompanyService {
     return company;
   }
 
-  async update(id: string, updateCompanyDto: UpdateCompanyDto) {
+  async update(id: string, updateCompanyDto: UpdateCompanyDto, reqUser?: any) {
     const company = await this.prisma.company.findUnique({
       where: { companyId: id },
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    // If updating password, hash it
-    const dataToUpdate = { ...updateCompanyDto };
-    if (dataToUpdate.password) {
-      dataToUpdate.password = await argon2.hash(dataToUpdate.password);
-    }
-
-    return this.prisma.company.update({
+    const updatedCompany = await this.prisma.company.update({
       where: { companyId: id },
-      data: dataToUpdate,
+      data: updateCompanyDto,
+      select: companyDetailsSelect,
     });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'COMPANY',
+      actorId: reqUser?.sub || id,
+      action: 'UPDATE_COMPANY',
+      description: `Updated company: ${updatedCompany.companyName}`,
+      companyId: id,
+    });
+
+    return updatedCompany;
   }
 
-  async remove(id: string) {
+  async remove(id: string, reqUser?: any) {
     const company = await this.prisma.company.findUnique({
       where: { companyId: id },
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    return this.prisma.company.delete({ where: { companyId: id } });
+    const deletedCompany = await this.prisma.company.delete({
+      where: { companyId: id },
+      select: companyDetailsSelect,
+    });
+
+    await this.activityLogService.log({
+      actorType: reqUser?.roles?.[0] || 'COMPANY',
+      actorId: reqUser?.sub || id,
+      action: 'DELETE_COMPANY',
+      description: `Deleted company: ${deletedCompany.companyName}`,
+      companyId: id,
+    });
+
+    return deletedCompany;
   }
 
   async findByEmail(email: string) {
@@ -232,12 +315,6 @@ export class CompanyService {
       include: {
         driver: {
           include: {
-            category: {
-              select: {
-                categoryId: true,
-                categoryName: true,
-              },
-            },
             partyDrivers: {
               include: {
                 party: {
@@ -259,7 +336,8 @@ export class CompanyService {
     return companyDrivers.map((cd) => {
       const driver = cd.driver;
       const parties = driver.partyDrivers.map((pd) => pd.party);
-      const { companyDrivers, partyDrivers, password, ...driverInfo } = driver as any;
+      const { companyDrivers, partyDrivers, password, ...driverInfo } =
+        driver as any;
       return {
         ...driverInfo,
         parties,

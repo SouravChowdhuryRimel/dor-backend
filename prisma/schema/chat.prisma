@@ -1,0 +1,30 @@
+model Conversation {
+  id               String        @id @default(uuid()) @map("id")
+  participant1Id   String        @map("participant1_id")
+  participant1Role Role          @map("participant1_role")
+  participant2Id   String        @map("participant2_id")
+  participant2Role Role          @map("participant2_role")
+
+  messages         ChatMessage[]
+
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@unique([participant1Id, participant1Role, participant2Id, participant2Role])
+  @@map("conversations")
+}
+
+model ChatMessage {
+  messageId      String       @id @default(uuid()) @map("message_id")
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String       @map("sender_id")
+  senderRole     Role         @map("sender_role")
+  message        String?
+  file           String?      @map("file")
+  image          String?      @map("image")
+  isRead         Boolean      @default(false) @map("is_read")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("chat_messages")
+}

@@ -3,8 +3,14 @@ model Notification {
   title          String
   message        String
   isRead         Boolean  @default(false) @map("is_read")
-  companyId      String   @map("company_id")
-  company        Company  @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  companyId      String?  @map("company_id")
+  company        Company? @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  partyId        String?  @map("party_id")
+  party          Party?   @relation(fields: [partyId], references: [partyId], onDelete: Cascade)
+  driverId       String?  @map("driver_id")
+  driver         Driver?  @relation(fields: [driverId], references: [driverId], onDelete: Cascade)
+  userId         String?  @map("user_id")
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   inquiryId      String?  @map("inquiry_id")
   inquiry        Inquiry? @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade)
 
@@ -12,6 +18,9 @@ model Notification {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([companyId])
+  @@index([partyId])
+  @@index([driverId])
+  @@index([userId])
   @@index([inquiryId])
   @@map("notifications")
 }

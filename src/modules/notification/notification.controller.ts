@@ -16,9 +16,6 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AccessTokenGuard } from 'src/common/guards/access-token.guard';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { Role } from 'src/common/constants/role.enum';
 
 @ApiTags('Notifications')
 @Controller('notifications')
@@ -27,23 +24,35 @@ export class NotificationController {
 
   @Get()
   @ApiBearerAuth()
-  @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.VENDOR)
-  @ApiOperation({ summary: 'Get all notifications for logged-in company (VENDOR only)' })
-  @ApiResponse({ status: 200, description: 'Return all notifications for the company.' })
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({
+    summary: 'Get all notifications for logged-in user (All roles)',
+    description:
+      'Retrieves all notifications for the currently logged-in account (User, Company, Party, or Driver).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return all notifications for the authenticated entity.',
+  })
   findAll(@Req() req: any, @Query() query: PaginationQueryDto) {
-    const companyId = req.user.sub;
-    return this.notificationService.findAllForCompany(companyId, query);
+    const actorId = req.user.sub;
+    return this.notificationService.findAllForActor(actorId, query);
   }
 
   @Patch(':id/read')
   @ApiBearerAuth()
-  @UseGuards(AccessTokenGuard, RolesGuard)
-  @Roles(Role.VENDOR)
-  @ApiOperation({ summary: 'Mark a notification as read (VENDOR only)' })
-  @ApiResponse({ status: 200, description: 'Notification successfully updated.' })
+  @UseGuards(AccessTokenGuard)
+  @ApiOperation({
+    summary: 'Mark a notification as read (All roles)',
+    description:
+      'Marks a specific notification as read for the currently logged-in account.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification successfully marked as read.',
+  })
   markAsRead(@Param('id') id: string, @Req() req: any) {
-    const companyId = req.user.sub;
-    return this.notificationService.markAsRead(id, companyId);
+    const actorId = req.user.sub;
+    return this.notificationService.markAsRead(id, actorId);
   }
 }

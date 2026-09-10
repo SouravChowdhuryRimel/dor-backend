@@ -1,37 +1,98 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
-import { CompanyStatus, ComplaintStatus, DeliveryStatus } from '@prisma/client';
+import {
+  CompanyStatus,
+  ComplaintStatus,
+  DeliveryStatus,
+  OrderStatus,
+  Role,
+} from '@prisma/client';
 
+const ACCEPTED_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.ACCEPTED,
+  OrderStatus.PROCESSING,
+  OrderStatus.DISPATCHED,
+  OrderStatus.DELIVERED,
+];
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSuperAdminSummary() {
-    const totalCompanies = await this.prisma.company.count();
-    const pendingVerificationCompanies = await this.prisma.company.count({
-      where: { status: CompanyStatus.PENDING },
-    });
-    const totalOrders = await this.prisma.order.count();
-    const totalComplaints = await this.prisma.complaint.count({
-      where: {
-        status: {
-          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
-        },
+  async getSuperAdminSummary(reqUser?: any) {
+    const isAdmin =
+      reqUser?.roles?.includes('ADMIN') &&
+      !reqUser?.roles?.includes('SUPER_ADMIN');
+    let categoryIds: string[] = [];
+    if (isAdmin) {
+      const adminCategories = await this.prisma.adminCategory.findMany({
+        where: { userId: reqUser.sub },
+      });
+      categoryIds = adminCategories.map((ac) => ac.categoryId);
+    }
+
+    const companyWhere: any = {};
+    if (isAdmin) {
+      companyWhere.categoryId = { in: categoryIds };
+    }
+
+    const pendingCompanyWhere: any = { status: CompanyStatus.PENDING };
+    if (isAdmin) {
+      pendingCompanyWhere.categoryId = { in: categoryIds };
+    }
+
+    const orderWhere: any = {};
+    if (isAdmin) {
+      orderWhere.product = { categoryId: { in: categoryIds } };
+    }
+
+    const complaintWhere: any = {
+      status: {
+        in: [
+          ComplaintStatus.PENDING,
+          ComplaintStatus.UNDER_REVIEW,
+          ComplaintStatus.REOPENED,
+        ],
       },
+    };
+    if (isAdmin) {
+      complaintWhere.company = { categoryId: { in: categoryIds } };
+    }
+
+    const driverWhere: any = {};
+
+    const partyWhere: any = {};
+    if (isAdmin) {
+      partyWhere.categoryId = { in: categoryIds };
+    }
+
+    const totalCompanies = await this.prisma.company.count({
+      where: companyWhere,
+    });
+    const pendingVerificationCompanies = await this.prisma.company.count({
+      where: pendingCompanyWhere,
+    });
+    const totalOrders = await this.prisma.order.count({ where: orderWhere });
+    const totalComplaints = await this.prisma.complaint.count({
+      where: complaintWhere,
     });
 
-    const totalDrivers = await this.prisma.driver.count();
-    const totalParties = await this.prisma.party.count();
+    const totalDrivers = await this.prisma.driver.count({ where: driverWhere });
+    const totalParties = await this.prisma.party.count({ where: partyWhere });
 
-    const totalRevenueAggregate = await this.prisma.order.aggregate({
+    const totalOrderValueAggregate = await this.prisma.order.aggregate({
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       _sum: { totalRate: true, bag: true },
     });
-    const totalRevenue = totalRevenueAggregate._sum.totalRate || 0;
-    const totalBagsOrdered = totalRevenueAggregate._sum.bag || 0;
+    const totalOrderValue = totalOrderValueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = totalOrderValueAggregate._sum.bag || 0;
 
     // Status breakdowns
     const companyStatuses = await this.prisma.company.groupBy({
+      where: companyWhere,
       by: ['status'],
       _count: { _all: true },
     });
@@ -46,6 +107,7 @@ export class DashboardService {
     });
 
     const complaintStatuses = await this.prisma.complaint.groupBy({
+      where: complaintWhere,
       by: ['status'],
       _count: { _all: true },
     });
@@ -75,6 +137,8 @@ export class DashboardService {
         createdAt: {
           gte: startOfTrend,
         },
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: {
         createdAt: true,
@@ -82,7 +146,7 @@ export class DashboardService {
       },
     });
 
-    const weeklyRevenueTrend = last7Days.map((date) => {
+    const weeklyOrderValueTrend = last7Days.map((date) => {
       const dayStart = new Date(date);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -92,21 +156,29 @@ export class DashboardService {
       );
 
       const count = dayOrders.length;
-      const revenue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const orderValue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
         date: date.toISOString().split('T')[0],
         label: dateLabel,
         count,
-        revenue,
+        orderValue,
       };
     });
 
     // Top performers
     const productOrdersGroup = await this.prisma.order.groupBy({
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['productId'],
       _count: { _all: true },
       _sum: { bag: true, totalRate: true },
@@ -129,11 +201,15 @@ export class DashboardService {
         productName: info?.productName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     const companyOrdersGroup = await this.prisma.order.groupBy({
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['companyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -157,11 +233,15 @@ export class DashboardService {
         ownerName: info?.ownerName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     const partyOrdersGroup = await this.prisma.order.groupBy({
+      where: {
+        ...orderWhere,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['partyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -172,7 +252,9 @@ export class DashboardService {
       },
       take: 5,
     });
-    const filteredPartyGroups = partyOrdersGroup.filter((g) => g.partyId !== null);
+    const filteredPartyGroups = partyOrdersGroup.filter(
+      (g) => g.partyId !== null,
+    );
     const partyIds = filteredPartyGroups.map((g) => g.partyId as string);
     const partiesInfo = await this.prisma.party.findMany({
       where: { partyId: { in: partyIds } },
@@ -186,24 +268,27 @@ export class DashboardService {
         businessName: info?.businessName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     // Generate recent activities by fetching recent records
     const recentCompanies = await this.prisma.company.findMany({
+      where: companyWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { companyName: true, createdAt: true },
     });
 
     const recentComplaints = await this.prisma.complaint.findMany({
+      where: complaintWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { title: true, createdAt: true },
     });
 
     const recentOrders = await this.prisma.order.findMany({
+      where: orderWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { showOrderId: true, createdAt: true },
@@ -243,14 +328,14 @@ export class DashboardService {
         pendingVerificationCompanies,
         totalOrders,
         totalComplaints,
-        totalRevenue,
+        totalOrderValue,
         totalDrivers,
         totalParties,
         totalBagsOrdered,
       },
       companyStatusBreakdown,
       complaintStatusBreakdown,
-      weeklyRevenueTrend,
+      weeklyOrderValueTrend,
       topProducts,
       topCompanies,
       topParties,
@@ -281,12 +366,15 @@ export class DashboardService {
       where: { companyId },
     });
 
-    const revenueAggregate = await this.prisma.order.aggregate({
-      where: { companyId },
+    const orderValueAggregate = await this.prisma.order.aggregate({
+      where: {
+        companyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       _sum: { totalRate: true, bag: true },
     });
-    const totalRevenue = revenueAggregate._sum.totalRate || 0;
-    const totalBagsOrdered = revenueAggregate._sum.bag || 0;
+    const totalOrderValue = orderValueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = orderValueAggregate._sum.bag || 0;
 
     // Delivery Status Breakdown
     const deliveryStatuses = await this.prisma.delivery.groupBy({
@@ -297,9 +385,11 @@ export class DashboardService {
       _count: { _all: true },
     });
     const deliveryStatusBreakdown = {
-      VAN_COMING: 0,
-      TRANSFER_IN_PROGRESS: 0,
-      NEAREST_TRANSFER: 0,
+      PENDING: 0,
+      ACCEPTED: 0,
+      REJECTED: 0,
+      IN_TRANSIT: 0,
+      REACHED: 0,
       DELIVERED: 0,
     };
     deliveryStatuses.forEach((d) => {
@@ -337,11 +427,12 @@ export class DashboardService {
       where: {
         companyId,
         createdAt: { gte: startOfTrend },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: { createdAt: true, totalRate: true },
     });
 
-    const weeklyRevenueTrend = last7Days.map((date) => {
+    const weeklyOrderValueTrend = last7Days.map((date) => {
       const dayStart = new Date(date);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -351,22 +442,77 @@ export class DashboardService {
       );
 
       const count = dayOrders.length;
-      const revenue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const orderValue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
         date: date.toISOString().split('T')[0],
         label: dateLabel,
         count,
-        revenue,
+        orderValue,
+      };
+    });
+
+    // Monthly Revenue Trend for the last 6 months
+    const last6Months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      d.setHours(0, 0, 0, 0);
+      last6Months.push(d);
+    }
+    const startOf6MonthTrend = new Date(last6Months[0]);
+
+    const sixMonthTrendOrders = await this.prisma.order.findMany({
+      where: {
+        companyId,
+        createdAt: { gte: startOf6MonthTrend },
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
+      select: { createdAt: true, totalRate: true, bag: true },
+    });
+
+    const sixMonthOrderValueTrend = last6Months.map((date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
+      const monthOrders = sixMonthTrendOrders.filter(
+        (o) => o.createdAt >= monthStart && o.createdAt <= monthEnd,
+      );
+
+      const count = monthOrders.length;
+      const orderValue = monthOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const bags = monthOrders.reduce((sum, o) => sum + (o.bag || 0), 0);
+
+      const monthLabel = date.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+      });
+
+      return {
+        month: `${year}-${String(month + 1).padStart(2, '0')}`,
+        label: monthLabel,
+        count,
+        orderValue,
+        bags,
       };
     });
 
     // Top Parties
     const partyOrdersGroup = await this.prisma.order.groupBy({
-      where: { companyId },
+      where: {
+        companyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['partyId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -375,7 +521,9 @@ export class DashboardService {
       },
       take: 5,
     });
-    const filteredPartyGroups = partyOrdersGroup.filter((g) => g.partyId !== null);
+    const filteredPartyGroups = partyOrdersGroup.filter(
+      (g) => g.partyId !== null,
+    );
     const partyIds = filteredPartyGroups.map((g) => g.partyId as string);
     const partiesInfo = await this.prisma.party.findMany({
       where: { partyId: { in: partyIds } },
@@ -389,13 +537,16 @@ export class DashboardService {
         businessName: info?.businessName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
     // Top Products
     const productOrdersGroup = await this.prisma.order.groupBy({
-      where: { companyId },
+      where: {
+        companyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['productId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -416,7 +567,7 @@ export class DashboardService {
         productName: info?.productName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalRevenue: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
@@ -460,28 +611,200 @@ export class DashboardService {
       {
         name: 'জাতীয় পরিচয়পত্র',
         description: 'মালিকের NID কপি',
-        file: company.companyDocument.length > 0 ? company.companyDocument[0] : null,
+        file:
+          company.companyDocument.length > 0
+            ? company.companyDocument[0]
+            : null,
       },
       {
         name: 'ব্যাংক তথ্য',
         description: 'ব্যাংক স্টেটমেন্ট বা চেক বই কপি',
-        file: company.companyDocument.length > 1 ? company.companyDocument[1] : null,
+        file:
+          company.companyDocument.length > 1
+            ? company.companyDocument[1]
+            : null,
       },
     ];
 
+    // Today's orders count
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayOrdersCount = await this.prisma.order.count({
+      where: {
+        companyId,
+        createdAt: { gte: startOfToday },
+      },
+    });
+
+    // Stock alert count
+    const companyProducts = await this.prisma.product.findMany({
+      where: { companyId },
+      select: { stockSize: true, minimumOrder: true },
+    });
+    const stockAlertCount = companyProducts.filter(
+      (p) => p.stockSize <= 0 || p.stockSize < p.minimumOrder,
+    ).length;
+
+    // Completed deliveries count (total completed deliveries)
+    const completedDeliveriesCount = await this.prisma.delivery.count({
+      where: {
+        order: { companyId },
+        status: DeliveryStatus.DELIVERED,
+      },
+    });
+
+    // Active complaints count
+    const activeComplaintsCount = await this.prisma.complaint.count({
+      where: {
+        companyId,
+        status: {
+          in: [
+            ComplaintStatus.PENDING,
+            ComplaintStatus.UNDER_REVIEW,
+            ComplaintStatus.REOPENED,
+          ],
+        },
+      },
+    });
+
+    // Active parties count
+    const activePartiesCount = await this.prisma.party.count({
+      where: { companyId },
+    });
+
+    // Sales growth percentage
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+
+    const thisMonthOrders = await this.prisma.order.aggregate({
+      where: {
+        companyId,
+        createdAt: { gte: startOfThisMonth },
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
+      _sum: { totalRate: true },
+    });
+    const thisMonthSales = thisMonthOrders._sum.totalRate || 0;
+
+    const lastMonthOrders = await this.prisma.order.aggregate({
+      where: {
+        companyId,
+        createdAt: {
+          gte: startOfLastMonth,
+          lte: endOfLastMonth,
+        },
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
+      _sum: { totalRate: true },
+    });
+    const lastMonthSales = lastMonthOrders._sum.totalRate || 0;
+
+    let salesGrowth = 0;
+    if (lastMonthSales > 0) {
+      salesGrowth = parseFloat(
+        (((thisMonthSales - lastMonthSales) / lastMonthSales) * 100).toFixed(1),
+      );
+    } else if (thisMonthSales > 0) {
+      salesGrowth = 100.0;
+    }
+
+    // Pending Deliveries: Orders that are not delivered or cancelled yet
+    const pendingOrdersRaw = await this.prisma.order.findMany({
+      where: {
+        companyId,
+        status: {
+          in: [
+            OrderStatus.PENDING,
+            OrderStatus.ACCEPTED,
+            OrderStatus.PROCESSING,
+            OrderStatus.DISPATCHED,
+          ],
+        },
+      },
+      include: {
+        party: {
+          select: {
+            partyName: true,
+            businessName: true,
+          },
+        },
+        product: {
+          select: {
+            productName: true,
+            unit: true,
+          },
+        },
+        deliveries: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pendingDeliveries = pendingOrdersRaw.map((o) => {
+      const latestDelivery = o.deliveries?.[0] || null;
+      let deliveryStatus = 'Pending';
+      if (latestDelivery) {
+        if (latestDelivery.status === DeliveryStatus.IN_TRANSIT) {
+          deliveryStatus = 'In Transit';
+        } else if (latestDelivery.status === DeliveryStatus.REACHED) {
+          deliveryStatus = 'Reached';
+        } else if (latestDelivery.status === DeliveryStatus.ACCEPTED) {
+          deliveryStatus = 'Accepted';
+        } else if (latestDelivery.status === DeliveryStatus.REJECTED) {
+          deliveryStatus = 'Rejected';
+        }
+      }
+      return {
+        orderId: o.orderId,
+        showOrderId: o.showOrderId,
+        partyName:
+          o.party?.businessName || o.party?.partyName || 'Unknown Party',
+        productName: o.product?.productName || 'Unknown Product',
+        quantity: o.bag,
+        unit: o.product?.unit || o.bagSize || 'Bag',
+        totalAmount: o.totalRate,
+        deliveryStatus,
+        createdAt: o.createdAt,
+      };
+    });
+
     return {
+      ownerName: company.ownerName,
       companyName: company.companyName,
+      totalSales: totalOrderValue,
+      salesGrowth,
+      todayOrdersCount,
+      stockAlertCount,
+      completedDeliveriesCount,
+      activeComplaintsCount,
+      activePartiesCount,
+      pendingDeliveries,
+
+      // original response fields to preserve compatibility
       metrics: {
         totalOrders,
         totalDrivers,
         totalParties,
         totalComplaints,
-        totalRevenue,
+        totalOrderValue,
         totalBagsOrdered,
       },
       deliveryStatusBreakdown,
       complaintStatusBreakdown,
-      weeklyRevenueTrend,
+      weeklyOrderValueTrend,
+      sixMonthOrderValueTrend,
       topParties,
       topProducts,
       recentOrders,
@@ -507,9 +830,10 @@ export class DashboardService {
           some: {
             status: {
               in: [
-                DeliveryStatus.VAN_COMING,
-                DeliveryStatus.TRANSFER_IN_PROGRESS,
-                DeliveryStatus.NEAREST_TRANSFER,
+                DeliveryStatus.PENDING,
+                DeliveryStatus.ACCEPTED,
+                DeliveryStatus.IN_TRANSIT,
+                DeliveryStatus.REACHED,
               ],
             },
           },
@@ -532,7 +856,9 @@ export class DashboardService {
       select: { companyId: true },
       distinct: ['companyId'],
     });
-    const companyIds = new Set<string>(orderedCompanies.map((o) => o.companyId));
+    const companyIds = new Set<string>(
+      orderedCompanies.map((o) => o.companyId),
+    );
     if (party.companyId) {
       companyIds.add(party.companyId);
     }
@@ -542,17 +868,24 @@ export class DashboardService {
       where: {
         partyId,
         status: {
-          in: [ComplaintStatus.PENDING, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.REOPENED],
+          in: [
+            ComplaintStatus.PENDING,
+            ComplaintStatus.UNDER_REVIEW,
+            ComplaintStatus.REOPENED,
+          ],
         },
       },
     });
 
-    const spendAggregate = await this.prisma.order.aggregate({
-      where: { partyId },
+    const orderValueAggregate = await this.prisma.order.aggregate({
+      where: {
+        partyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       _sum: { totalRate: true, bag: true },
     });
-    const totalSpend = spendAggregate._sum.totalRate || 0;
-    const totalBagsOrdered = spendAggregate._sum.bag || 0;
+    const totalOrderValue = orderValueAggregate._sum.totalRate || 0;
+    const totalBagsOrdered = orderValueAggregate._sum.bag || 0;
 
     // Weekly Spend Trend
     const last7Days = [];
@@ -568,11 +901,12 @@ export class DashboardService {
       where: {
         partyId,
         createdAt: { gte: startOfTrend },
+        status: { in: ACCEPTED_ORDER_STATUSES },
       },
       select: { createdAt: true, totalRate: true },
     });
 
-    const weeklySpendTrend = last7Days.map((date) => {
+    const weeklyOrderValueTrend = last7Days.map((date) => {
       const dayStart = new Date(date);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
@@ -582,22 +916,29 @@ export class DashboardService {
       );
 
       const count = dayOrders.length;
-      const spend = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
+      const orderValue = dayOrders.reduce((sum, o) => sum + o.totalRate, 0);
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
         date: date.toISOString().split('T')[0],
         label: dateLabel,
         count,
-        spend,
+        orderValue,
       };
     });
 
     // Top Products
     const productOrdersGroup = await this.prisma.order.groupBy({
-      where: { partyId },
+      where: {
+        partyId,
+        status: { in: ACCEPTED_ORDER_STATUSES },
+      },
       by: ['productId'],
       _sum: { totalRate: true, bag: true },
       _count: { _all: true },
@@ -618,7 +959,7 @@ export class DashboardService {
         productName: info?.productName || 'Unknown',
         orderCount: g._count._all,
         totalBags: g._sum.bag || 0,
-        totalSpend: g._sum.totalRate || 0,
+        totalOrderValue: g._sum.totalRate || 0,
       };
     });
 
@@ -723,10 +1064,10 @@ export class DashboardService {
         deliveryRemaining,
         activeCompanies,
         pendingComplaints,
-        totalSpend,
+        totalOrderValue,
         totalBagsOrdered,
       },
-      weeklySpendTrend,
+      weeklyOrderValueTrend,
       topProducts,
       recentOrders,
       recentInquiries,
@@ -762,9 +1103,10 @@ export class DashboardService {
         driverId,
         status: {
           in: [
-            DeliveryStatus.VAN_COMING,
-            DeliveryStatus.TRANSFER_IN_PROGRESS,
-            DeliveryStatus.NEAREST_TRANSFER,
+            DeliveryStatus.PENDING,
+            DeliveryStatus.ACCEPTED,
+            DeliveryStatus.IN_TRANSIT,
+            DeliveryStatus.REACHED,
           ],
         },
       },
@@ -777,7 +1119,15 @@ export class DashboardService {
       },
     });
 
-    const proofUploadPending = 0; // Default or mocked to 0 as there is no proof table/column
+    const proofUploadPending = await this.prisma.delivery.count({
+      where: {
+        driverId,
+        OR: [
+          { status: DeliveryStatus.IN_TRANSIT, pickupProof: null },
+          { status: DeliveryStatus.DELIVERED, deliveryProof: null },
+        ],
+      },
+    });
 
     const totalDeliveries = await this.prisma.delivery.count({
       where: { driverId },
@@ -809,7 +1159,11 @@ export class DashboardService {
         (d) => d.createdAt >= dayStart && d.createdAt <= dayEnd,
       ).length;
 
-      const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      };
       const dateLabel = date.toLocaleDateString('en-US', options);
 
       return {
@@ -819,9 +1173,10 @@ export class DashboardService {
       };
     });
 
-    const currentLocation = driver.upozela && driver.district 
-      ? `${driver.upozela}, ${driver.district}` 
-      : driver.district || driver.upozela || '';
+    const currentLocation =
+      driver.upozela && driver.district
+        ? `${driver.upozela}, ${driver.district}`
+        : driver.district || driver.upozela || '';
 
     // Fetch ongoing deliveries list with order, company and party details
     const ongoingDeliveriesRaw = await this.prisma.delivery.findMany({
@@ -829,9 +1184,10 @@ export class DashboardService {
         driverId,
         status: {
           in: [
-            DeliveryStatus.VAN_COMING,
-            DeliveryStatus.TRANSFER_IN_PROGRESS,
-            DeliveryStatus.NEAREST_TRANSFER,
+            DeliveryStatus.PENDING,
+            DeliveryStatus.ACCEPTED,
+            DeliveryStatus.IN_TRANSIT,
+            DeliveryStatus.REACHED,
           ],
         },
       },
@@ -863,8 +1219,8 @@ export class DashboardService {
     const ongoingDeliveriesList = ongoingDeliveriesRaw.map((d) => {
       const company = d.order?.company;
       const party = d.order?.party;
-      const pickupPoint = company 
-        ? `${company.companyName} গেট, ${company.upozela || company.district || ''}` 
+      const pickupPoint = company
+        ? `${company.companyName} গেট, ${company.upozela || company.district || ''}`
         : null;
 
       return {
@@ -911,7 +1267,8 @@ export class DashboardService {
       orderId: d.orderId,
       showOrderId: d.order?.showOrderId || null,
       companyName: d.order?.company?.companyName || null,
-      partyName: d.order?.party?.businessName || d.order?.party?.partyName || null,
+      partyName:
+        d.order?.party?.businessName || d.order?.party?.partyName || null,
       destinationAddress: d.address,
       upozela: d.upozela,
       district: d.district,

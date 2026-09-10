@@ -12,17 +12,25 @@ services:
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:-super-secret-key}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-refresh-secret-key}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-1h}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-7d}
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-superadmin@example.com}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-password123}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL:-}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/src/main.js"
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -33,7 +41,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
       - POSTGRES_DB=${DB_NAME:-mydb}
     ports:
-      - '5435:5432'
+      - '127.0.0.1:5435:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -42,6 +50,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -54,6 +63,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - app-network
 

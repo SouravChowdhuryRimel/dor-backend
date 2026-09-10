@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../core/database/database.service';
-import { Prisma, User, Role } from '@prisma/client';
+import { Prisma, User, Role, CompanyStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { CreateAdminDto } from '../dto/create-admin.dto';
 import { AdminStatusFilter } from '../dto/admin-status-filter.dto';
@@ -42,8 +42,7 @@ export class UsersService implements OnApplicationBootstrap {
         this.configService.get<string>('SUPER_ADMIN_EMAIL') ||
         'superadmin@example.com';
       const phoneNumber =
-        this.configService.get<string>('SUPER_ADMIN_PHONE') ||
-        '01700000000';
+        this.configService.get<string>('SUPER_ADMIN_PHONE') || '01700000000';
       const password =
         this.configService.get<string>('SUPER_ADMIN_PASSWORD') || 'password123';
 
@@ -62,7 +61,9 @@ export class UsersService implements OnApplicationBootstrap {
           roles: [Role.SUPER_ADMIN],
         },
       });
-      this.logger.log(`Super Admin created successfully with phone: ${phoneNumber}`);
+      this.logger.log(
+        `Super Admin created successfully with phone: ${phoneNumber}`,
+      );
       this.logger.log('--- EXAMPLE LOGIN ROUTE ---');
       this.logger.log(
         `curl -X POST http://localhost:3000/api/v1/auth/signin \\`,
@@ -83,6 +84,24 @@ export class UsersService implements OnApplicationBootstrap {
     });
   }
 
+  private mapAdminCategories(user: any) {
+    if (!user) return user;
+    const categoryIds =
+      user.adminCategories?.map(
+        (ac: any) => ac.category?.categoryId || ac.categoryId,
+      ) || [];
+    const category = user.adminCategories?.[0]?.category || null;
+    const categoryId = categoryIds[0] || null;
+    const { adminCategories, ...rest } = user;
+    return {
+      ...rest,
+      categoryId,
+      categoryIds,
+      category,
+      adminCategories,
+    };
+  }
+
   async createAdmin(data: CreateAdminDto): Promise<User> {
     const hashedPassword = await argon2.hash(data.password, {
       type: argon2.argon2id,
@@ -90,34 +109,56 @@ export class UsersService implements OnApplicationBootstrap {
       timeCost: 3,
     });
 
-    return this.prisma.user.create({
+    let catIds: string[] = [];
+    if (data.categoryIds && data.categoryIds.length > 0) {
+      catIds = data.categoryIds;
+    } else if ((data as any).categoryId) {
+      catIds = [(data as any).categoryId];
+    }
+
+    const user = await this.prisma.user.create({
       data: {
         email: data.email,
         phoneNumber: data.phoneNumber,
         password: hashedPassword,
         name: data.name,
-        categoryId: data.categoryId,
         isActive: data.isActive ?? true,
         roles: [Role.ADMIN],
+        adminCategories: {
+          create: catIds.map((cid) => ({ categoryId: cid })),
+        },
       },
       select: {
         id: true,
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
-        categoryId: true,
+        adminCategories: {
+          select: {
+            categoryId: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       } as Prisma.UserSelect,
-    }) as unknown as Promise<User>;
+    });
+
+    return this.mapAdminCategories(user) as unknown as User;
   }
 
   async findAllAdmins(
     status: AdminStatusFilter = AdminStatusFilter.ALL,
   ): Promise<Partial<User>[]> {
-    return this.prisma.user.findMany({
+    const admins = await this.prisma.user.findMany({
       where: {
         roles: {
           has: Role.ADMIN,
@@ -131,19 +172,26 @@ export class UsersService implements OnApplicationBootstrap {
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
-        categoryId: true,
-        category: {
+        adminCategories: {
           select: {
             categoryId: true,
-            categoryName: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
           },
         },
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return admins.map((admin) => this.mapAdminCategories(admin));
   }
 
   async findAdminById(id: string): Promise<Partial<User>> {
@@ -157,13 +205,18 @@ export class UsersService implements OnApplicationBootstrap {
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
-        categoryId: true,
-        category: {
+        adminCategories: {
           select: {
             categoryId: true,
-            categoryName: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
           },
         },
         createdAt: true,
@@ -175,48 +228,76 @@ export class UsersService implements OnApplicationBootstrap {
       throw new NotFoundException('Admin not found');
     }
 
-    return admin;
+    return this.mapAdminCategories(admin);
   }
 
   async updateAdmin(id: string, data: UpdateAdminDto): Promise<Partial<User>> {
     await this.findAdminById(id);
 
-    const password = data.password
-      ? await argon2.hash(data.password, {
-          type: argon2.argon2id,
-          memoryCost: 65536,
-          timeCost: 3,
-        })
-      : undefined;
+    let catIds: string[] | undefined = undefined;
+    if (data.categoryIds && data.categoryIds.length > 0) {
+      catIds = data.categoryIds;
+    } else if ((data as any).categoryId) {
+      catIds = [(data as any).categoryId];
+    }
 
-    return this.prisma.user.update({
+    // Update categories by deleting existing ones and inserting new ones if provided
+    if (catIds !== undefined) {
+      await this.prisma.adminCategory.deleteMany({
+        where: { userId: id },
+      });
+    }
+
+    const user = await this.prisma.user.update({
       where: { id },
       data: {
         email: data.email,
-        phoneNumber: data.phoneNumber,
         name: data.name,
-        categoryId: data.categoryId,
-        isActive: data.isActive,
-        ...(password ? { password } : {}),
+        profileImage: data.profileImage,
+        ...(catIds !== undefined
+          ? {
+            adminCategories: {
+              create: catIds.map((cid) => ({ categoryId: cid })),
+            },
+          }
+          : {}),
       },
       select: {
         id: true,
         email: true,
         phoneNumber: true,
         name: true,
+        profileImage: true,
         roles: true,
         isActive: true,
-        categoryId: true,
+        adminCategories: {
+          select: {
+            categoryId: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return this.mapAdminCategories(user);
   }
 
   async removeAdmin(id: string): Promise<Partial<User>> {
     await this.findAdminById(id);
 
-    return this.prisma.user.delete({
+    // Delete relation records manually before deleting user due to foreign key cascade
+    await this.prisma.adminCategory.deleteMany({
+      where: { userId: id },
+    });
+
+    const user = await this.prisma.user.delete({
       where: { id },
       select: {
         id: true,
@@ -225,29 +306,60 @@ export class UsersService implements OnApplicationBootstrap {
         name: true,
         roles: true,
         isActive: true,
-        categoryId: true,
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return user;
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { email },
+      include: {
+        adminCategories: {
+          select: {
+            categoryId: true,
+          },
+        },
+      },
     });
+    return this.mapAdminCategories(user);
   }
 
   async findByPhone(phoneNumber: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { phoneNumber },
+      include: {
+        adminCategories: {
+          select: {
+            categoryId: true,
+          },
+        },
+      },
     });
+    return this.mapAdminCategories(user);
   }
 
   async findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id },
+      include: {
+        adminCategories: {
+          select: {
+            categoryId: true,
+            category: {
+              select: {
+                categoryId: true,
+                categoryName: true,
+              },
+            },
+          },
+        },
+      },
     });
+    return this.mapAdminCategories(user);
   }
 
   async update(id: string, data: Prisma.UserUpdateInput): Promise<User> {
@@ -268,5 +380,51 @@ export class UsersService implements OnApplicationBootstrap {
       where: { id: userId },
       data: { password: hashedPassword },
     });
+  }
+
+  async softDeleteUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { isActive: false },
+      });
+      return { success: true, message: 'User profile soft-deleted successfully' };
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { companyId: userId },
+    });
+    if (company) {
+      await this.prisma.company.update({
+        where: { companyId: userId },
+        data: { status: CompanyStatus.BLOCKED, isVerified: false },
+      });
+      return { success: true, message: 'Company profile soft-deleted successfully' };
+    }
+
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: userId },
+    });
+    if (party) {
+      await this.prisma.party.update({
+        where: { partyId: userId },
+        data: { status: 'INACTIVE' },
+      });
+      return { success: true, message: 'Party profile soft-deleted successfully' };
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: userId },
+    });
+    if (driver) {
+      await this.prisma.driver.update({
+        where: { driverId: userId },
+        data: { isVerified: false },
+      });
+      return { success: true, message: 'Driver profile soft-deleted successfully' };
+    }
+
+    throw new NotFoundException('Account not found');
   }
 }

@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class PartyLoginDto {
   @ApiProperty({
@@ -19,4 +19,12 @@ export class PartyLoginDto {
   @IsNotEmpty()
   @MinLength(6)
   password: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional Firebase Cloud Messaging (FCM) token for push notifications',
+    example: 'fcm_token_sample_123456',
+  })
+  @IsString()
+  @IsOptional()
+  fcmToken?: string;
 }

@@ -1,6 +1,8 @@
 model SubCategory {
   subCategoryId String    @id @default(uuid()) @map("sub_category_id")
   title         String
+  categoryId    String    @map("category_id")
+  category      Category  @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   products      Product[]
 
   @@map("sub_categories")

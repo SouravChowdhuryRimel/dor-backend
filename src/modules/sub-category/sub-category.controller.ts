@@ -27,7 +27,7 @@ import { Role } from 'src/common/constants/role.enum';
 @ApiTags('SubCategories')
 @Controller('sub_categories')
 export class SubCategoryController {
-  constructor(private readonly subCategoryService: SubCategoryService) { }
+  constructor(private readonly subCategoryService: SubCategoryService) {}
 
   @Post()
   @ApiBearerAuth()

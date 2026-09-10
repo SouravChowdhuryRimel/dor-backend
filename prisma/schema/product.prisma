@@ -4,18 +4,25 @@ model Product {
   productName   String      @map("product_name")
   unit          String
   bagSize       String      @map("bag_size")
+  packagingType PackagingType @default(PIECE) @map("packaging_type")
+  unitType      UnitType      @default(PIECE) @map("unit_type")
   defaultPrice  Float       @map("default_price")
+  regularPrice  Float       @map("regular_price")
+  offerPrice    Float       @map("offer_price")
   minimumOrder  Int         @map("minimum_order")
   description   String
   stockSize     Int         @map("stock_size")
-  subCategoryId String      @map("sub_category_id")
-  subCategory   SubCategory @relation(fields: [subCategoryId], references: [subCategoryId])
-  companyId     String?     @map("company_id")
-  company       Company?    @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  subCategoryId String?     @map("sub_category_id")
+  subCategory   SubCategory? @relation(fields: [subCategoryId], references: [subCategoryId])
+  companyId     String      @map("company_id")
+  company       Company     @relation(fields: [companyId], references: [companyId], onDelete: Cascade)
+  categoryId    String      @map("category_id")
+  category      Category    @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   offers        Offer[]
   orders        Order[]
   partyRates    PartyProductRate[]
   complaints    Complaint[]
+  inquiryResponses InquiryResponse[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

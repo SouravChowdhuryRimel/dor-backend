@@ -1,13 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsString,
-  IsNotEmpty,
-  IsOptional,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateComplaintDto {
   @ApiPropertyOptional({
-    description: 'Unique friendly complaint ticket ID. If not provided, it will be auto-generated.',
+    description:
+      'Unique friendly complaint ticket ID. If not provided, it will be auto-generated.',
     example: 'CMP-8842',
   })
   @IsString()
@@ -24,14 +21,16 @@ export class CreateComplaintDto {
 
   @ApiProperty({
     description: 'Detailed description of the issue',
-    example: 'The delivery truck was delayed by 4 hours and the driver was extremely uncooperative.',
+    example:
+      'The delivery truck was delayed by 4 hours and the driver was extremely uncooperative.',
   })
   @IsString()
   @IsNotEmpty()
   description: string;
 
   @ApiPropertyOptional({
-    description: 'Array of attached file paths (e.g. photos of damage, invoices)',
+    description:
+      'Array of attached file paths (e.g. photos of damage, invoices)',
     example: ['/uploads/documents/doc-1234.jpg'],
     type: [String],
   })

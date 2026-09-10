@@ -2,13 +2,25 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateSubCategoryDto } from './dto/create-sub-category.dto';
 import { UpdateSubCategoryDto } from './dto/update-sub-category.dto';
-import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../shared/pagination/pagination.util';
 
 @Injectable()
 export class SubCategoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createSubCategoryDto: CreateSubCategoryDto) {
+    const category = await this.prisma.category.findUnique({
+      where: { categoryId: createSubCategoryDto.categoryId },
+    });
+    if (!category) {
+      throw new NotFoundException(
+        `Category with ID "${createSubCategoryDto.categoryId}" not found`,
+      );
+    }
+
     return this.prisma.subCategory.create({
       data: createSubCategoryDto,
     });
@@ -24,6 +36,9 @@ export class SubCategoryService {
       this.prisma.subCategory.findMany({
         skip,
         take: limit,
+        include: {
+          category: true,
+        },
       }),
     ]);
 
@@ -33,6 +48,9 @@ export class SubCategoryService {
   async findOne(id: string) {
     const subCategory = await this.prisma.subCategory.findUnique({
       where: { subCategoryId: id },
+      include: {
+        category: true,
+      },
     });
     if (!subCategory) {
       throw new NotFoundException(`SubCategory not found`);
@@ -46,6 +64,17 @@ export class SubCategoryService {
     });
     if (!subCategory) {
       throw new NotFoundException(`SubCategory not found`);
+    }
+
+    if (updateSubCategoryDto.categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { categoryId: updateSubCategoryDto.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID "${updateSubCategoryDto.categoryId}" not found`,
+        );
+      }
     }
 
     return this.prisma.subCategory.update({

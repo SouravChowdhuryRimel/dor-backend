@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsEmail, IsArray } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsEmail,
+  IsArray,
+} from 'class-validator';
 
 export class CreatePartyDto {
   @ApiProperty({ description: 'Name of the party', example: 'John Party' })
@@ -7,7 +14,10 @@ export class CreatePartyDto {
   @IsNotEmpty()
   partyName: string;
 
-  @ApiProperty({ description: 'Business Name of the party', example: 'Acme Business' })
+  @ApiProperty({
+    description: 'Business Name of the party',
+    example: 'Acme Business',
+  })
   @IsString()
   @IsNotEmpty()
   businessName: string;
@@ -17,17 +27,27 @@ export class CreatePartyDto {
   @IsNotEmpty()
   phoneNumber: string;
 
-  @ApiProperty({ description: 'Email address of the party', example: 'party@example.com' })
+  @ApiProperty({
+    description: 'Email address of the party',
+    example: 'party@example.com',
+  })
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ description: 'Password for logging in', minLength: 6, example: 'PartyPass123!' })
+  @ApiProperty({
+    description: 'Password for logging in',
+    minLength: 6,
+    example: 'PartyPass123!',
+  })
   @IsString()
   @IsNotEmpty()
   password: string;
 
-  @ApiProperty({ description: 'Address of the party', example: '789 Market St' })
+  @ApiProperty({
+    description: 'Address of the party',
+    example: '789 Market St',
+  })
   @IsString()
   @IsNotEmpty()
   address: string;
@@ -42,22 +62,34 @@ export class CreatePartyDto {
   @IsNotEmpty()
   upozela: string;
 
-  @ApiPropertyOptional({ description: 'Bazzar/Area of the party', example: 'Mirpur Bazaar' })
+  @ApiPropertyOptional({
+    description: 'Bazzar/Area of the party',
+    example: 'Mirpur Bazaar',
+  })
   @IsString()
   @IsOptional()
   bazzarArea?: string;
 
-  @ApiPropertyOptional({ description: 'Bazzar of the party (alias for bazzarArea)', example: 'Mirpur Bazaar' })
+  @ApiPropertyOptional({
+    description: 'Bazzar of the party (alias for bazzarArea)',
+    example: 'Mirpur Bazaar',
+  })
   @IsString()
   @IsOptional()
   bazzar?: string;
 
-  @ApiPropertyOptional({ description: 'Area of the party (alias for bazzarArea)', example: 'Mirpur Bazaar' })
+  @ApiPropertyOptional({
+    description: 'Area of the party (alias for bazzarArea)',
+    example: 'Mirpur Bazaar',
+  })
   @IsString()
   @IsOptional()
   area?: string;
 
-  @ApiProperty({ description: 'Description of the party', example: 'Retailer merchant' })
+  @ApiProperty({
+    description: 'Description of the party',
+    example: 'Retailer merchant',
+  })
   @IsString()
   @IsNotEmpty()
   description: string;
@@ -78,7 +110,6 @@ export class CreatePartyDto {
   @IsOptional()
   treadLicense?: string;
 
-
   @ApiPropertyOptional({
     description: 'Documents of the party',
     type: [String],
@@ -93,4 +124,44 @@ export class CreatePartyDto {
   @IsString()
   @IsOptional()
   profileImage?: string;
+
+  @ApiPropertyOptional({
+    description: 'Additional address of the party',
+    example: 'Building 4, Apt 2B',
+  })
+  @IsString()
+  @IsOptional()
+  additionalAddress?: string;
+
+  @ApiPropertyOptional({
+    description: 'Latitude of party location',
+    example: 23.8103,
+  })
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude of party location',
+    example: 90.4125,
+  })
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Latitude of party location (alias lat)',
+    example: 23.8103,
+  })
+  @IsNumber()
+  @IsOptional()
+  lat?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude of party location (alias long)',
+    example: 90.4125,
+  })
+  @IsNumber()
+  @IsOptional()
+  long?: number;
 }

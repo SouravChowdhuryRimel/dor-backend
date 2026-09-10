@@ -3,7 +3,9 @@ import { IsString, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 
 export class GetActivityLogsQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: 'Filter by actor type (ADMIN, COMPANY, PARTY, DRIVER)' })
+  @ApiPropertyOptional({
+    description: 'Filter by actor type (ADMIN, COMPANY, PARTY, DRIVER)',
+  })
   @IsString()
   @IsOptional()
   actorType?: string;

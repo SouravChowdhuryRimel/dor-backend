@@ -9,7 +9,10 @@ export class GetDeliveriesQueryDto extends PaginationQueryDto {
   @IsOptional()
   driverId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by delivery status', enum: DeliveryStatus })
+  @ApiPropertyOptional({
+    description: 'Filter by delivery status',
+    enum: DeliveryStatus,
+  })
   @IsEnum(DeliveryStatus)
   @IsOptional()
   status?: DeliveryStatus;

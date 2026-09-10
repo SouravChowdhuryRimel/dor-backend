@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { GetActivityLogsQueryDto } from './dto/get-activity-logs-query.dto';
-import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../shared/pagination/pagination.util';
 
 @Injectable()
 export class ActivityLogService {
@@ -12,17 +15,26 @@ export class ActivityLogService {
     actorId: string;
     action: string;
     description: string;
-    ipAddress?: string;
-    userAgent?: string;
-    userId?: string;
-    companyId?: string;
-    partyId?: string;
-    driverId?: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    userId?: string | null;
+    companyId?: string | null;
+    partyId?: string | null;
+    driverId?: string | null;
   }) {
     const logData = { ...data };
-    
+
+    if (logData.actorType && logData.actorType.toUpperCase() === 'VENDOR') {
+      logData.actorType = 'COMPANY';
+    }
+
     // Automatically map relation foreign key if not provided explicitly
-    if (!logData.userId && !logData.companyId && !logData.partyId && !logData.driverId) {
+    if (
+      !logData.userId &&
+      !logData.companyId &&
+      !logData.partyId &&
+      !logData.driverId
+    ) {
       const type = logData.actorType.toUpperCase();
       if (type === 'ADMIN' || type === 'SUPER_ADMIN' || type === 'USER') {
         logData.userId = logData.actorId;
@@ -33,6 +45,24 @@ export class ActivityLogService {
       } else if (type === 'DRIVER') {
         logData.driverId = logData.actorId;
       }
+    }
+
+    // Safeguard against foreign key violations on deleted records
+    if (logData.userId) {
+      const exists = await this.prisma.user.findUnique({ where: { id: logData.userId } });
+      if (!exists) logData.userId = null;
+    }
+    if (logData.companyId) {
+      const exists = await this.prisma.company.findUnique({ where: { companyId: logData.companyId } });
+      if (!exists) logData.companyId = null;
+    }
+    if (logData.partyId) {
+      const exists = await this.prisma.party.findUnique({ where: { partyId: logData.partyId } });
+      if (!exists) logData.partyId = null;
+    }
+    if (logData.driverId) {
+      const exists = await this.prisma.driver.findUnique({ where: { driverId: logData.driverId } });
+      if (!exists) logData.driverId = null;
     }
 
     return this.prisma.activityLog.create({
@@ -69,10 +99,20 @@ export class ActivityLogService {
             select: { id: true, name: true, email: true, phoneNumber: true },
           },
           company: {
-            select: { companyId: true, companyName: true, ownerName: true, phoneNumber: true },
+            select: {
+              companyId: true,
+              companyName: true,
+              ownerName: true,
+              phoneNumber: true,
+            },
           },
           party: {
-            select: { partyId: true, partyName: true, businessName: true, phoneNumber: true },
+            select: {
+              partyId: true,
+              partyName: true,
+              businessName: true,
+              phoneNumber: true,
+            },
           },
           driver: {
             select: { driverId: true, driverName: true, phoneNumber: true },

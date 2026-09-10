@@ -1,4 +1,0 @@
-Creating new SUPER_ADMIN...
-Super Admin created successfully:
-Email: superadmin@example.com
-Password: password123

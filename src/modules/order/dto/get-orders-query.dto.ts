@@ -15,13 +15,22 @@ export class GetOrdersQueryDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({
     description: 'Filter by order status',
-    enum: ['PENDING', 'ACCEPTED', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'CANCELLED'],
+    enum: [
+      'PENDING',
+      'ACCEPTED',
+      'PROCESSING',
+      'DISPATCHED',
+      'DELIVERED',
+      'CANCELLED',
+    ],
   })
   @IsString()
   @IsOptional()
   status?: string;
 
-  @ApiPropertyOptional({ description: 'Search query for friendly order ID (showOrderId)' })
+  @ApiPropertyOptional({
+    description: 'Search query for friendly order ID (showOrderId)',
+  })
   @IsString()
   @IsOptional()
   search?: string;

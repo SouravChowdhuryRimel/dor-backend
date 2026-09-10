@@ -9,16 +9,21 @@ import cluster, { Worker } from 'cluster';
 import * as os from 'os';
 import { AppModule } from './app.module';
 import { join } from 'path';
+import { RedisIoAdapter } from './common/adapters/redis-io.adapter';
 
 async function bootstrap() {
   try {
-    const app = await NestFactory.create<NestExpressApplication>(
-      AppModule,
-      { bufferLogs: true },
-    );
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+      bufferLogs: true,
+    });
 
     app.useLogger(app.get(PinoLogger));
     const configService = app.get(ConfigService);
+
+    // Register Redis WebSocket adapter for Socket.io clustering
+    const redisIoAdapter = new RedisIoAdapter(app, configService);
+    await redisIoAdapter.connectToRedis();
+    app.useWebSocketAdapter(redisIoAdapter);
 
     // Express trust proxy
     app.set('trust proxy', true);
@@ -53,7 +58,7 @@ async function bootstrap() {
     );
 
     // Serve static files from the uploads directory
-    app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    app.useStaticAssets(join(process.cwd(), 'uploads'), {
       prefix: '/uploads/',
     });
 

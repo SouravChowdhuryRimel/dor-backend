@@ -1,69 +1,146 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
-import { createPaginatedResponse, PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import { AcceptOrderDto } from './dto/accept-order.dto';
+import {
+  createPaginatedResponse,
+  PaginationQueryDto,
+} from '../../shared/pagination/pagination.util';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { OrderStatus } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
+import { Role } from '../../common/constants/role.enum';
 
 @Injectable()
 export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
-  ) {}
+    private readonly notificationService: NotificationService,
+  ) { }
 
   async create(createOrderDto: CreateOrderDto, reqUser?: any) {
-    // Verify company exists
-    const companyExists = await this.prisma.company.findUnique({
-      where: { companyId: createOrderDto.companyId },
-    });
-    if (!companyExists) {
-      throw new NotFoundException(`Company with ID "${createOrderDto.companyId}" not found`);
-    }
-
-    // Verify product exists
+    // 1. Verify product exists
     const productExists = await this.prisma.product.findUnique({
       where: { productId: createOrderDto.productId },
     });
     if (!productExists) {
-      throw new NotFoundException(`Product with ID "${createOrderDto.productId}" not found`);
+      throw new NotFoundException(
+        `Product with ID "${createOrderDto.productId}" not found`,
+      );
     }
 
-    // Verify party exists if provided
-    if (createOrderDto.partyId) {
+    // 2. Derive companyId from product's companyId
+    const companyId = productExists.companyId;
+    const companyExists = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!companyExists) {
+      throw new NotFoundException(
+        `Company with ID "${companyId}" not found`,
+      );
+    }
+
+    // 3. Derive partyId from authenticated user (if Party)
+    let partyId: string | null = null;
+    if (reqUser?.roles?.includes(Role.PARTY)) {
+      partyId = reqUser.sub;
+    }
+    if (partyId) {
       const partyExists = await this.prisma.party.findUnique({
-        where: { partyId: createOrderDto.partyId },
+        where: { partyId },
       });
       if (!partyExists) {
-        throw new NotFoundException(`Party/Customer with ID "${createOrderDto.partyId}" not found`);
+        throw new NotFoundException(
+          `Party/Customer with ID "${partyId}" not found`,
+        );
       }
     }
 
-    const showOrderId = createOrderDto.showOrderId || `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    // 4. Derive bag quantity & bag size
+    const bagQuantity = Number(createOrderDto.quantity || 1);
+    const bagSize = createOrderDto.packagingType || productExists.bagSize || 'BAG';
+
+    const {
+      address,
+      additionalAddress,
+      lat,
+      long,
+      deliveryTime,
+      specialNote,
+    } = createOrderDto;
+
+    const latFloat = lat !== undefined && lat !== null && !isNaN(Number(lat)) ? Number(lat) : null;
+    const longFloat = long !== undefined && long !== null && !isNaN(Number(long)) ? Number(long) : null;
+
+    const showOrderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const order = await this.prisma.order.create({
       data: {
-        ...createOrderDto,
         showOrderId,
-        status: (createOrderDto.status as OrderStatus) || OrderStatus.PENDING,
+        companyId,
+        productId: createOrderDto.productId,
+        bag: bagQuantity,
+        bagSize,
+        totalRate: createOrderDto.totalRate,
+        partyId,
+        discount: 0,
+        status: OrderStatus.PENDING,
       },
     });
 
-    const actorId = reqUser?.sub || createOrderDto.partyId || createOrderDto.companyId;
-    const actorType = reqUser?.roles[0] || (createOrderDto.partyId ? 'PARTY' : 'COMPANY');
+    if (address || additionalAddress || latFloat !== null || longFloat !== null || deliveryTime || specialNote) {
+      await this.prisma.delivery.create({
+        data: {
+          address: address || '',
+          additionalAddress: additionalAddress || null,
+          upozela: latFloat !== null ? String(latFloat) : '',
+          district: longFloat !== null ? String(longFloat) : '',
+          lat: latFloat,
+          long: longFloat,
+          description: specialNote || '',
+          deliveryTime: deliveryTime ? new Date(deliveryTime) : new Date(),
+          orderId: order.orderId,
+          status: 'PENDING',
+          driverId: null,
+        },
+      });
+    }
+
+    const actorId = reqUser?.sub || partyId || companyId;
+    const actorType = reqUser?.roles?.[0] || (partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'CREATE_ORDER',
-      description: `Created order ${showOrderId} for party ${createOrderDto.partyId || 'N/A'} and company ${createOrderDto.companyId}`,
+      description: `Created order ${showOrderId} for party ${partyId || 'N/A'} and company ${companyId}`,
+      companyId,
+      partyId: partyId || undefined,
     });
 
-    return order;
+    // Notify Company about the new order in Bangla
+    await this.notificationService.sendNotification({
+      title: 'নতুন অর্ডার প্রাপ্তি',
+      message: `আপনার প্রতিষ্ঠানে একটি নতুন অর্ডার জমা হয়েছে। (অর্ডার আইডি: #${showOrderId})`,
+      companyId,
+      data: {
+        type: 'NEW_ORDER',
+        orderId: order.orderId,
+        showOrderId,
+      },
+    });
+
+    return this.findOne(order.orderId, reqUser);
   }
 
-  async findAll(query?: GetOrdersQueryDto) {
+  async findAll(query?: GetOrdersQueryDto, reqUser?: any) {
     const where: any = {};
     if (query?.companyId) {
       where.companyId = query.companyId;
@@ -71,14 +148,51 @@ export class OrderService {
     if (query?.partyId) {
       where.partyId = query.partyId;
     }
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        where.companyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        where.partyId = reqUser.sub;
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        where.deliveries = { some: { driverId: reqUser.sub } };
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.product = { categoryId: { in: categoryIds } };
+      }
+    }
+
     if (query?.status) {
       where.status = query.status as OrderStatus;
     }
     if (query?.search) {
-      where.showOrderId = {
-        contains: query.search,
-        mode: 'insensitive',
-      };
+      where.OR = [
+        {
+          showOrderId: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          party: {
+            partyName: {
+              contains: query.search,
+              mode: 'insensitive',
+            },
+          },
+        },
+        {
+          party: {
+            businessName: {
+              contains: query.search,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ];
     }
 
     const page = query?.page || 1;
@@ -87,7 +201,10 @@ export class OrderService {
 
     const orderBy: any = {};
     const allowedSortFields = ['createdAt', 'totalRate', 'bag', 'status'];
-    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'createdAt';
+    const sortBy =
+      query?.sortBy && allowedSortFields.includes(query.sortBy)
+        ? query.sortBy
+        : 'createdAt';
     const sortOrder = query?.sortOrder === 'asc' ? 'asc' : 'desc';
     orderBy[sortBy] = sortOrder;
 
@@ -101,40 +218,383 @@ export class OrderService {
           company: true,
           product: true,
           party: true,
+          deliveries: {
+            include: {
+              driver: true,
+            },
+          },
         },
         orderBy,
       }),
     ]);
 
-    return createPaginatedResponse(data, total, page, limit);
+    const mapOrderStatusText = (status: OrderStatus): string => {
+      switch (status) {
+        case 'PENDING':
+          return 'পেন্ডিং';
+        case 'ACCEPTED':
+          return 'Accepted';
+        case 'PROCESSING':
+          return 'Driver Assigned';
+        case 'DISPATCHED':
+          return 'ইন-ট্রানজিট';
+        case 'DELIVERED':
+          return 'Delivered';
+        case 'CANCELLED':
+          return 'Cancelled';
+        default:
+          return status;
+      }
+    };
+
+    const mappedData = data.map((order) => {
+      const company = order.company
+        ? {
+            companyId: order.company.companyId,
+            companyName: order.company.companyName,
+            phoneNumber: order.company.phoneNumber || '',
+            address: order.company.address || '',
+            lat: order.company.latitude ?? null,
+            long: order.company.longitude ?? null,
+          }
+        : null;
+
+      const party = order.party
+        ? {
+            partyId: order.party.partyId,
+            partyName: order.party.businessName || order.party.partyName || '',
+            phoneNumber: order.party.phoneNumber || '',
+            address: order.party.address || '',
+            additionalAddress: order.party.additionalAddress || null,
+            lat: order.party.lat ?? null,
+            long: order.party.long ?? null,
+          }
+        : null;
+
+      const activeDriver = (order as any).deliveries?.[0]?.driver || null;
+      const driver = activeDriver
+        ? {
+            driverId: activeDriver.driverId,
+            driverName: activeDriver.driverName,
+            phoneNumber: activeDriver.phoneNumber || '',
+            driverImage: activeDriver.driverImage || null,
+            truckNumber: activeDriver.truckNumber || null,
+            address: activeDriver.address || '',
+            lat: activeDriver.lat ?? null,
+            long: activeDriver.long ?? null,
+          }
+        : null;
+
+      const productDetails = order.product
+        ? {
+            productId: order.product.productId,
+            productName: order.product.productName,
+            productImage: order.product.productImage || [],
+            packagingType: order.product.packagingType,
+            unitType: order.product.unitType,
+            defaultPrice: order.product.defaultPrice,
+            minimumOrder: order.product.minimumOrder,
+            description: order.product.description,
+            companyId: order.product.companyId,
+            categoryId: order.product.categoryId,
+            quantity: order.bag,
+            totalRate: order.totalRate,
+          }
+        : null;
+
+      return {
+        ...order,
+        quantity: order.bag,
+        totalRate: order.totalRate,
+        company,
+        party,
+        driver,
+        productDetails,
+        statusText: mapOrderStatusText(order.status),
+        quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
+        partyName: order.party?.businessName || order.party?.partyName || 'N/A',
+      };
+    });
+
+    return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, reqUser?: any) {
     const order = await this.prisma.order.findUnique({
       where: { orderId: id },
       include: {
         company: true,
         product: true,
         party: true,
-        deliveries: true,
+        deliveries: {
+          include: {
+            driver: true,
+          },
+        },
         complaints: true,
       },
     });
     if (!order) {
       throw new NotFoundException(`Order with ID "${id}" not found`);
     }
-    return order;
+
+    if (reqUser && reqUser.roles) {
+      if (reqUser.roles.includes(Role.VENDOR)) {
+        if (order.companyId !== reqUser.sub) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      } else if (reqUser.roles.includes(Role.PARTY)) {
+        if (order.partyId !== reqUser.sub) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      } else if (reqUser.roles.includes(Role.DRIVER)) {
+        const hasDelivery = order.deliveries?.some((d) => d.driverId === reqUser.sub);
+        if (!hasDelivery) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        if (!categoryIds.includes(order.product.categoryId)) {
+          throw new ForbiddenException('You do not have permission to access this order');
+        }
+      }
+    }
+
+    const mapOrderStatusText = (status: OrderStatus): string => {
+      switch (status) {
+        case 'PENDING':
+          return 'পেন্ডিং';
+        case 'ACCEPTED':
+          return 'Accepted';
+        case 'PROCESSING':
+          return 'Driver Assigned';
+        case 'DISPATCHED':
+          return 'ইন-ট্রানজিট';
+        case 'DELIVERED':
+          return 'Delivered';
+        case 'CANCELLED':
+          return 'Cancelled';
+        default:
+          return status;
+      }
+    };
+
+    const mapDeliveryStatusText = (status: string): string => {
+      switch (status) {
+        case 'PENDING':
+          return 'পেন্ডিং (Pending)';
+        case 'ACCEPTED':
+          return 'গৃহীত (Accepted)';
+        case 'REJECTED':
+          return 'বাতিল (Rejected)';
+        case 'IN_TRANSIT':
+          return 'ইন-ট্রানজিট (In-Transit)';
+        case 'REACHED':
+          return 'পৌঁছেছে (Reached)';
+        case 'DELIVERED':
+          return 'ডেলিভারি সম্পন্ন (Delivered)';
+        default:
+          return status;
+      }
+    };
+
+    const quantity = order.bag;
+    const unitPrice = quantity > 0 ? order.totalRate / quantity : 0;
+    const subtotal = order.totalRate;
+    const discount = order.discount;
+    const grandTotal = subtotal - discount;
+
+    // Stock Check details
+    const stockSize = order.product?.stockSize ?? 0;
+    const isAvailable = stockSize >= quantity;
+    const stockCheck = {
+      productName: order.product?.productName || 'N/A',
+      orderQuantity: quantity,
+      stockSize: stockSize,
+      isAvailable: isAvailable,
+      statusText: isAvailable ? 'পর্যাপ্ত' : 'অপ্রতুল',
+    };
+
+    const company = order.company
+      ? {
+          companyId: order.company.companyId,
+          companyName: order.company.companyName,
+          phoneNumber: order.company.phoneNumber || '',
+          address: order.company.address || '',
+          lat: order.company.latitude ?? null,
+          long: order.company.longitude ?? null,
+        }
+      : null;
+
+    const party = order.party
+      ? {
+          partyId: order.party.partyId,
+          partyName: order.party.businessName || order.party.partyName || '',
+          phoneNumber: order.party.phoneNumber || '',
+          address: order.party.address || '',
+          additionalAddress: order.party.additionalAddress || null,
+          lat: order.party.lat ?? null,
+          long: order.party.long ?? null,
+        }
+      : null;
+
+    const productDetails = order.product
+      ? {
+          productId: order.product.productId,
+          productName: order.product.productName,
+          productImage: order.product.productImage || [],
+          packagingType: order.product.packagingType,
+          unitType: order.product.unitType,
+          defaultPrice: order.product.defaultPrice,
+          minimumOrder: order.product.minimumOrder,
+          description: order.product.description,
+          companyId: order.product.companyId,
+          categoryId: order.product.categoryId,
+          quantity: order.bag,
+          totalRate: order.totalRate,
+        }
+      : null;
+
+    // Delivery and Driver Details
+    const activeDelivery = order.deliveries?.[0] || null;
+    let deliveryDetails = null;
+    let trackingTimeline: any[] = [];
+
+    if (activeDelivery) {
+      const driver = activeDelivery.driver;
+
+      deliveryDetails = {
+        deliveryId: activeDelivery.deliveryId,
+        address: activeDelivery.address,
+        additionalAddress: activeDelivery.additionalAddress || null,
+        upozela: activeDelivery.upozela,
+        district: activeDelivery.district,
+        deliveryTime: activeDelivery.deliveryTime,
+        status: activeDelivery.status,
+        statusText: mapDeliveryStatusText(activeDelivery.status),
+        currentLocation: activeDelivery.currentLocation || null,
+        driver: driver
+          ? {
+              driverId: driver.driverId,
+              driverName: driver.driverName,
+              driverImage: driver.driverImage || null,
+              truckNumber: driver.truckNumber || null,
+              phoneNumber: driver.phoneNumber || '',
+              address: driver.address || '',
+              lat: driver.lat ?? null,
+              long: driver.long ?? null,
+            }
+          : null,
+      };
+
+      // Construct Delivery Tracking Timeline
+      const orderAccepted =
+        order.status !== 'PENDING' && order.status !== 'CANCELLED';
+      const reachedPickup =
+        activeDelivery.status === 'IN_TRANSIT' ||
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const pickedUp =
+        activeDelivery.status === 'IN_TRANSIT' ||
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const deliveryStarted =
+        activeDelivery.status === 'IN_TRANSIT' ||
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const nearDestination =
+        activeDelivery.status === 'REACHED' ||
+        activeDelivery.status === 'DELIVERED';
+      const deliveryCompleted = activeDelivery.status === 'DELIVERED';
+
+      trackingTimeline = [
+        {
+          title: 'অর্ডার গ্রহণ করা হয়েছে',
+          status: orderAccepted ? 'COMPLETED' : 'PENDING',
+          time: orderAccepted ? order.updatedAt : null,
+        },
+        {
+          title: 'পিকআপ পয়েন্টে পৌঁছেছে',
+          status: reachedPickup ? 'COMPLETED' : 'PENDING',
+          time: reachedPickup
+            ? activeDelivery.startDeliveryTime || activeDelivery.updatedAt
+            : null,
+        },
+        {
+          title: 'পণ্য সংগ্রহ করা হয়েছে (Picked Up)',
+          status: pickedUp ? 'COMPLETED' : 'PENDING',
+          proofImage: activeDelivery.pickupProof || null,
+          time: pickedUp ? activeDelivery.startDeliveryTime : null,
+        },
+        {
+          title: 'ডেলিভারি শুরু হয়েছে',
+          status: deliveryStarted ? 'COMPLETED' : 'PENDING',
+          currentLocation: activeDelivery.currentLocation || null,
+          time: deliveryStarted ? activeDelivery.startDeliveryTime : null,
+        },
+        {
+          title: 'গন্তব্যের কাছাকাছি',
+          status: nearDestination ? 'COMPLETED' : 'PENDING',
+          time: nearDestination ? activeDelivery.updatedAt : null,
+        },
+        {
+          title: 'ডেলিভারি সম্পন্ন',
+          status: deliveryCompleted ? 'COMPLETED' : 'PENDING',
+          proofImage: activeDelivery.deliveryProof || null,
+          time: deliveryCompleted ? activeDelivery.endDeliveryTime : null,
+        },
+      ];
+    }
+
+    const activeDriver = activeDelivery?.driver || null;
+    const driver = activeDriver
+      ? {
+          driverId: activeDriver.driverId,
+          driverName: activeDriver.driverName,
+          phoneNumber: activeDriver.phoneNumber || '',
+          driverImage: activeDriver.driverImage || null,
+          truckNumber: activeDriver.truckNumber || null,
+          address: activeDriver.address || '',
+          lat: activeDriver.lat ?? null,
+          long: activeDriver.long ?? null,
+        }
+      : null;
+
+    return {
+      ...order,
+      quantity: order.bag,
+      totalRate: order.totalRate,
+      company,
+      party,
+      driver,
+      productDetails,
+      statusText: mapOrderStatusText(order.status),
+      quantityText: `${order.bag} ${order.product?.unit || 'Bag'}`,
+      partyName: order.party?.businessName || order.party?.partyName || 'N/A',
+      subtotal,
+      discount,
+      grandTotal,
+      unitPrice,
+      stockCheck,
+      deliveryDetails,
+      trackingTimeline,
+    };
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto, reqUser?: any) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, reqUser);
 
     if (updateOrderDto.companyId) {
       const companyExists = await this.prisma.company.findUnique({
         where: { companyId: updateOrderDto.companyId },
       });
       if (!companyExists) {
-        throw new NotFoundException(`Company with ID "${updateOrderDto.companyId}" not found`);
+        throw new NotFoundException(
+          `Company with ID "${updateOrderDto.companyId}" not found`,
+        );
       }
     }
 
@@ -143,7 +603,9 @@ export class OrderService {
         where: { productId: updateOrderDto.productId },
       });
       if (!productExists) {
-        throw new NotFoundException(`Product with ID "${updateOrderDto.productId}" not found`);
+        throw new NotFoundException(
+          `Product with ID "${updateOrderDto.productId}" not found`,
+        );
       }
     }
 
@@ -152,60 +614,103 @@ export class OrderService {
         where: { partyId: updateOrderDto.partyId },
       });
       if (!partyExists) {
-        throw new NotFoundException(`Party/Customer with ID "${updateOrderDto.partyId}" not found`);
+        throw new NotFoundException(
+          `Party/Customer with ID "${updateOrderDto.partyId}" not found`,
+        );
       }
     }
+
+    const {
+      address,
+      upozela,
+      district,
+      deliveryTime,
+      specialNote,
+      ...orderUpdateData
+    } = updateOrderDto;
 
     const updatedOrder = await this.prisma.order.update({
       where: { orderId: id },
       data: {
-        ...updateOrderDto,
-        status: updateOrderDto.status ? (updateOrderDto.status as OrderStatus) : undefined,
+        ...orderUpdateData,
+        status: updateOrderDto.status
+          ? (updateOrderDto.status as OrderStatus)
+          : undefined,
       },
     });
 
-    const actorId = reqUser?.sub || updatedOrder.partyId || updatedOrder.companyId;
-    const actorType = reqUser?.roles[0] || (updatedOrder.partyId ? 'PARTY' : 'COMPANY');
+    if (address !== undefined || upozela !== undefined || district !== undefined || deliveryTime !== undefined || specialNote !== undefined) {
+      const existingDelivery = await this.prisma.delivery.findFirst({
+        where: { orderId: id },
+      });
+
+      if (existingDelivery) {
+        await this.prisma.delivery.update({
+          where: { deliveryId: existingDelivery.deliveryId },
+          data: {
+            address: address !== undefined ? address : undefined,
+            upozela: upozela !== undefined ? upozela : undefined,
+            district: district !== undefined ? district : undefined,
+            description: specialNote !== undefined ? specialNote : undefined,
+            deliveryTime: deliveryTime !== undefined ? new Date(deliveryTime) : undefined,
+          },
+        });
+      } else {
+        await this.prisma.delivery.create({
+          data: {
+            address: address || '',
+            upozela: upozela || '',
+            district: district || '',
+            description: specialNote || '',
+            deliveryTime: deliveryTime ? new Date(deliveryTime) : new Date(),
+            orderId: id,
+            status: 'PENDING',
+            driverId: null,
+          },
+        });
+      }
+    }
+
+    const actorId =
+      reqUser?.sub || updatedOrder.partyId || updatedOrder.companyId;
+    const actorType =
+      reqUser?.roles[0] || (updatedOrder.partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'UPDATE_ORDER',
       description: `Updated order ${updatedOrder.showOrderId}`,
+      companyId: updatedOrder.companyId,
+      partyId: updatedOrder.partyId,
     });
 
     return updatedOrder;
   }
 
   async remove(id: string, reqUser?: any) {
-    const order = await this.findOne(id);
+    const order = await this.findOne(id, reqUser);
     const deletedOrder = await this.prisma.order.delete({
       where: { orderId: id },
     });
 
-    const actorId = reqUser?.sub || deletedOrder.partyId || deletedOrder.companyId;
-    const actorType = reqUser?.roles[0] || (deletedOrder.partyId ? 'PARTY' : 'COMPANY');
+    const actorId =
+      reqUser?.sub || deletedOrder.partyId || deletedOrder.companyId;
+    const actorType =
+      reqUser?.roles[0] || (deletedOrder.partyId ? 'PARTY' : 'COMPANY');
     await this.activityLogService.log({
       actorType,
       actorId,
       action: 'DELETE_ORDER',
       description: `Deleted order ${deletedOrder.showOrderId}`,
+      companyId: deletedOrder.companyId,
+      partyId: deletedOrder.partyId,
     });
 
     return deletedOrder;
   }
 
-  async generateInvoice(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { orderId },
-      include: {
-        company: true,
-        party: true,
-        product: true,
-      },
-    });
-    if (!order) {
-      throw new NotFoundException(`Order with ID "${orderId}" not found`);
-    }
+  async generateInvoice(orderId: string, reqUser?: any) {
+    const order = await this.findOne(orderId, reqUser);
 
     const invoiceNumber = `INV-${order.showOrderId}`;
     const issueDate = order.createdAt;
@@ -215,8 +720,8 @@ export class OrderService {
     const quantity = order.bag;
     const rate = quantity > 0 ? order.totalRate / quantity : 0;
     const subtotal = order.totalRate;
-    const vat = subtotal * 0.05; // 5% VAT
-    const grandTotal = subtotal + vat;
+    const vat = 0;
+    const grandTotal = subtotal;
 
     return {
       invoiceMeta: {
@@ -225,22 +730,27 @@ export class OrderService {
         dueDate,
         status: order.status,
       },
-      seller: {
-        companyId: order.company.companyId,
-        companyName: order.company.companyName,
-        ownerName: order.company.ownerName,
-        email: order.company.email,
-        phoneNumber: order.company.phoneNumber,
-        address: `${order.company.address}, ${order.company.upozela}, ${order.company.district}`,
-      },
-      buyer: order.party ? {
-        partyId: order.party.partyId,
-        partyName: order.party.partyName,
-        businessName: order.party.businessName,
-        email: order.party.email,
-        phoneNumber: order.party.phoneNumber,
-        address: `${order.party.address}, ${order.party.upozela}, ${order.party.district}`,
-      } : null,
+      seller: order.company
+        ? {
+            companyId: order.company.companyId,
+            companyName: order.company.companyName,
+            phoneNumber: order.company.phoneNumber,
+            address: order.company.address,
+            lat: order.company.lat,
+            long: order.company.long,
+          }
+        : null,
+      buyer: order.party
+        ? {
+            partyId: order.party.partyId,
+            partyName: order.party.partyName,
+            phoneNumber: order.party.phoneNumber,
+            address: order.party.address,
+            additionalAddress: order.party.additionalAddress,
+            lat: order.party.lat,
+            long: order.party.long,
+          }
+        : null,
       item: {
         productId: order.product.productId,
         productName: order.product.productName,
@@ -258,7 +768,11 @@ export class OrderService {
     };
   }
 
-  async findDriverAssignedOrders(driverId: string, type?: string, query?: PaginationQueryDto) {
+  async findDriverAssignedOrders(
+    driverId: string,
+    type?: string,
+    query?: PaginationQueryDto,
+  ) {
     // Verify driver exists
     const driverExists = await this.prisma.driver.findUnique({
       where: { driverId },
@@ -274,10 +788,10 @@ export class OrderService {
     const where: any = { driverId };
 
     if (type === 'pending') {
-      where.status = 'VAN_COMING';
+      where.status = { in: ['PENDING', 'ACCEPTED'] };
     } else if (type === 'ongoing') {
       where.status = {
-        in: ['TRANSFER_IN_PROGRESS', 'NEAREST_TRANSFER'],
+        in: ['IN_TRANSIT', 'REACHED'],
       };
     } else if (type === 'completed') {
       where.status = 'DELIVERED';
@@ -305,5 +819,162 @@ export class OrderService {
     ]);
 
     return createPaginatedResponse(data, total, page, limit);
+  }
+
+  async acceptOrder(id: string, reqUser: any, acceptOrderDto?: AcceptOrderDto) {
+    const order = await this.findOne(id, reqUser);
+
+    // If requester is a VENDOR, ensure they own the order
+    if (reqUser?.roles?.includes(Role.VENDOR)) {
+      if (order.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You do not have permission to accept this order',
+        );
+      }
+    }
+
+    // Verify order status is PENDING
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException(
+        `Only pending orders can be accepted. Current status is ${order.status}`,
+      );
+    }
+
+    const driverId = acceptOrderDto?.driverId;
+    if (driverId) {
+      const driverExists = await this.prisma.driver.findUnique({
+        where: { driverId },
+      });
+      if (!driverExists) {
+        throw new NotFoundException(`Driver with ID "${driverId}" not found`);
+      }
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { orderId: id },
+      data: { status: OrderStatus.ACCEPTED },
+    });
+
+    if (driverId) {
+      const existingDelivery = await this.prisma.delivery.findFirst({
+        where: { orderId: id },
+      });
+
+      if (existingDelivery) {
+        await this.prisma.delivery.update({
+          where: { deliveryId: existingDelivery.deliveryId },
+          data: { driverId },
+        });
+      } else {
+        await this.prisma.delivery.create({
+          data: {
+            address: '',
+            upozela: '',
+            district: '',
+            description: '',
+            deliveryTime: new Date(),
+            orderId: id,
+            status: 'PENDING',
+            driverId,
+          },
+        });
+      }
+    }
+
+    const actorId = reqUser?.sub || updatedOrder.companyId;
+    const actorType = reqUser?.roles[0] || 'VENDOR';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'ACCEPT_ORDER',
+      description: `Accepted order ${updatedOrder.showOrderId}${driverId ? ` with driver ${driverId}` : ''}`,
+      companyId: updatedOrder.companyId,
+      partyId: updatedOrder.partyId,
+    });
+
+    // Create notification and send via WebSockets & FCM if driver assigned
+    if (driverId) {
+      await this.notificationService.sendNotification({
+        title: 'নতুন ডেলিভারি নির্ধারিত',
+        message: `আপনাকে অর্ডার ${updatedOrder.showOrderId}-এর ডেলিভারির দায়িত্ব প্রদান করা হয়েছে।`,
+        driverId,
+        data: {
+          type: 'DRIVER_ASSIGNED',
+          orderId: id,
+          showOrderId: updatedOrder.showOrderId,
+        },
+      });
+    }
+
+    // Create notification and send via WebSockets & FCM if party is associated
+    if (updatedOrder.partyId) {
+      await this.notificationService.sendNotification({
+        title: 'অর্ডার গৃহীত হয়েছে',
+        message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) কোম্পানি কর্তৃক সফলভাবে গৃহীত হয়েছে।`,
+        partyId: updatedOrder.partyId,
+        data: {
+          type: 'ORDER_ACCEPTED',
+          orderId: id,
+          showOrderId: updatedOrder.showOrderId,
+        },
+      });
+    }
+
+    return this.findOne(id, reqUser);
+  }
+
+  async cancelOrder(id: string, reqUser: any) {
+    const order = await this.findOne(id, reqUser);
+
+    // If requester is a VENDOR, ensure they own the order
+    if (reqUser?.roles?.includes(Role.VENDOR)) {
+      if (order.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You do not have permission to cancel this order',
+        );
+      }
+    }
+
+    // Verify order is not already DELIVERED or CANCELLED
+    if (
+      order.status === OrderStatus.DELIVERED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot cancel order in ${order.status} status`,
+      );
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { orderId: id },
+      data: { status: OrderStatus.CANCELLED },
+    });
+
+    const actorId = reqUser?.sub || updatedOrder.companyId;
+    const actorType = reqUser?.roles[0] || 'VENDOR';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'CANCEL_ORDER',
+      description: `Cancelled order ${updatedOrder.showOrderId}`,
+      companyId: updatedOrder.companyId,
+      partyId: updatedOrder.partyId,
+    });
+
+    // Create notification and send via WebSockets & FCM if party is associated
+    if (updatedOrder.partyId) {
+      await this.notificationService.sendNotification({
+        title: 'অর্ডার বাতিল করা হয়েছে',
+        message: `আপনার অর্ডারটি (${updatedOrder.showOrderId}) বাতিল করা হয়েছে।`,
+        partyId: updatedOrder.partyId,
+        data: {
+          type: 'ORDER_CANCELLED',
+          orderId: id,
+          showOrderId: updatedOrder.showOrderId,
+        },
+      });
+    }
+
+    return updatedOrder;
   }
 }

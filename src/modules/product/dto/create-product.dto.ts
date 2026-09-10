@@ -6,8 +6,10 @@ import {
   IsArray,
   IsOptional,
   Min,
+  IsEnum,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
+import { PackagingType, UnitType } from '@prisma/client';
 
 export class CreateProductDto {
   @ApiPropertyOptional({
@@ -15,8 +17,17 @@ export class CreateProductDto {
     example: ['url1.jpg', 'url2.jpg'],
     type: [String],
   })
-  @IsArray()
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined;
+    }
+    if (typeof value === 'string') {
+      return [value];
+    }
+    return value as string[];
+  })
+  @IsArray()
   @IsString({ each: true })
   productImage?: string[];
 
@@ -45,13 +56,53 @@ export class CreateProductDto {
   bagSize: string;
 
   @ApiProperty({
-    description: 'Default price of the product',
+    description: 'Type of packaging',
+    enum: PackagingType,
+    example: PackagingType.BAG,
+  })
+  @IsEnum(PackagingType)
+  @IsNotEmpty()
+  packagingType: PackagingType;
+
+  @ApiProperty({
+    description: 'Type of unit',
+    enum: UnitType,
+    example: UnitType.PIECE,
+  })
+  @IsEnum(UnitType)
+  @IsNotEmpty()
+  unitType: UnitType;
+
+  @ApiPropertyOptional({
+    description:
+      'Default price of the product (Legacy, falls back to offerPrice)',
     example: 450.5,
   })
   @IsNumber()
   @Min(0)
+  @IsOptional()
   @Type(() => Number)
-  defaultPrice: number;
+  defaultPrice?: number;
+
+  @ApiProperty({
+    description: 'Regular price of the product',
+    example: 500.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsNotEmpty()
+  @Type(() => Number)
+  regularPrice: number;
+
+  @ApiProperty({
+    description: 'Offer price of the product (discounted)',
+    example: 450.0,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsNotEmpty()
+  @Type(() => Number)
+  offerPrice: number;
 
   @ApiProperty({
     description: 'Minimum order quantity',
@@ -79,13 +130,21 @@ export class CreateProductDto {
   @Type(() => Number)
   stockSize: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID of the SubCategory',
     example: 'uuid-string',
   })
   @IsString()
-  @IsNotEmpty()
-  subCategoryId: string;
+  @IsOptional()
+  subCategoryId?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the Category (required if subCategoryId is not provided)',
+    example: 'uuid-string',
+  })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
 
   @ApiPropertyOptional({
     description: 'ID of the associated company/vendor',

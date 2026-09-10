@@ -4,7 +4,10 @@ import { ComplaintStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../../shared/pagination/pagination.util';
 
 export class GetComplaintsQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: 'Filter by complaint status', enum: ComplaintStatus })
+  @ApiPropertyOptional({
+    description: 'Filter by complaint status',
+    enum: ComplaintStatus,
+  })
   @IsEnum(ComplaintStatus)
   @IsOptional()
   status?: ComplaintStatus;
