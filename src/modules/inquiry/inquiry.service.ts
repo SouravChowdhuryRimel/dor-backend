@@ -11,7 +11,7 @@ import { GetInquiriesQueryDto } from './dto/get-inquiries-query.dto';
 import { CreateInquiryResponseDto } from './dto/create-inquiry-response.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { NotificationService } from '../notification/notification.service';
-import { InquiryStatus } from '@prisma/client';
+import { InquiryStatus, CompanyStatus } from '@prisma/client';
 
 @Injectable()
 export class InquiryService {
@@ -50,6 +50,10 @@ export class InquiryService {
       ? new Date(createInquiryDto.deadline)
       : null;
 
+    const inquiryKeywords = (createInquiryDto.keywords || [])
+      .map((k) => k.trim())
+      .filter(Boolean);
+
     // 1. Create Inquiry
     const inquiry = await this.prisma.inquiry.create({
       data: {
@@ -59,6 +63,7 @@ export class InquiryService {
         quantity: createInquiryDto.quantity || null,
         deadline: deadlineDate,
         imageUrls: createInquiryDto.imageUrls || [],
+        keywords: inquiryKeywords,
         partyId,
         categoryId,
         status: InquiryStatus.OPEN,
@@ -77,31 +82,54 @@ export class InquiryService {
             businessName: true,
             phoneNumber: true,
             email: true,
+            district: true,
+            upozela: true,
+            address: true,
           },
         },
       },
     });
 
-    // 2. Find all companies in the same category
-    const companies = await this.prisma.company.findMany({
-      where: { categoryId },
-      select: { companyId: true },
+    // 2. Find matching companies:
+    // a) Companies in the same category
+    const categoryCompanies = await this.prisma.company.findMany({
+      where: {
+        categoryId,
+        status: { not: CompanyStatus.BLOCKED },
+      },
+      select: { companyId: true, companyName: true },
     });
 
-    // 3. Automatically dispatch notifications to all companies in the category
-    if (companies.length > 0) {
-      for (const company of companies) {
-        await this.notificationService.sendNotification({
-          title: 'নতুন ইনকোয়ারি জমা হয়েছে',
-          message: `আপনার ক্যাটাগরিতে একটি নতুন ইনকোয়ারি এসেছে: "${inquiry.title}"`,
-          companyId: company.companyId,
+    // b) Companies whose keywords match any inquiry keyword
+    let keywordCompanies: { companyId: string; companyName: string }[] = [];
+    if (inquiryKeywords.length > 0) {
+      keywordCompanies = await this.prisma.company.findMany({
+        where: {
+          keywords: { hasSome: inquiryKeywords },
+          status: { not: CompanyStatus.BLOCKED },
+        },
+        select: { companyId: true, companyName: true },
+      });
+    }
+
+    // Deduplicate target companies
+    const targetMap = new Map<string, string>();
+    categoryCompanies.forEach((c) => targetMap.set(c.companyId, c.companyName));
+    keywordCompanies.forEach((c) => targetMap.set(c.companyId, c.companyName));
+
+    // 3. Automatically dispatch notifications to all matching companies
+    for (const [companyId] of targetMap.entries()) {
+      await this.notificationService.sendNotification({
+        title: 'নতুন ইনকোয়ারি জমা হয়েছে',
+        message: `আপনার ক্যাটাগরি/কীওয়ার্ড অনুযায়ী একটি নতুন ইনকোয়ারি এসেছে: "${inquiry.title}"`,
+        companyId,
+        inquiryId: inquiry.inquiryId,
+        data: {
+          type: 'NEW_INQUIRY',
           inquiryId: inquiry.inquiryId,
-          data: {
-            type: 'NEW_INQUIRY',
-            inquiryId: inquiry.inquiryId,
-          },
-        });
-      }
+          categoryId: inquiry.categoryId,
+        },
+      });
     }
 
     return inquiry;
@@ -234,11 +262,38 @@ export class InquiryService {
 
   async findAll(query?: GetInquiriesQueryDto, userId?: string, role?: string) {
     const where: any = {};
-    if (query?.categoryId) {
-      where.categoryId = query.categoryId;
-    }
     if (query?.partyId) {
       where.partyId = query.partyId;
+    }
+
+    if (role === 'COMPANY' && userId) {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+        select: { categoryId: true, keywords: true },
+      });
+
+      if (company) {
+        const companyKeywords = company.keywords || [];
+        const matchConditions: any[] = [{ categoryId: company.categoryId }];
+        if (companyKeywords.length > 0) {
+          matchConditions.push({
+            keywords: { hasSome: companyKeywords },
+          });
+        }
+
+        if (query?.categoryId) {
+          where.AND = [
+            { OR: matchConditions },
+            { categoryId: query.categoryId },
+          ];
+        } else {
+          where.OR = matchConditions;
+        }
+      } else if (query?.categoryId) {
+        where.categoryId = query.categoryId;
+      }
+    } else if (query?.categoryId) {
+      where.categoryId = query.categoryId;
     }
 
     const page = query?.page || 1;
@@ -323,10 +378,14 @@ export class InquiryService {
         }
       }
 
+      const hasResponded = filteredResponses.some(
+        (r) => r.companyId === userId,
+      );
       const { _count, responses, ...rest } = item;
       return {
         ...rest,
         responseCount,
+        hasResponded,
         responses: filteredResponses,
       };
     });
@@ -408,10 +467,14 @@ export class InquiryService {
       }
     }
 
+    const hasResponded = filteredResponses.some(
+      (r) => r.companyId === userId,
+    );
     const { _count, responses, ...rest } = inquiry;
     return {
       ...rest,
       responseCount,
+      hasResponded,
       responses: filteredResponses,
     };
   }

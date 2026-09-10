@@ -58,4 +58,13 @@ export class UpdateInquiryDto {
   @IsArray()
   @IsOptional()
   imageUrls?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Keywords/tags for the inquiry (optional)',
+    example: ['ইলেকট্রনিক', 'কম্পিউটার'],
+    type: [String],
+  })
+  @IsArray()
+  @IsOptional()
+  keywords?: string[];
 }

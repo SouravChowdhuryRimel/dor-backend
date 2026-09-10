@@ -15,6 +15,7 @@ model Company {
   incomeTax       String?         @map("income_tax")
   companyDocument String[]        @map("company_document")
   companyImage    String?         @map("company_image")
+  keywords        String[]        @default([])
   fcmToken        String?         @map("fcm_token")
   categoryId      String          @map("category_id")
   category        Category        @relation(fields: [categoryId], references: [categoryId])

@@ -366,6 +366,75 @@ export class DashboardService {
       where: { companyId },
     });
 
+    // Matching Inquiries for this company (category & keywords match)
+    const companyKeywords = company.keywords || [];
+    const inquiryMatchConditions: any[] = [{ categoryId: company.categoryId }];
+    if (companyKeywords.length > 0) {
+      inquiryMatchConditions.push({
+        keywords: { hasSome: companyKeywords },
+      });
+    }
+
+    const matchingInquiryWhere = {
+      OR: inquiryMatchConditions,
+    };
+
+    const totalInquiries = await this.prisma.inquiry.count({
+      where: matchingInquiryWhere,
+    });
+
+    const recentInquiriesRaw = await this.prisma.inquiry.findMany({
+      where: matchingInquiryWhere,
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+        party: {
+          select: {
+            partyId: true,
+            partyName: true,
+            businessName: true,
+            phoneNumber: true,
+            email: true,
+            district: true,
+            upozela: true,
+            address: true,
+          },
+        },
+        responses: {
+          where: { companyId },
+          select: {
+            responseId: true,
+            offeredPrice: true,
+            comment: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    const recentInquiries = recentInquiriesRaw.map((inq) => ({
+      inquiryId: inq.inquiryId,
+      title: inq.title,
+      productName: inq.productName,
+      description: inq.description,
+      quantity: inq.quantity,
+      deadline: inq.deadline,
+      status: inq.status,
+      imageUrls: inq.imageUrls,
+      keywords: inq.keywords,
+      createdAt: inq.createdAt,
+      category: inq.category,
+      party: inq.party,
+      hasResponded: inq.responses.length > 0,
+      myResponse: inq.responses[0] || null,
+    }));
+
     const orderValueAggregate = await this.prisma.order.aggregate({
       where: {
         companyId,
@@ -791,6 +860,8 @@ export class DashboardService {
       activeComplaintsCount,
       activePartiesCount,
       pendingDeliveries,
+      totalInquiries,
+      recentInquiries,
 
       // original response fields to preserve compatibility
       metrics: {
@@ -798,6 +869,7 @@ export class DashboardService {
         totalDrivers,
         totalParties,
         totalComplaints,
+        totalInquiries,
         totalOrderValue,
         totalBagsOrdered,
       },

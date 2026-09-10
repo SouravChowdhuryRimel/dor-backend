@@ -121,4 +121,25 @@ export class CreateCompanyDto {
   @IsString()
   @IsOptional()
   companyImage?: string;
+
+  @ApiPropertyOptional({
+    description: 'Keywords or service tags associated with the company business',
+    example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
+    type: [String],
+  })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return value.split(',').map((k: string) => k.trim()).filter(Boolean);
+      }
+    }
+    return value;
+  })
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  keywords?: string[];
 }

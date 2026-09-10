@@ -95,6 +95,12 @@ export class InquiryController {
         quantity: { type: 'string', example: '500 Bags' },
         deadline: { type: 'string', example: '2026-09-15' },
         categoryId: { type: 'string', description: 'Category ID (Optional: Auto-retrieved from Party profile if omitted)' },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['ইলেকট্রনিক', 'কম্পিউটার'],
+          description: 'Keywords/tags for the inquiry (optional)',
+        },
         images: {
           type: 'array',
           items: { type: 'string', format: 'binary' },
@@ -113,6 +119,16 @@ export class InquiryController {
       createInquiryDto.imageUrls = files.map(
         (file) => `/uploads/inquiries/${file.filename}`,
       );
+    }
+    if (createInquiryDto.keywords && typeof (createInquiryDto.keywords as any) === 'string') {
+      try {
+        createInquiryDto.keywords = JSON.parse(createInquiryDto.keywords as any);
+      } catch {
+        createInquiryDto.keywords = ((createInquiryDto.keywords as any) as string)
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
+      }
     }
     return this.inquiryService.create(partyId, createInquiryDto);
   }
@@ -180,6 +196,12 @@ export class InquiryController {
         quantity: { type: 'string' },
         deadline: { type: 'string' },
         categoryId: { type: 'string' },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['ইলেকট্রনিক', 'কম্পিউটার'],
+          description: 'Keywords/tags for the inquiry (optional)',
+        },
         images: {
           type: 'array',
           items: { type: 'string', format: 'binary' },
@@ -199,6 +221,16 @@ export class InquiryController {
       updateInquiryDto.imageUrls = files.map(
         (file) => `/uploads/inquiries/${file.filename}`,
       );
+    }
+    if (updateInquiryDto.keywords && typeof (updateInquiryDto.keywords as any) === 'string') {
+      try {
+        updateInquiryDto.keywords = JSON.parse(updateInquiryDto.keywords as any);
+      } catch {
+        updateInquiryDto.keywords = ((updateInquiryDto.keywords as any) as string)
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
+      }
     }
     return this.inquiryService.update(id, partyId, updateInquiryDto);
   }

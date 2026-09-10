@@ -42,14 +42,24 @@ export class CategoryService {
     return this.mapCategoryAdmins(category);
   }
 
-  async findAll(query?: PaginationQueryDto) {
+  async findAll(query?: PaginationQueryDto & { search?: string }) {
     const page = query?.page || 1;
     const limit = query?.limit || 10;
     const skip = (page - 1) * limit;
 
+    const where: any = {};
+    if (query?.search && query.search.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { categoryName: { contains: term, mode: 'insensitive' } },
+        { keywords: { has: term } },
+      ];
+    }
+
     const [total, data] = await Promise.all([
-      this.prisma.category.count(),
+      this.prisma.category.count({ where }),
       this.prisma.category.findMany({
+        where,
         include: {
           adminCategories: {
             include: { user: true },
@@ -62,6 +72,51 @@ export class CategoryService {
 
     const mappedData = data.map((category) => this.mapCategoryAdmins(category));
     return createPaginatedResponse(mappedData, total, page, limit);
+  }
+
+  async getCategoryKeywords(search?: string) {
+    const where: any = { status: 'ACTIVE' };
+    if (search && search.trim()) {
+      const term = search.trim();
+      where.OR = [
+        { categoryName: { contains: term, mode: 'insensitive' } },
+        { keywords: { has: term } },
+      ];
+    }
+
+    const categories = await this.prisma.category.findMany({
+      where,
+      select: {
+        categoryId: true,
+        categoryName: true,
+        categoryThumbnail: true,
+        keywords: true,
+      },
+      orderBy: { categoryName: 'asc' },
+    });
+
+    const categoryKeywordsSet = new Set<string>();
+    categories.forEach((cat) => {
+      (cat.keywords || []).forEach((k) => categoryKeywordsSet.add(k));
+    });
+
+    const companies = await this.prisma.company.findMany({
+      where: { status: 'APPROVED' },
+      select: { keywords: true },
+    });
+    const companyKeywordsSet = new Set<string>();
+    companies.forEach((comp) => {
+      (comp.keywords || []).forEach((k) => companyKeywordsSet.add(k));
+    });
+
+    const allKeywords = Array.from(
+      new Set([...categoryKeywordsSet, ...companyKeywordsSet]),
+    ).sort();
+
+    return {
+      categories,
+      allKeywords,
+    };
   }
 
   async findOne(id: string) {

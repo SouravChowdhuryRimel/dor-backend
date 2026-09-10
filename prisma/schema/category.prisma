@@ -2,6 +2,7 @@ model Category {
   categoryId        String         @id @default(uuid()) @map("category_id")
   categoryName      String         @map("category_name")
   categoryThumbnail String?        @map("category_thumbnail")
+  keywords          String[]       @default([])
   status            CategoryStatus @default(ACTIVE)
   companies         Company[]
   parties           Party[]

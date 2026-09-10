@@ -76,6 +76,25 @@ export class UpdateProfileDto {
   @IsOptional()
   companyImage?: any;
 
+  @ApiPropertyOptional({
+    description: 'Company keywords or service tags',
+    type: [String],
+    example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
+  })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return value.split(',').map((k: string) => k.trim()).filter(Boolean);
+      }
+    }
+    return value;
+  })
+  @IsOptional()
+  keywords?: string[];
+
   // Party fields
   @ApiPropertyOptional({ description: 'Party Name' })
   @IsString()

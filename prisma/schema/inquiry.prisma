@@ -4,6 +4,7 @@ model Inquiry {
   productName   String?           @map("product_name")
   description   String
   imageUrls     String[]          @map("image_urls")
+  keywords      String[]          @default([])
   quantity      String?
   deadline      DateTime?
   status        InquiryStatus     @default(OPEN)

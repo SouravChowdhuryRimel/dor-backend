@@ -29,6 +29,7 @@ const companyDetailsSelect = {
   incomeTax: true,
   companyDocument: true,
   companyImage: true,
+  keywords: true,
   categoryId: true,
   createdAt: true,
   updatedAt: true,
@@ -84,6 +85,7 @@ export class CompanyService {
         incomeTax: true,
         companyDocument: true,
         companyImage: true,
+        keywords: true,
         categoryId: true,
         createdAt: true,
       },
@@ -349,5 +351,56 @@ export class CompanyService {
     return this.prisma.company.findFirst({
       where: { phoneNumber },
     });
+  }
+
+  async updateKeywords(companyId: string, keywords: string[], reqUser?: any) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const cleanKeywords = Array.from(
+      new Set(keywords.map((k) => k.trim()).filter((k) => k.length > 0)),
+    );
+
+    return this.update(companyId, { keywords: cleanKeywords }, reqUser);
+  }
+
+  async addKeywords(companyId: string, newKeywords: string[], reqUser?: any) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const currentKeywords = company.keywords || [];
+    const combined = Array.from(
+      new Set([
+        ...currentKeywords,
+        ...newKeywords.map((k) => k.trim()).filter((k) => k.length > 0),
+      ]),
+    );
+
+    return this.update(companyId, { keywords: combined }, reqUser);
+  }
+
+  async removeKeywords(
+    companyId: string,
+    keywordsToRemove: string[],
+    reqUser?: any,
+  ) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const currentKeywords = company.keywords || [];
+    const toRemoveSet = new Set(
+      keywordsToRemove.map((k) => k.trim().toLowerCase()),
+    );
+    const filtered = currentKeywords.filter(
+      (k) => !toRemoveSet.has(k.trim().toLowerCase()),
+    );
+
+    return this.update(companyId, { keywords: filtered }, reqUser);
   }
 }
