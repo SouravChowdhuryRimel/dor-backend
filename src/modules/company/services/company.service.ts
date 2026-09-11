@@ -223,6 +223,16 @@ export class CompanyService {
       companyId,
     });
 
+    await this.notificationService.sendNotification({
+      title: 'কোম্পানি অ্যাকাউন্ট অনুমোদিত',
+      message: `অভিনন্দন! আপনার প্রতিষ্ঠান "${company.companyName}" সফলভাবে অনুমোদিত হয়েছে।`,
+      companyId,
+      data: {
+        type: 'COMPANY_APPROVED',
+        companyId,
+      },
+    });
+
     return updatedCompany;
   }
 
@@ -277,6 +287,27 @@ export class CompanyService {
       description: `Updated company: ${updatedCompany.companyName}`,
       companyId: id,
     });
+
+    if (
+      updateCompanyDto.status &&
+      updateCompanyDto.status !== company.status
+    ) {
+      if (
+        updateCompanyDto.status === CompanyStatus.REJECTED ||
+        updateCompanyDto.status === CompanyStatus.BLOCKED
+      ) {
+        await this.notificationService.sendNotification({
+          title: 'কোম্পানি অ্যাকাউন্ট স্ট্যাটাস পরিবর্তন',
+          message: `আপনার কোম্পানি অ্যাকাউন্টের স্ট্যাটাস পরিবর্তন করে "${updateCompanyDto.status}" করা হয়েছে।`,
+          companyId: id,
+          data: {
+            type: 'COMPANY_STATUS_UPDATED',
+            status: updateCompanyDto.status,
+            companyId: id,
+          },
+        });
+      }
+    }
 
     return updatedCompany;
   }

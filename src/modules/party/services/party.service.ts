@@ -266,6 +266,16 @@ export class PartyService {
       partyId: id,
     });
 
+    await this.notificationService.sendNotification({
+      title: 'অ্যাকাউন্ট ভেরিফিকেশন সম্পন্ন',
+      message: `অভিনন্দন! আপনার প্রতিষ্ঠান "${verified.partyName || verified.businessName || 'পার্টি'}" সফলভাবে ভেরিফাইড হয়েছে।`,
+      partyId: id,
+      data: {
+        type: 'PARTY_VERIFIED',
+        partyId: id,
+      },
+    });
+
     return verified;
   }
 

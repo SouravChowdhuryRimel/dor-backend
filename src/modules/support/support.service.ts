@@ -10,9 +10,16 @@ import { GetSupportTicketsDto } from './dto/get-support-tickets.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { Role } from '@prisma/client';
 
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGateway } from '../notification/notification.gateway';
+
 @Injectable()
 export class SupportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
+  ) {}
 
   async createTicket(dto: CreateSupportTicketDto, reqUser: any) {
     const creatorId = reqUser.sub;
@@ -21,7 +28,7 @@ export class SupportService {
     const count = await this.prisma.supportTicket.count();
     const showTicketId = `ST-${String(count + 1).padStart(6, '0')}`;
 
-    return this.prisma.supportTicket.create({
+    const ticket = await this.prisma.supportTicket.create({
       data: {
         showTicketId,
         title: dto.title,
@@ -30,6 +37,41 @@ export class SupportService {
         creatorRole,
       },
     });
+
+    try {
+      const adminUsers = await this.prisma.user.findMany({
+        where: { roles: { hasSome: [Role.ADMIN, Role.SUPER_ADMIN] } },
+        select: { id: true },
+      });
+
+      const notifTitle = `নতুন সাপোর্ট টিকেট: #${showTicketId}`;
+      const notifMessage = `ইউজার একটি নতুন সাপোর্ট টিকেট তৈরি করেছেন: "${dto.title}"`;
+
+      for (const admin of adminUsers) {
+        await this.notificationService.sendNotification({
+          title: notifTitle,
+          message: notifMessage,
+          userId: admin.id,
+          data: {
+            type: 'SUPPORT_TICKET_CREATED',
+            ticketId: ticket.ticketId,
+            showTicketId,
+          },
+        });
+      }
+
+      this.notificationGateway.sendNotificationToAdmin({
+        title: notifTitle,
+        message: notifMessage,
+        ticketId: ticket.ticketId,
+        showTicketId,
+        createdAt: new Date(),
+      });
+    } catch {
+      // Ignore notification failures on ticket create
+    }
+
+    return ticket;
   }
 
   async findAll(query: GetSupportTicketsDto, reqUser: any) {
@@ -154,15 +196,86 @@ export class SupportService {
       });
     }
 
+    try {
+      const notifTitle = `সাপোর্ট টিকেটে নতুন বার্তা: #${ticket.showTicketId}`;
+      const notifMessage = `${senderName}: "${dto.message.slice(0, 60)}"`;
+
+      if (isAdmin) {
+        const notifPayload: any = {
+          title: notifTitle,
+          message: notifMessage,
+          data: {
+            type: 'SUPPORT_TICKET_REPLIED',
+            ticketId,
+            showTicketId: ticket.showTicketId,
+          },
+        };
+
+        if (ticket.creatorRole === Role.VENDOR) {
+          notifPayload.companyId = ticket.creatorId;
+        } else if (ticket.creatorRole === Role.PARTY) {
+          notifPayload.partyId = ticket.creatorId;
+        } else if (ticket.creatorRole === Role.DRIVER) {
+          notifPayload.driverId = ticket.creatorId;
+        } else {
+          notifPayload.userId = ticket.creatorId;
+        }
+
+        await this.notificationService.sendNotification(notifPayload);
+      } else {
+        this.notificationGateway.sendNotificationToAdmin({
+          title: notifTitle,
+          message: notifMessage,
+          ticketId,
+          showTicketId: ticket.showTicketId,
+          createdAt: new Date(),
+        });
+      }
+    } catch {
+      // Ignore notification failures on reply
+    }
+
     return message;
   }
 
   async updateStatus(ticketId: string, status: string, reqUser: any) {
-    await this.findOne(ticketId, reqUser);
+    const ticket = await this.findOne(ticketId, reqUser);
 
-    return this.prisma.supportTicket.update({
+    const updated = await this.prisma.supportTicket.update({
       where: { ticketId },
       data: { status },
     });
+
+    try {
+      const notifTitle = `সাপোর্ট টিকেট স্ট্যাটাস আপডেট: #${ticket.showTicketId}`;
+      const notifMessage = `আপনার সাপোর্ট টিকেটের স্ট্যাটাস পরিবর্তন করে "${status}" করা হয়েছে।`;
+
+      const notifPayload: any = {
+        title: notifTitle,
+        message: notifMessage,
+        data: {
+          type: 'SUPPORT_TICKET_STATUS_UPDATED',
+          ticketId,
+          status,
+          showTicketId: ticket.showTicketId,
+        },
+      };
+
+      if (ticket.creatorRole === Role.VENDOR) {
+        notifPayload.companyId = ticket.creatorId;
+      } else if (ticket.creatorRole === Role.PARTY) {
+        notifPayload.partyId = ticket.creatorId;
+      } else if (ticket.creatorRole === Role.DRIVER) {
+        notifPayload.driverId = ticket.creatorId;
+      } else {
+        notifPayload.userId = ticket.creatorId;
+      }
+
+      await this.notificationService.sendNotification(notifPayload);
+    } catch {
+      // Ignore notification failures on status update
+    }
+
+    return updated;
   }
 }

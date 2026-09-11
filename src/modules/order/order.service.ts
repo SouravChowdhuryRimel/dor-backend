@@ -684,6 +684,45 @@ export class OrderService {
       partyId: updatedOrder.partyId,
     });
 
+    if (updateOrderDto.status && updateOrderDto.status !== order.status) {
+      if (updatedOrder.partyId) {
+        if (updateOrderDto.status === OrderStatus.PROCESSING) {
+          await this.notificationService.sendNotification({
+            title: 'অর্ডার প্রস্তুত করা হচ্ছে',
+            message: `আপনার অর্ডারটি (#${updatedOrder.showOrderId}) বর্তমানে প্রসেসিং/প্রস্তুত করা হচ্ছে।`,
+            partyId: updatedOrder.partyId,
+            data: {
+              type: 'ORDER_PROCESSING',
+              orderId: id,
+              showOrderId: updatedOrder.showOrderId,
+            },
+          });
+        } else if (updateOrderDto.status === OrderStatus.DISPATCHED) {
+          await this.notificationService.sendNotification({
+            title: 'অর্ডার পাঠানো হয়েছে',
+            message: `আপনার অর্ডারটি (#${updatedOrder.showOrderId}) ডেলিভারির উদ্দেশ্যে পাঠানো হয়েছে।`,
+            partyId: updatedOrder.partyId,
+            data: {
+              type: 'ORDER_DISPATCHED',
+              orderId: id,
+              showOrderId: updatedOrder.showOrderId,
+            },
+          });
+        } else if (updateOrderDto.status === OrderStatus.DELIVERED) {
+          await this.notificationService.sendNotification({
+            title: 'অর্ডার ডেলিভারি সম্পন্ন',
+            message: `আপনার অর্ডারটি (#${updatedOrder.showOrderId}) সফলভাবে ডেলিভারি সম্পন্ন হয়েছে।`,
+            partyId: updatedOrder.partyId,
+            data: {
+              type: 'ORDER_DELIVERED',
+              orderId: id,
+              showOrderId: updatedOrder.showOrderId,
+            },
+          });
+        }
+      }
+    }
+
     return updatedOrder;
   }
 

@@ -274,7 +274,7 @@ export class InquiryService {
       throw new ForbiddenException(`You can only close your own inquiries`);
     }
 
-    return this.prisma.inquiry.update({
+    const updatedInquiry = await this.prisma.inquiry.update({
       where: { inquiryId },
       data: { status: InquiryStatus.CLOSED },
       include: {
@@ -286,6 +286,31 @@ export class InquiryService {
         },
       },
     });
+
+    try {
+      const responses = await this.prisma.inquiryResponse.findMany({
+        where: { inquiryId },
+        select: { companyId: true },
+      });
+      const uniqueCompanyIds = [...new Set(responses.map((r) => r.companyId))];
+
+      for (const cId of uniqueCompanyIds) {
+        await this.notificationService.sendNotification({
+          title: 'ইনকোয়ারি সম্পন্ন হয়েছে',
+          message: `ইনকোয়ারিটি ("${inquiry.title}") বায়ার কর্তৃক সম্পন্ন/বন্ধ করা হয়েছে।`,
+          companyId: cId,
+          inquiryId,
+          data: {
+            type: 'INQUIRY_CLOSED',
+            inquiryId,
+          },
+        });
+      }
+    } catch {
+      // Ignore notification failures on close inquiry
+    }
+
+    return updatedInquiry;
   }
 
   async findAll(query?: GetInquiriesQueryDto, userId?: string, role?: string) {
