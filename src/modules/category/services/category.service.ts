@@ -18,7 +18,6 @@ export class CategoryService {
     const { adminCategories, ...rest } = category;
     return {
       ...rest,
-      keywords: category.keywords || [],
       admins,
     };
   }
@@ -73,34 +72,6 @@ export class CategoryService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-  async getCategoryKeywords(search?: string) {
-    const where: any = { status: 'ACTIVE' };
-    if (search && search.trim()) {
-      where.categoryName = { contains: search.trim(), mode: 'insensitive' };
-    }
-
-    const categories = await this.prisma.category.findMany({
-      where,
-      select: {
-        categoryId: true,
-        categoryName: true,
-        categoryThumbnail: true,
-      },
-      orderBy: { categoryName: 'asc' },
-    });
-
-    const globalKeywords = await this.prisma.keyword.findMany({
-      select: { name: true },
-      orderBy: { name: 'asc' },
-    });
-
-    const allKeywords = globalKeywords.map((k) => k.name);
-
-    return {
-      categories: categories.map((c) => ({ ...c, keywords: [] })),
-      allKeywords,
-    };
-  }
 
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
