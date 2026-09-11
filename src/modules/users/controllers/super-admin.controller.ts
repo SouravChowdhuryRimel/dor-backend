@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Patch,
   Body,
   UseGuards,
@@ -35,6 +36,48 @@ import { UpdateSuperAdminProfileDto } from '../dto/update-super-admin-profile.dt
 @Controller('superAdmin')
 export class SuperAdminController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('profile')
+  @ApiOperation({
+    summary: 'Get currently logged-in Super Admin profile',
+    description:
+      'Retrieves profile information for the authenticated SUPER_ADMIN user.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the Super Admin details.',
+  })
+  async getProfile(@Req() req: any) {
+    const { sub } = req.user;
+    const user = await this.usersService.findById(sub);
+    if (!user) {
+      throw new NotFoundException('User profile not found');
+    }
+    const category =
+      (user as any).adminCategories?.map((ac: any) => ({
+        categoryId: ac.category?.categoryId || ac.categoryId,
+        categoryName: ac.category?.categoryName || null,
+      })) || [];
+
+    return {
+      id: user.id,
+      phoneNumber: user.phoneNumber,
+      ownerName: user.name || null,
+      email: user.email || null,
+      profileImage: (user as any).profileImage || null,
+      district: null,
+      upozela: null,
+      address: null,
+      area: null,
+      status: user.isActive ? 'ACTIVE' : 'INACTIVE',
+      role: Role.SUPER_ADMIN,
+      isVerified: true,
+      category,
+      company: [],
+      driver: [],
+      party: [],
+    };
+  }
 
   @Patch('profile')
   @UseInterceptors(
@@ -78,25 +121,53 @@ export class SuperAdminController {
     const { sub } = req.user;
 
     const updateData: any = {};
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.email !== undefined) updateData.email = body.email;
-    if (body.phoneNumber !== undefined) updateData.phoneNumber = body.phoneNumber;
+    if (
+      body.name !== undefined &&
+      typeof body.name === 'string' &&
+      body.name.trim() !== ''
+    ) {
+      updateData.name = body.name.trim();
+    }
+    if (
+      body.email !== undefined &&
+      typeof body.email === 'string' &&
+      body.email.trim() !== ''
+    ) {
+      updateData.email = body.email.trim();
+    }
+    if (
+      body.phoneNumber !== undefined &&
+      typeof body.phoneNumber === 'string' &&
+      body.phoneNumber.trim() !== ''
+    ) {
+      updateData.phoneNumber = body.phoneNumber.trim();
+    }
 
     if (file) {
       updateData.profileImage = `/uploads/documents/${file.filename}`;
-    } else if (body.profileImage !== undefined) {
-      updateData.profileImage = body.profileImage;
+    } else if (
+      body.profileImage !== undefined &&
+      typeof body.profileImage === 'string' &&
+      body.profileImage.trim() !== ''
+    ) {
+      updateData.profileImage = body.profileImage.trim();
     }
 
-    if (body.password) {
-      updateData.password = await argon2.hash(body.password, {
+    if (
+      body.password !== undefined &&
+      typeof body.password === 'string' &&
+      body.password.trim() !== ''
+    ) {
+      updateData.password = await argon2.hash(body.password.trim(), {
         type: argon2.argon2id,
         memoryCost: 65536,
         timeCost: 3,
       });
     }
 
-    await this.usersService.update(sub, updateData);
+    if (Object.keys(updateData).length > 0) {
+      await this.usersService.update(sub, updateData);
+    }
 
     const user = await this.usersService.findById(sub);
     if (!user) {
