@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
@@ -57,6 +61,12 @@ export class CompanyService {
     if (!category) {
       throw new NotFoundException(
         `Category with ID "${createCompanyDto.categoryId}" not found. Create a category first.`,
+      );
+    }
+
+    if (createCompanyDto.keywords && createCompanyDto.keywords.length > 0) {
+      createCompanyDto.keywords = await this.validateKeywordsAgainstMasterList(
+        createCompanyDto.keywords,
       );
     }
 
@@ -134,8 +144,8 @@ export class CompanyService {
   }
 
   async findPending(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
     const where = { status: CompanyStatus.PENDING };
 
@@ -165,8 +175,8 @@ export class CompanyService {
   }
 
   async findVerified(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
     const where = { isVerified: true };
 
@@ -217,8 +227,8 @@ export class CompanyService {
   }
 
   async findAll(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
 
     const [total, data] = await Promise.all([
@@ -247,6 +257,12 @@ export class CompanyService {
       where: { companyId: id },
     });
     if (!company) throw new NotFoundException('Company not found');
+
+    if (updateCompanyDto.keywords && updateCompanyDto.keywords.length > 0) {
+      updateCompanyDto.keywords = await this.validateKeywordsAgainstMasterList(
+        updateCompanyDto.keywords,
+      );
+    }
 
     const updatedCompany = await this.prisma.company.update({
       where: { companyId: id },
@@ -359,9 +375,7 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    const cleanKeywords = Array.from(
-      new Set(keywords.map((k) => k.trim()).filter((k) => k.length > 0)),
-    );
+    const cleanKeywords = await this.validateKeywordsAgainstMasterList(keywords);
 
     return this.update(companyId, { keywords: cleanKeywords }, reqUser);
   }
@@ -372,12 +386,11 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
+    const validatedNewKeywords =
+      await this.validateKeywordsAgainstMasterList(newKeywords);
     const currentKeywords = company.keywords || [];
     const combined = Array.from(
-      new Set([
-        ...currentKeywords,
-        ...newKeywords.map((k) => k.trim()).filter((k) => k.length > 0),
-      ]),
+      new Set([...currentKeywords, ...validatedNewKeywords]),
     );
 
     return this.update(companyId, { keywords: combined }, reqUser);
@@ -402,5 +415,36 @@ export class CompanyService {
     );
 
     return this.update(companyId, { keywords: filtered }, reqUser);
+  }
+
+  private async validateKeywordsAgainstMasterList(
+    keywords: string[],
+  ): Promise<string[]> {
+    const cleaned = Array.from(
+      new Set(keywords.map((k) => k.trim()).filter((k) => k.length > 0)),
+    );
+    if (cleaned.length === 0) return [];
+
+    const existing = await this.prisma.keyword.findMany({
+      where: { name: { in: cleaned } },
+      select: { name: true },
+    });
+    const validNames = new Set(
+      existing.map((e) => e.name.trim().toLowerCase()),
+    );
+    const invalid = cleaned.filter(
+      (k) => !validNames.has(k.toLowerCase()),
+    );
+
+    if (invalid.length > 0) {
+      throw new BadRequestException(
+        `Invalid keyword(s): "${invalid.join(', ')}". You can only select keywords from the official admin keyword list.`,
+      );
+    }
+
+    const nameMap = new Map(
+      existing.map((e) => [e.name.toLowerCase(), e.name]),
+    );
+    return cleaned.map((k) => nameMap.get(k.toLowerCase()) || k);
   }
 }

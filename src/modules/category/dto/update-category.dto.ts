@@ -74,25 +74,4 @@ export class UpdateCategoryDto {
   @IsEnum(CategoryStatusDto)
   @IsOptional()
   status?: CategoryStatusDto;
-
-  @ApiPropertyOptional({
-    description: 'Keywords or tags associated with this category',
-    example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
-    type: [String],
-  })
-  @Transform(({ value }) => {
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {
-        return value.split(',').map((k: string) => k.trim()).filter(Boolean);
-      }
-    }
-    return value;
-  })
-  @IsArray()
-  @IsOptional()
-  @IsString({ each: true })
-  keywords?: string[];
 }

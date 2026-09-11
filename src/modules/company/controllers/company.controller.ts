@@ -148,6 +148,21 @@ export class CompanyController {
       }
     }
     createCompanyDto.companyDocument = uploadedDocs;
+    if (
+      createCompanyDto.keywords &&
+      typeof (createCompanyDto.keywords as any) === 'string'
+    ) {
+      try {
+        createCompanyDto.keywords = JSON.parse(
+          createCompanyDto.keywords as any,
+        );
+      } catch {
+        createCompanyDto.keywords = ((createCompanyDto.keywords as any) as string)
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
+      }
+    }
     return this.companyService.register(createCompanyDto);
   }
 
@@ -291,6 +306,20 @@ export class CompanyController {
       }
       if (typedFiles.companyImage && typedFiles.companyImage.length > 0) {
         dataToUpdate.companyImage = `/uploads/documents/${typedFiles.companyImage[0].filename}`;
+      }
+    }
+
+    if (
+      dataToUpdate.keywords &&
+      typeof (dataToUpdate.keywords as any) === 'string'
+    ) {
+      try {
+        dataToUpdate.keywords = JSON.parse(dataToUpdate.keywords as any);
+      } catch {
+        dataToUpdate.keywords = ((dataToUpdate.keywords as any) as string)
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
       }
     }
 

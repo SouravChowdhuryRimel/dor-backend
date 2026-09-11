@@ -6,10 +6,11 @@ import {
   createPaginatedResponse,
   PaginationQueryDto,
 } from '../../../shared/pagination/pagination.util';
+import { QueryCategoryDto } from '../dto/query-category.dto';
 
 @Injectable()
 export class CategoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   private mapCategoryAdmins(category: any) {
     if (!category) return null;
@@ -17,6 +18,7 @@ export class CategoryService {
     const { adminCategories, ...rest } = category;
     return {
       ...rest,
+      keywords: category.keywords || [],
       admins,
     };
   }
@@ -42,18 +44,15 @@ export class CategoryService {
     return this.mapCategoryAdmins(category);
   }
 
-  async findAll(query?: PaginationQueryDto & { search?: string }) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+  async findAll(query?: QueryCategoryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (query?.search && query.search.trim()) {
       const term = query.search.trim();
-      where.OR = [
-        { categoryName: { contains: term, mode: 'insensitive' } },
-        { keywords: { has: term } },
-      ];
+      where.categoryName = { contains: term, mode: 'insensitive' };
     }
 
     const [total, data] = await Promise.all([
@@ -77,11 +76,7 @@ export class CategoryService {
   async getCategoryKeywords(search?: string) {
     const where: any = { status: 'ACTIVE' };
     if (search && search.trim()) {
-      const term = search.trim();
-      where.OR = [
-        { categoryName: { contains: term, mode: 'insensitive' } },
-        { keywords: { has: term } },
-      ];
+      where.categoryName = { contains: search.trim(), mode: 'insensitive' };
     }
 
     const categories = await this.prisma.category.findMany({
@@ -90,31 +85,19 @@ export class CategoryService {
         categoryId: true,
         categoryName: true,
         categoryThumbnail: true,
-        keywords: true,
       },
       orderBy: { categoryName: 'asc' },
     });
 
-    const categoryKeywordsSet = new Set<string>();
-    categories.forEach((cat) => {
-      (cat.keywords || []).forEach((k) => categoryKeywordsSet.add(k));
+    const globalKeywords = await this.prisma.keyword.findMany({
+      select: { name: true },
+      orderBy: { name: 'asc' },
     });
 
-    const companies = await this.prisma.company.findMany({
-      where: { status: 'APPROVED' },
-      select: { keywords: true },
-    });
-    const companyKeywordsSet = new Set<string>();
-    companies.forEach((comp) => {
-      (comp.keywords || []).forEach((k) => companyKeywordsSet.add(k));
-    });
-
-    const allKeywords = Array.from(
-      new Set([...categoryKeywordsSet, ...companyKeywordsSet]),
-    ).sort();
+    const allKeywords = globalKeywords.map((k) => k.name);
 
     return {
-      categories,
+      categories: categories.map((c) => ({ ...c, keywords: [] })),
       allKeywords,
     };
   }

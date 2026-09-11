@@ -9,13 +9,12 @@
 
 | ফিচার | মেথড | এন্ডপয়েন্ট | বিবরণ |
 | :--- | :--- | :--- | :--- |
-| **বিক্রেতার তথ্য ও কীওয়ার্ড ফেচ** | `GET` | `/api/v1/companies/:id` | বিক্রেতার প্রোফাইল ও বর্তমান কীওয়ার্ড লিস্ট (`keywords: []`) |
-| **কীওয়ার্ড যোগ / বাদ / পরিবর্তন** | `PATCH` | `/api/v1/companies/:id/keywords` | বিক্রেতার কীওয়ার্ড ট্যাগ যোগ (`addKeywords`), রিমুভ (`removeKeywords`) বা রিপ্লেস (`keywords`) |
-| **ক্যাটাগরি ও কীওয়ার্ড তালিকা** | `GET` | `/api/v1/categories/keywords` | সকল সক্রিয় ক্যাটাগরি ও সমস্ত ইউনিক কীওয়ার্ডের সম্মিলিত তালিকা (সার্চ ও ফিল্টার সাপোর্টসহ) |
-| **ক্যাটাগরি ও কীওয়ার্ড সার্চ** | `GET` | `/api/v1/categories?search=চাল` | ক্যাটাগরির নাম ও কীওয়ার্ড অনুযায়ী কেস-ইনসেনসিটিভ সার্চ |
-| **ক্রেতার ইনকোয়ারি সাবমিট** | `POST` | `/api/v1/inquiries` | ক্যাটাগরি ও কীওয়ার্ডসহ নতুন ইনকোয়ারি তৈরি (Multipart Form-data) |
-| **বিক্রেতার ড্যাশবোর্ড সামারি** | `GET` | `/api/v1/dashboard/company/:id/summary` | মোট ইনকোয়ারি সংখ্যা ও ক্রেতার পূর্ণ বিবরণসহ সাম্প্রতিক ইনকোয়ারি তালিকা |
-| **ম্যাচিং ইনকোয়ারি তালিকা** | `GET` | `/api/v1/inquiries` | বিক্রেতার ক্যাটাগরি/কীওয়ার্ডের সাথে ম্যাচ করা পেজিনেটেড ইনকোয়ারি লিস্ট |
+| **কোম্পানি সাইনআপ (ক্যাটাগরি ও কীওয়ার্ডসহ)** | `POST` | `/api/v1/companies` | সাইনআপের সময় ক্যাটাগরি নির্বাচন এবং মাস্টার লিস্ট থেকে একাধিক কীওয়ার্ড যোগ (`keywords: []`) |
+| **গ্লোবাল কীওয়ার্ড সার্চ ও ড্রপডাউন লিস্ট** | `GET` | `/api/v1/keywords?search=চাল` | অ্যাডমিনের তৈরি গ্লোবাল কীওয়ার্ড পুলে সার্চ ও ড্রপডাউন লোড (`?all=true` দিয়ে সব পাওয়া যায়) |
+| **নতুন গ্লোবাল কীওয়ার্ড যোগ (Admin)** | `POST` | `/api/v1/keywords` | অ্যাডমিন/সুপার অ্যাডমিন কর্তৃক সেন্ট্রাল লিস্টে নতুন কীওয়ার্ড যোগ (`name` বা `names: []`) |
+| **বিক্রেতার কীওয়ার্ড প্রোফাইল আপডেট** | `PATCH` | `/api/v1/companies/:id/keywords` | প্রোফাইল এডিটে কীওয়ার্ড যোগ (`addKeywords`), রিমুভ (`removeKeywords`) বা রিপ্লেস (`keywords`) |
+| **ক্রেতার ইনকোয়ারি সাবমিট** | `POST` | `/api/v1/inquiries` | সেন্ট্রাল লিস্ট থেকে কীওয়ার্ড সিলেক্ট করে ইনকোয়ারি তৈরি (Multipart Form-data) |
+| **বিক্রেতার ড্যাশবোর্ড ও নোটিফিকেশন** | `GET` | `/api/v1/inquiries` | ইনকোয়ারির কীওয়ার্ড যেসব কোম্পানির প্রোফাইলে আছে, **শুধুমাত্র তারাই** নোটিফিকেশন ও ইনকোয়ারি পাবে |
 
 ---
 
@@ -76,52 +75,21 @@ class CompanyProfileModel {
 
 ---
 
-### ২. `CategoryKeywordResponseModel` (ক্যাটাগরি ও কীওয়ার্ড মডেল)
+### ২. `GlobalKeywordModel` (গ্লোবাল কীওয়ার্ড মডেল)
 ```dart
-class CategoryKeywordItem {
-  final String categoryId;
-  final String categoryName;
-  final String? categoryThumbnail;
-  final List<String> keywords;
+class GlobalKeywordModel {
+  final String keywordId;
+  final String name;
 
-  CategoryKeywordItem({
-    required this.categoryId,
-    required this.categoryName,
-    this.categoryThumbnail,
-    required this.keywords,
+  GlobalKeywordModel({
+    required this.keywordId,
+    required this.name,
   });
 
-  factory CategoryKeywordItem.fromJson(Map<String, dynamic> json) {
-    return CategoryKeywordItem(
-      categoryId: json['categoryId'] ?? '',
-      categoryName: json['categoryName'] ?? '',
-      categoryThumbnail: json['categoryThumbnail'],
-      keywords: json['keywords'] != null
-          ? List<String>.from(json['keywords'])
-          : [],
-    );
-  }
-}
-
-class CategoryKeywordResponseModel {
-  final List<CategoryKeywordItem> categories;
-  final List<String> allKeywords;
-
-  CategoryKeywordResponseModel({
-    required this.categories,
-    required this.allKeywords,
-  });
-
-  factory CategoryKeywordResponseModel.fromJson(Map<String, dynamic> json) {
-    final catList = (json['categories'] as List? ?? [])
-        .map((e) => CategoryKeywordItem.fromJson(e))
-        .toList();
-    final kwList = json['allKeywords'] != null
-        ? List<String>.from(json['allKeywords'])
-        : <String>[];
-    return CategoryKeywordResponseModel(
-      categories: catList,
-      allKeywords: kwList,
+  factory GlobalKeywordModel.fromJson(Map<String, dynamic> json) {
+    return GlobalKeywordModel(
+      keywordId: json['keywordId'] ?? '',
+      name: json['name'] ?? '',
     );
   }
 }
@@ -287,24 +255,26 @@ class ApiService {
   }
 
   // ==========================================
-  // 2. ক্রেতার ক্যাটাগরি ও কীওয়ার্ড সার্ভিস
+  // 2. গ্লোবাল কীওয়ার্ড সার্ভিস (Category-independent)
   // ==========================================
 
-  /// ক্যাটাগরি ও অল কীওয়ার্ড লিস্ট পাওয়া
-  static Future<CategoryKeywordResponseModel?> getCategoriesAndKeywords({
+  /// গ্লোবাল কীওয়ার্ড সার্চ ও লিস্ট পাওয়া
+  static Future<List<GlobalKeywordModel>> getGlobalKeywords({
     String? search,
+    bool all = true,
   }) async {
-    String endpoint = '$baseUrl/categories/keywords';
+    String endpoint = '$baseUrl/keywords?all=$all';
     if (search != null && search.trim().isNotEmpty) {
-      endpoint += '?search=${Uri.encodeComponent(search.trim())}';
+      endpoint += '&search=${Uri.encodeComponent(search.trim())}';
     }
 
     final res = await http.get(Uri.parse(endpoint));
     if (res.statusCode == 200) {
-      final data = jsonDecode(res.body)['data'];
-      return CategoryKeywordResponseModel.fromJson(data);
+      final body = jsonDecode(res.body);
+      final list = (body['data'] is List ? body['data'] : body['data']?['data']) as List? ?? [];
+      return list.map((e) => GlobalKeywordModel.fromJson(e)).toList();
     }
-    return null;
+    return [];
   }
 
   /// ক্রেতা কর্তৃক নতুন ইনকোয়ারি তৈরি (Multipart)

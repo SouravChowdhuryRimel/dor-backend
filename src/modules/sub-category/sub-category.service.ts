@@ -27,8 +27,8 @@ export class SubCategoryService {
   }
 
   async findAll(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
 
     const [total, data] = await Promise.all([

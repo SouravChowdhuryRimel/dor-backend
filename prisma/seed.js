@@ -35,6 +35,26 @@ async function main() {
     });
   }
 
+  // 1.1 Seed Global Keywords (Independent of categories)
+  console.log('Seeding initial global keywords...');
+  const initialKeywords = [
+    'ইলেকট্রনিক্স',
+    'কম্পিউটার',
+    'মোবাইল',
+    'ল্যাপটপ',
+    'চাল',
+    'খাদ্যপণ্য',
+    'কৃষিপণ্য',
+    'গম',
+    'ডাল',
+    'সিমেন্ট',
+    'রড',
+  ];
+  await prisma.keyword.createMany({
+    data: initialKeywords.map((name) => ({ name })),
+    skipDuplicates: true,
+  });
+
   // 2. Create Admin (User with ADMIN/SUPER_ADMIN roles)
   console.log('Upserting Admin user...');
   const adminUser = await prisma.user.upsert({
