@@ -308,6 +308,9 @@ export class UsersService implements OnApplicationBootstrap {
     if (data.name !== undefined && typeof data.name === 'string' && data.name.trim() !== '') {
       updateData.name = data.name.trim();
     }
+    if (data.isActive !== undefined) {
+      updateData.isActive = data.isActive;
+    }
     if (data.profileImage !== undefined && typeof data.profileImage === 'string' && data.profileImage.trim() !== '') {
       updateData.profileImage = data.profileImage.trim();
     }

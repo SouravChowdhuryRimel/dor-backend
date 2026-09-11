@@ -148,6 +148,28 @@ export class CategoryController {
     return this.categoryService.findDriversByCategoryId(id);
   }
 
+  @Get(':id/sub_categories')
+  @ApiOperation({ summary: 'Get sub-categories by category ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns sub-categories belonging to the category.',
+  })
+  @ApiResponse({ status: 404, description: 'Category not found.' })
+  findSubCategoriesByCategoryId(@Param('id') id: string) {
+    return this.categoryService.findSubCategoriesByCategoryId(id);
+  }
+
+  @Get(':id/sub-categories')
+  @ApiOperation({ summary: 'Get sub-categories by category ID (alias)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns sub-categories belonging to the category.',
+  })
+  @ApiResponse({ status: 404, description: 'Category not found.' })
+  findSubCategoriesByCategoryIdKebab(@Param('id') id: string) {
+    return this.categoryService.findSubCategoriesByCategoryId(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get category by ID' })
   @ApiResponse({ status: 200, description: 'Return the category.' })

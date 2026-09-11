@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, IsEmail, IsArray, ValidateIf } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEmail,
+  IsArray,
+  ValidateIf,
+  IsBoolean,
+} from 'class-validator';
 
 export class UpdateAdminDto {
   @ApiPropertyOptional({
@@ -26,6 +33,20 @@ export class UpdateAdminDto {
   @IsString()
   @IsOptional()
   name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether the admin account can sign in',
+    example: true,
+  })
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    if (value === 'true' || value === true || value === 1 || value === '1') return true;
+    if (value === 'false' || value === false || value === 0 || value === '0') return false;
+    return value;
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 
   @ApiPropertyOptional({
     description: 'Profile image of the admin (file upload)',
