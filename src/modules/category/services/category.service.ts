@@ -6,10 +6,11 @@ import {
   createPaginatedResponse,
   PaginationQueryDto,
 } from '../../../shared/pagination/pagination.util';
+import { QueryCategoryDto } from '../dto/query-category.dto';
 
 @Injectable()
 export class CategoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   private mapCategoryAdmins(category: any) {
     if (!category) return null;
@@ -42,14 +43,21 @@ export class CategoryService {
     return this.mapCategoryAdmins(category);
   }
 
-  async findAll(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+  async findAll(query?: QueryCategoryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
 
+    const where: any = {};
+    if (query?.search && query.search.trim()) {
+      const term = query.search.trim();
+      where.categoryName = { contains: term, mode: 'insensitive' };
+    }
+
     const [total, data] = await Promise.all([
-      this.prisma.category.count(),
+      this.prisma.category.count({ where }),
       this.prisma.category.findMany({
+        where,
         include: {
           adminCategories: {
             include: { user: true },
@@ -63,6 +71,7 @@ export class CategoryService {
     const mappedData = data.map((category) => this.mapCategoryAdmins(category));
     return createPaginatedResponse(mappedData, total, page, limit);
   }
+
 
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({

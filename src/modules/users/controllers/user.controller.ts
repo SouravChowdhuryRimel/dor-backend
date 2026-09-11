@@ -124,11 +124,13 @@ export class UserController {
         role: Role.VENDOR,
         isVerified: company.isVerified,
         category,
+        keywords: (company as any).keywords || [],
         company: [
           {
             companyName: company.companyName,
             companyDocument: company.companyDocument,
             companyImage: company.companyImage || null,
+            keywords: (company as any).keywords || [],
           },
         ],
         driver: [],
@@ -441,6 +443,20 @@ export class UserController {
         updateData.companyDocument = body.companyDocument;
       if (body.companyImage !== undefined)
         updateData.companyImage = body.companyImage;
+      if (body.keywords !== undefined) {
+        if (Array.isArray(body.keywords)) {
+          updateData.keywords = body.keywords;
+        } else if (typeof body.keywords === 'string') {
+          try {
+            updateData.keywords = JSON.parse(body.keywords);
+          } catch {
+            updateData.keywords = (body.keywords as string)
+              .split(',')
+              .map((k) => k.trim())
+              .filter(Boolean);
+          }
+        }
+      }
 
       await this.companyService.update(sub, updateData, req.user);
       return this.getProfile(req);

@@ -11,7 +11,7 @@ import { GetInquiriesQueryDto } from './dto/get-inquiries-query.dto';
 import { CreateInquiryResponseDto } from './dto/create-inquiry-response.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { NotificationService } from '../notification/notification.service';
-import { InquiryStatus } from '@prisma/client';
+import { InquiryStatus, CompanyStatus } from '@prisma/client';
 
 @Injectable()
 export class InquiryService {
@@ -50,6 +50,13 @@ export class InquiryService {
       ? new Date(createInquiryDto.deadline)
       : null;
 
+    const inquiryKeywords =
+      createInquiryDto.keywords && createInquiryDto.keywords.length > 0
+        ? await this.validateKeywordsAgainstMasterList(
+            createInquiryDto.keywords,
+          )
+        : [];
+
     // 1. Create Inquiry
     const inquiry = await this.prisma.inquiry.create({
       data: {
@@ -59,6 +66,7 @@ export class InquiryService {
         quantity: createInquiryDto.quantity || null,
         deadline: deadlineDate,
         imageUrls: createInquiryDto.imageUrls || [],
+        keywords: inquiryKeywords,
         partyId,
         categoryId,
         status: InquiryStatus.OPEN,
@@ -77,34 +85,82 @@ export class InquiryService {
             businessName: true,
             phoneNumber: true,
             email: true,
+            district: true,
+            upozela: true,
+            address: true,
           },
         },
       },
     });
 
-    // 2. Find all companies in the same category
-    const companies = await this.prisma.company.findMany({
-      where: { categoryId },
-      select: { companyId: true },
-    });
+    // 2. Find matching companies: ONLY companies that use these keywords
+    let targetCompanies: { companyId: string; companyName: string }[] = [];
+    if (inquiryKeywords.length > 0) {
+      targetCompanies = await this.prisma.company.findMany({
+        where: {
+          keywords: { hasSome: inquiryKeywords },
+          status: { not: CompanyStatus.BLOCKED },
+        },
+        select: { companyId: true, companyName: true },
+      });
+    } else {
+      // Fallback: If no keywords were specified, notify companies in the category
+      targetCompanies = await this.prisma.company.findMany({
+        where: {
+          categoryId,
+          status: { not: CompanyStatus.BLOCKED },
+        },
+        select: { companyId: true, companyName: true },
+      });
+    }
 
-    // 3. Automatically dispatch notifications to all companies in the category
-    if (companies.length > 0) {
-      for (const company of companies) {
-        await this.notificationService.sendNotification({
-          title: 'নতুন ইনকোয়ারি জমা হয়েছে',
-          message: `আপনার ক্যাটাগরিতে একটি নতুন ইনকোয়ারি এসেছে: "${inquiry.title}"`,
-          companyId: company.companyId,
+    // 3. Automatically dispatch notifications to matching companies
+    for (const company of targetCompanies) {
+      await this.notificationService.sendNotification({
+        title: 'নতুন ইনকোয়ারি জমা হয়েছে',
+        message: `আপনার সেবার কীওয়ার্ড অনুযায়ী একটি নতুন ইনকোয়ারি এসেছে: "${inquiry.title}"`,
+        companyId: company.companyId,
+        inquiryId: inquiry.inquiryId,
+        data: {
+          type: 'NEW_INQUIRY',
           inquiryId: inquiry.inquiryId,
-          data: {
-            type: 'NEW_INQUIRY',
-            inquiryId: inquiry.inquiryId,
-          },
-        });
-      }
+          categoryId: inquiry.categoryId,
+        },
+      });
     }
 
     return inquiry;
+  }
+
+  private async validateKeywordsAgainstMasterList(
+    keywords: string[],
+  ): Promise<string[]> {
+    const cleaned = Array.from(
+      new Set(keywords.map((k) => k.trim()).filter((k) => k.length > 0)),
+    );
+    if (cleaned.length === 0) return [];
+
+    const existing = await this.prisma.keyword.findMany({
+      where: { name: { in: cleaned } },
+      select: { name: true },
+    });
+    const validNames = new Set(
+      existing.map((e) => e.name.trim().toLowerCase()),
+    );
+    const invalid = cleaned.filter(
+      (k) => !validNames.has(k.toLowerCase()),
+    );
+
+    if (invalid.length > 0) {
+      throw new BadRequestException(
+        `Invalid keyword(s): "${invalid.join(', ')}". Keywords must be selected from the official admin keyword list.`,
+      );
+    }
+
+    const nameMap = new Map(
+      existing.map((e) => [e.name.toLowerCase(), e.name]),
+    );
+    return cleaned.map((k) => nameMap.get(k.toLowerCase()) || k);
   }
 
   async respond(
@@ -218,7 +274,7 @@ export class InquiryService {
       throw new ForbiddenException(`You can only close your own inquiries`);
     }
 
-    return this.prisma.inquiry.update({
+    const updatedInquiry = await this.prisma.inquiry.update({
       where: { inquiryId },
       data: { status: InquiryStatus.CLOSED },
       include: {
@@ -230,15 +286,73 @@ export class InquiryService {
         },
       },
     });
+
+    try {
+      const responses = await this.prisma.inquiryResponse.findMany({
+        where: { inquiryId },
+        select: { companyId: true },
+      });
+      const uniqueCompanyIds = [...new Set(responses.map((r) => r.companyId))];
+
+      for (const cId of uniqueCompanyIds) {
+        await this.notificationService.sendNotification({
+          title: 'ইনকোয়ারি সম্পন্ন হয়েছে',
+          message: `ইনকোয়ারিটি ("${inquiry.title}") বায়ার কর্তৃক সম্পন্ন/বন্ধ করা হয়েছে।`,
+          companyId: cId,
+          inquiryId,
+          data: {
+            type: 'INQUIRY_CLOSED',
+            inquiryId,
+          },
+        });
+      }
+    } catch {
+      // Ignore notification failures on close inquiry
+    }
+
+    return updatedInquiry;
   }
 
   async findAll(query?: GetInquiriesQueryDto, userId?: string, role?: string) {
     const where: any = {};
-    if (query?.categoryId) {
-      where.categoryId = query.categoryId;
-    }
     if (query?.partyId) {
       where.partyId = query.partyId;
+    }
+
+    if (role === 'COMPANY' && userId) {
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+        select: { categoryId: true, keywords: true },
+      });
+
+      if (company) {
+        const companyKeywords = company.keywords || [];
+        const matchConditions: any[] = [];
+        if (companyKeywords.length > 0) {
+          matchConditions.push({
+            keywords: { hasSome: companyKeywords },
+          });
+        }
+        matchConditions.push({
+          AND: [
+            { categoryId: company.categoryId },
+            { keywords: { isEmpty: true } },
+          ],
+        });
+
+        if (query?.categoryId) {
+          where.AND = [
+            { OR: matchConditions },
+            { categoryId: query.categoryId },
+          ];
+        } else {
+          where.OR = matchConditions;
+        }
+      } else if (query?.categoryId) {
+        where.categoryId = query.categoryId;
+      }
+    } else if (query?.categoryId) {
+      where.categoryId = query.categoryId;
     }
 
     const page = query?.page || 1;
@@ -323,10 +437,14 @@ export class InquiryService {
         }
       }
 
+      const hasResponded = filteredResponses.some(
+        (r) => r.companyId === userId,
+      );
       const { _count, responses, ...rest } = item;
       return {
         ...rest,
         responseCount,
+        hasResponded,
         responses: filteredResponses,
       };
     });
@@ -408,10 +526,14 @@ export class InquiryService {
       }
     }
 
+    const hasResponded = filteredResponses.some(
+      (r) => r.companyId === userId,
+    );
     const { _count, responses, ...rest } = inquiry;
     return {
       ...rest,
       responseCount,
+      hasResponded,
       responses: filteredResponses,
     };
   }
@@ -449,6 +571,15 @@ export class InquiryService {
     const dataToUpdate: any = { ...updateInquiryDto };
     if (updateInquiryDto.deadline) {
       dataToUpdate.deadline = deadlineDate;
+    }
+
+    if (
+      updateInquiryDto.keywords &&
+      updateInquiryDto.keywords.length > 0
+    ) {
+      dataToUpdate.keywords = await this.validateKeywordsAgainstMasterList(
+        updateInquiryDto.keywords,
+      );
     }
 
     return this.prisma.inquiry.update({

@@ -66,6 +66,11 @@ export class DashboardService {
       partyWhere.categoryId = { in: categoryIds };
     }
 
+    const inquiryWhere: any = {};
+    if (isAdmin) {
+      inquiryWhere.categoryId = { in: categoryIds };
+    }
+
     const totalCompanies = await this.prisma.company.count({
       where: companyWhere,
     });
@@ -73,8 +78,8 @@ export class DashboardService {
       where: pendingCompanyWhere,
     });
     const totalOrders = await this.prisma.order.count({ where: orderWhere });
-    const totalComplaints = await this.prisma.complaint.count({
-      where: complaintWhere,
+    const totalInquiries = await this.prisma.inquiry.count({
+      where: inquiryWhere,
     });
 
     const totalDrivers = await this.prisma.driver.count({ where: driverWhere });
@@ -106,20 +111,17 @@ export class DashboardService {
       companyStatusBreakdown[c.status] = c._count._all;
     });
 
-    const complaintStatuses = await this.prisma.complaint.groupBy({
-      where: complaintWhere,
+    const inquiryStatuses = await this.prisma.inquiry.groupBy({
+      where: inquiryWhere,
       by: ['status'],
       _count: { _all: true },
     });
-    const complaintStatusBreakdown = {
-      PENDING: 0,
-      UNDER_REVIEW: 0,
-      RESOLVED: 0,
-      REOPENED: 0,
-      CANCELLED: 0,
+    const inquiryStatusBreakdown = {
+      OPEN: 0,
+      CLOSED: 0,
     };
-    complaintStatuses.forEach((c) => {
-      complaintStatusBreakdown[c.status] = c._count._all;
+    inquiryStatuses.forEach((i) => {
+      inquiryStatusBreakdown[i.status] = i._count._all;
     });
 
     // Weekly trend
@@ -277,44 +279,152 @@ export class DashboardService {
       where: companyWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
-      select: { companyName: true, createdAt: true },
+      select: {
+        companyName: true,
+        ownerName: true,
+        district: true,
+        createdAt: true,
+        category: {
+          select: {
+            categoryName: true,
+          },
+        },
+      },
     });
 
     const recentComplaints = await this.prisma.complaint.findMany({
       where: complaintWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
-      select: { title: true, createdAt: true },
+      select: {
+        showComplaintId: true,
+        title: true,
+        createdAt: true,
+        company: {
+          select: {
+            companyName: true,
+          },
+        },
+        party: {
+          select: {
+            partyName: true,
+            businessName: true,
+          },
+        },
+      },
+    });
+
+    const recentInquiries = await this.prisma.inquiry.findMany({
+      where: inquiryWhere,
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        title: true,
+        quantity: true,
+        createdAt: true,
+        category: {
+          select: {
+            categoryName: true,
+          },
+        },
+        party: {
+          select: {
+            partyName: true,
+            businessName: true,
+          },
+        },
+      },
     });
 
     const recentOrders = await this.prisma.order.findMany({
       where: orderWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
-      select: { showOrderId: true, createdAt: true },
+      select: {
+        showOrderId: true,
+        bag: true,
+        createdAt: true,
+        product: {
+          select: {
+            productName: true,
+          },
+        },
+        party: {
+          select: {
+            partyName: true,
+            businessName: true,
+          },
+        },
+      },
     });
 
     const activities: { title: string; time: Date; type: string }[] = [];
 
     recentCompanies.forEach((c) => {
+      const catName = c.category?.categoryName;
+      const subParts: string[] = [];
+      if (c.ownerName) subParts.push(`মালিক: ${c.ownerName}`);
+      if (c.district) subParts.push(c.district);
+
+      const extraInfo = subParts.length > 0 ? ` (${subParts.join(' • ')})` : '';
+      const catInfo = catName ? ` - ${catName}` : '';
+
       activities.push({
-        title: `নতুন কোম্পানি নিবন্ধিত: ${c.companyName}`,
+        title: `নতুন কোম্পানি নিবন্ধিত: ${c.companyName}${catInfo}${extraInfo}`,
         time: c.createdAt,
         type: 'COMPANY',
       });
     });
 
     recentComplaints.forEach((cmp) => {
+      const partyText = cmp.party?.businessName || cmp.party?.partyName;
+      const companyText = cmp.company?.companyName;
+
+      const subParts: string[] = [];
+      if (companyText) subParts.push(`কোম্পানি: ${companyText}`);
+      if (partyText) subParts.push(`বাদি: ${partyText}`);
+
+      const extraInfo = subParts.length > 0 ? ` (${subParts.join(' • ')})` : '';
+
       activities.push({
-        title: `একটি অভিযোগ পাওয়া গেছে: ${cmp.title}`,
+        title: `অভিযোগ দায়ের করা হয়েছে: #${cmp.showComplaintId} - ${cmp.title}${extraInfo}`,
         time: cmp.createdAt,
         type: 'COMPLAINT',
       });
     });
 
-    recentOrders.forEach((o) => {
+    recentInquiries.forEach((inq) => {
+      const partyText = inq.party?.businessName || inq.party?.partyName;
+      const catText = inq.category?.categoryName;
+
+      const subParts: string[] = [];
+      if (inq.quantity) subParts.push(`পরিমাণ: ${inq.quantity}`);
+      if (partyText) subParts.push(partyText);
+
+      const extraInfo = subParts.length > 0 ? ` (${subParts.join(' • ')})` : '';
+      const catInfo = catText ? ` - ${catText}` : '';
+
       activities.push({
-        title: `নতুন অর্ডার করা হয়েছে: #${o.showOrderId}`,
+        title: `নতুন ইনকোয়ারি জমা হয়েছে: "${inq.title}"${catInfo}${extraInfo}`,
+        time: inq.createdAt,
+        type: 'INQUIRY',
+      });
+    });
+
+    recentOrders.forEach((o) => {
+      const productName = o.product?.productName;
+      const bagText = o.bag ? `${o.bag} ব্যাগ` : null;
+      const partyText = o.party?.businessName || o.party?.partyName;
+
+      const subParts: string[] = [];
+      if (bagText) subParts.push(bagText);
+      if (partyText) subParts.push(partyText);
+
+      const extraInfo = subParts.length > 0 ? ` (${subParts.join(' • ')})` : '';
+      const productInfo = productName ? ` - ${productName}` : '';
+
+      activities.push({
+        title: `নতুন অর্ডার করা হয়েছে: #${o.showOrderId}${productInfo}${extraInfo}`,
         time: o.createdAt,
         type: 'ORDER',
       });
@@ -327,14 +437,14 @@ export class DashboardService {
         totalCompanies,
         pendingVerificationCompanies,
         totalOrders,
-        totalComplaints,
+        totalInquiries,
         totalOrderValue,
         totalDrivers,
         totalParties,
         totalBagsOrdered,
       },
       companyStatusBreakdown,
-      complaintStatusBreakdown,
+      inquiryStatusBreakdown,
       weeklyOrderValueTrend,
       topProducts,
       topCompanies,
@@ -365,6 +475,75 @@ export class DashboardService {
     const totalComplaints = await this.prisma.complaint.count({
       where: { companyId },
     });
+
+    // Matching Inquiries for this company (category & keywords match)
+    const companyKeywords = company.keywords || [];
+    const inquiryMatchConditions: any[] = [{ categoryId: company.categoryId }];
+    if (companyKeywords.length > 0) {
+      inquiryMatchConditions.push({
+        keywords: { hasSome: companyKeywords },
+      });
+    }
+
+    const matchingInquiryWhere = {
+      OR: inquiryMatchConditions,
+    };
+
+    const totalInquiries = await this.prisma.inquiry.count({
+      where: matchingInquiryWhere,
+    });
+
+    const recentInquiriesRaw = await this.prisma.inquiry.findMany({
+      where: matchingInquiryWhere,
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        category: {
+          select: {
+            categoryId: true,
+            categoryName: true,
+          },
+        },
+        party: {
+          select: {
+            partyId: true,
+            partyName: true,
+            businessName: true,
+            phoneNumber: true,
+            email: true,
+            district: true,
+            upozela: true,
+            address: true,
+          },
+        },
+        responses: {
+          where: { companyId },
+          select: {
+            responseId: true,
+            offeredPrice: true,
+            comment: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    const recentInquiries = recentInquiriesRaw.map((inq) => ({
+      inquiryId: inq.inquiryId,
+      title: inq.title,
+      productName: inq.productName,
+      description: inq.description,
+      quantity: inq.quantity,
+      deadline: inq.deadline,
+      status: inq.status,
+      imageUrls: inq.imageUrls,
+      keywords: inq.keywords,
+      createdAt: inq.createdAt,
+      category: inq.category,
+      party: inq.party,
+      hasResponded: inq.responses.length > 0,
+      myResponse: inq.responses[0] || null,
+    }));
 
     const orderValueAggregate = await this.prisma.order.aggregate({
       where: {
@@ -791,6 +970,8 @@ export class DashboardService {
       activeComplaintsCount,
       activePartiesCount,
       pendingDeliveries,
+      totalInquiries,
+      recentInquiries,
 
       // original response fields to preserve compatibility
       metrics: {
@@ -798,6 +979,7 @@ export class DashboardService {
         totalDrivers,
         totalParties,
         totalComplaints,
+        totalInquiries,
         totalOrderValue,
         totalBagsOrdered,
       },

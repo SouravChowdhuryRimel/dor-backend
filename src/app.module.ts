@@ -31,6 +31,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
 import { SupportModule } from './modules/support/support.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { KeywordModule } from './modules/keyword/keyword.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { ChatModule } from './modules/chat/chat.module';
     ActivityLogModule,
     SupportModule,
     ChatModule,
+    KeywordModule,
   ],
   providers: [
     {

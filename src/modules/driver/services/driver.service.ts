@@ -32,13 +32,18 @@ const driverDetailsSelect = {
   isVerified: true,
   createdAt: true,
   updatedAt: true,
-} satisfies Prisma.DriverSelect;
+};
+
+import { NotificationService } from '../../notification/notification.service';
+import { NotificationGateway } from '../../notification/notification.gateway';
 
 @Injectable()
 export class DriverService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(createDriverDto: CreateDriverDto, reqUser?: any) {
@@ -97,6 +102,38 @@ export class DriverService {
       action: 'REGISTER_DRIVER',
       description: `Registered new driver: ${driver.driverName}`,
       driverId: driver.driverId,
+    });
+
+    // Notify all Admins in Bangla
+    const adminUsers = await this.prisma.user.findMany({
+      where: {
+        roles: {
+          hasSome: ['ADMIN', 'SUPER_ADMIN'],
+        },
+      },
+      select: { id: true },
+    });
+
+    const notifTitle = 'নতুন ড্রাইভার নিবন্ধন';
+    const notifMessage = `নতুন ড্রাইভার "${driver.driverName}" নিবন্ধিত হয়েছে। (ফোন: ${driver.phoneNumber})`;
+
+    for (const admin of adminUsers) {
+      await this.notificationService.sendNotification({
+        title: notifTitle,
+        message: notifMessage,
+        userId: admin.id,
+        data: {
+          type: 'NEW_DRIVER_REGISTERED',
+          driverId: driver.driverId,
+        },
+      });
+    }
+
+    this.notificationGateway.sendNotificationToAdmin({
+      title: notifTitle,
+      message: notifMessage,
+      driverId: driver.driverId,
+      createdAt: new Date(),
     });
 
     return driver;
@@ -248,6 +285,16 @@ export class DriverService {
       action: 'VERIFY_DRIVER',
       description: `Verified driver: ${verified.driverName}`,
       driverId: id,
+    });
+
+    await this.notificationService.sendNotification({
+      title: 'ড্রাইভার ভেরিফিকেশন সম্পন্ন',
+      message: `অভিনন্দন ${verified.driverName}! আপনার ড্রাইভার প্রোফাইল সফলভাবে ভেরিফাইড হয়েছে।`,
+      driverId: id,
+      data: {
+        type: 'DRIVER_VERIFIED',
+        driverId: id,
+      },
     });
 
     return verified;

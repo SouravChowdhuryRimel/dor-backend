@@ -87,6 +87,12 @@ export class CompanyController {
         address: { type: 'string' },
         categoryId: { type: 'string' },
         incomeTax: { type: 'string' },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
+          description: 'Keywords or services for the company',
+        },
         companyDocument: {
           type: 'array',
           items: {
@@ -142,6 +148,21 @@ export class CompanyController {
       }
     }
     createCompanyDto.companyDocument = uploadedDocs;
+    if (
+      createCompanyDto.keywords &&
+      typeof (createCompanyDto.keywords as any) === 'string'
+    ) {
+      try {
+        createCompanyDto.keywords = JSON.parse(
+          createCompanyDto.keywords as any,
+        );
+      } catch {
+        createCompanyDto.keywords = ((createCompanyDto.keywords as any) as string)
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
+      }
+    }
     return this.companyService.register(createCompanyDto);
   }
 
@@ -251,6 +272,12 @@ export class CompanyController {
           format: 'binary',
           description: 'Company image / logo',
         },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
+          description: 'Keywords or services for the company',
+        },
       },
     },
   })
@@ -282,7 +309,78 @@ export class CompanyController {
       }
     }
 
+    if (
+      dataToUpdate.keywords &&
+      typeof (dataToUpdate.keywords as any) === 'string'
+    ) {
+      try {
+        dataToUpdate.keywords = JSON.parse(dataToUpdate.keywords as any);
+      } catch {
+        dataToUpdate.keywords = ((dataToUpdate.keywords as any) as string)
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
+      }
+    }
+
     return this.companyService.update(id, dataToUpdate, req.user);
+  }
+
+  @Patch(':id/keywords')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Add, remove, or replace keywords/services for a company/seller' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
+          description: 'Full list of keywords to replace existing ones',
+        },
+        addKeywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['ট্যাবলেট'],
+          description: 'Keywords to add to existing ones',
+        },
+        removeKeywords: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['মোবাইল'],
+          description: 'Keywords to remove',
+        },
+      },
+    },
+  })
+  updateKeywords(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      keywords?: string[];
+      addKeywords?: string[];
+      removeKeywords?: string[];
+    },
+    @Req() req: any,
+  ) {
+    if (body.addKeywords && body.addKeywords.length > 0) {
+      return this.companyService.addKeywords(id, body.addKeywords, req.user);
+    }
+    if (body.removeKeywords && body.removeKeywords.length > 0) {
+      return this.companyService.removeKeywords(
+        id,
+        body.removeKeywords,
+        req.user,
+      );
+    }
+    return this.companyService.updateKeywords(
+      id,
+      body.keywords || [],
+      req.user,
+    );
   }
 
   @Get(':id/drivers')

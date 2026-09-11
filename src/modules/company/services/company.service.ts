@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
@@ -29,6 +33,7 @@ const companyDetailsSelect = {
   incomeTax: true,
   companyDocument: true,
   companyImage: true,
+  keywords: true,
   categoryId: true,
   createdAt: true,
   updatedAt: true,
@@ -59,6 +64,12 @@ export class CompanyService {
       );
     }
 
+    if (createCompanyDto.keywords && createCompanyDto.keywords.length > 0) {
+      createCompanyDto.keywords = await this.validateKeywordsAgainstMasterList(
+        createCompanyDto.keywords,
+      );
+    }
+
     const hashedPassword = await argon2.hash(createCompanyDto.password, {
       type: argon2.argon2id,
       memoryCost: 65536,
@@ -84,6 +95,7 @@ export class CompanyService {
         incomeTax: true,
         companyDocument: true,
         companyImage: true,
+        keywords: true,
         categoryId: true,
         createdAt: true,
       },
@@ -132,8 +144,8 @@ export class CompanyService {
   }
 
   async findPending(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
     const where = { status: CompanyStatus.PENDING };
 
@@ -163,8 +175,8 @@ export class CompanyService {
   }
 
   async findVerified(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
     const where = { isVerified: true };
 
@@ -211,12 +223,22 @@ export class CompanyService {
       companyId,
     });
 
+    await this.notificationService.sendNotification({
+      title: 'কোম্পানি অ্যাকাউন্ট অনুমোদিত',
+      message: `অভিনন্দন! আপনার প্রতিষ্ঠান "${company.companyName}" সফলভাবে অনুমোদিত হয়েছে।`,
+      companyId,
+      data: {
+        type: 'COMPANY_APPROVED',
+        companyId,
+      },
+    });
+
     return updatedCompany;
   }
 
   async findAll(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
 
     const [total, data] = await Promise.all([
@@ -246,6 +268,12 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
+    if (updateCompanyDto.keywords && updateCompanyDto.keywords.length > 0) {
+      updateCompanyDto.keywords = await this.validateKeywordsAgainstMasterList(
+        updateCompanyDto.keywords,
+      );
+    }
+
     const updatedCompany = await this.prisma.company.update({
       where: { companyId: id },
       data: updateCompanyDto,
@@ -259,6 +287,27 @@ export class CompanyService {
       description: `Updated company: ${updatedCompany.companyName}`,
       companyId: id,
     });
+
+    if (
+      updateCompanyDto.status &&
+      updateCompanyDto.status !== company.status
+    ) {
+      if (
+        updateCompanyDto.status === CompanyStatus.REJECTED ||
+        updateCompanyDto.status === CompanyStatus.BLOCKED
+      ) {
+        await this.notificationService.sendNotification({
+          title: 'কোম্পানি অ্যাকাউন্ট স্ট্যাটাস পরিবর্তন',
+          message: `আপনার কোম্পানি অ্যাকাউন্টের স্ট্যাটাস পরিবর্তন করে "${updateCompanyDto.status}" করা হয়েছে।`,
+          companyId: id,
+          data: {
+            type: 'COMPANY_STATUS_UPDATED',
+            status: updateCompanyDto.status,
+            companyId: id,
+          },
+        });
+      }
+    }
 
     return updatedCompany;
   }
@@ -349,5 +398,84 @@ export class CompanyService {
     return this.prisma.company.findFirst({
       where: { phoneNumber },
     });
+  }
+
+  async updateKeywords(companyId: string, keywords: string[], reqUser?: any) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const cleanKeywords = await this.validateKeywordsAgainstMasterList(keywords);
+
+    return this.update(companyId, { keywords: cleanKeywords }, reqUser);
+  }
+
+  async addKeywords(companyId: string, newKeywords: string[], reqUser?: any) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const validatedNewKeywords =
+      await this.validateKeywordsAgainstMasterList(newKeywords);
+    const currentKeywords = company.keywords || [];
+    const combined = Array.from(
+      new Set([...currentKeywords, ...validatedNewKeywords]),
+    );
+
+    return this.update(companyId, { keywords: combined }, reqUser);
+  }
+
+  async removeKeywords(
+    companyId: string,
+    keywordsToRemove: string[],
+    reqUser?: any,
+  ) {
+    const company = await this.prisma.company.findUnique({
+      where: { companyId },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const currentKeywords = company.keywords || [];
+    const toRemoveSet = new Set(
+      keywordsToRemove.map((k) => k.trim().toLowerCase()),
+    );
+    const filtered = currentKeywords.filter(
+      (k) => !toRemoveSet.has(k.trim().toLowerCase()),
+    );
+
+    return this.update(companyId, { keywords: filtered }, reqUser);
+  }
+
+  private async validateKeywordsAgainstMasterList(
+    keywords: string[],
+  ): Promise<string[]> {
+    const cleaned = Array.from(
+      new Set(keywords.map((k) => k.trim()).filter((k) => k.length > 0)),
+    );
+    if (cleaned.length === 0) return [];
+
+    const existing = await this.prisma.keyword.findMany({
+      where: { name: { in: cleaned } },
+      select: { name: true },
+    });
+    const validNames = new Set(
+      existing.map((e) => e.name.trim().toLowerCase()),
+    );
+    const invalid = cleaned.filter(
+      (k) => !validNames.has(k.toLowerCase()),
+    );
+
+    if (invalid.length > 0) {
+      throw new BadRequestException(
+        `Invalid keyword(s): "${invalid.join(', ')}". You can only select keywords from the official admin keyword list.`,
+      );
+    }
+
+    const nameMap = new Map(
+      existing.map((e) => [e.name.toLowerCase(), e.name]),
+    );
+    return cleaned.map((k) => nameMap.get(k.toLowerCase()) || k);
   }
 }

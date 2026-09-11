@@ -18,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { CategoryService } from '../services/category.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
@@ -55,7 +56,7 @@ const categoryImageUpload = {
 @ApiTags('Categories')
 @Controller('categories')
 export class CategoryController {
-  constructor(private readonly categoryService: CategoryService) {}
+  constructor(private readonly categoryService: CategoryService) { }
 
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
@@ -104,9 +105,10 @@ export class CategoryController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all categories' })
+  @ApiOperation({ summary: 'Get all categories with optional search across name' })
+  @ApiQuery({ name: 'search', required: false, description: 'Search term matching category name' })
   @ApiResponse({ status: 200, description: 'Return all categories.' })
-  findAll(@Query() query: PaginationQueryDto) {
+  findAll(@Query() query: PaginationQueryDto & { search?: string }) {
     return this.categoryService.findAll(query);
   }
 

@@ -6,9 +6,14 @@ import { GetOffersQueryDto } from './dto/get-offers-query.dto';
 import { createPaginatedResponse } from '../../shared/pagination/pagination.util';
 import { Role } from '../../common/constants/role.enum';
 
+import { NotificationService } from '../notification/notification.service';
+
 @Injectable()
 export class OfferService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   async create(createOfferDto: CreateOfferDto, reqUser?: any) {
     // Verify party exists
@@ -40,13 +45,28 @@ export class OfferService {
       }
     }
 
-    return this.prisma.offer.create({
+    const offer = await this.prisma.offer.create({
       data: {
         ...createOfferDto,
         startDate: new Date(createOfferDto.startDate),
         endDate: new Date(createOfferDto.endDate),
       },
     });
+
+    await this.notificationService.sendNotification({
+      title: 'নতুন অফার প্রাপ্তি',
+      message: `"${productExists.productName}" পণ্যের জন্য আপনার অ্যাকাউন্টে বিশেষ অফার মূল্য: ৳${createOfferDto.offerPrice} (ডিসকাউন্ট: ${createOfferDto.discountRate}%)।`,
+      partyId: createOfferDto.partyId,
+      data: {
+        type: 'NEW_OFFER',
+        offerId: offer.offerId,
+        productId: createOfferDto.productId,
+        offerPrice: String(createOfferDto.offerPrice),
+        discountRate: String(createOfferDto.discountRate),
+      },
+    });
+
+    return offer;
   }
 
   async findAll(query?: GetOffersQueryDto, reqUser?: any) {
