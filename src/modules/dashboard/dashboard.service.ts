@@ -66,6 +66,11 @@ export class DashboardService {
       partyWhere.categoryId = { in: categoryIds };
     }
 
+    const inquiryWhere: any = {};
+    if (isAdmin) {
+      inquiryWhere.categoryId = { in: categoryIds };
+    }
+
     const totalCompanies = await this.prisma.company.count({
       where: companyWhere,
     });
@@ -73,8 +78,8 @@ export class DashboardService {
       where: pendingCompanyWhere,
     });
     const totalOrders = await this.prisma.order.count({ where: orderWhere });
-    const totalComplaints = await this.prisma.complaint.count({
-      where: complaintWhere,
+    const totalInquiries = await this.prisma.inquiry.count({
+      where: inquiryWhere,
     });
 
     const totalDrivers = await this.prisma.driver.count({ where: driverWhere });
@@ -327,7 +332,7 @@ export class DashboardService {
         totalCompanies,
         pendingVerificationCompanies,
         totalOrders,
-        totalComplaints,
+        totalInquiries,
         totalOrderValue,
         totalDrivers,
         totalParties,
