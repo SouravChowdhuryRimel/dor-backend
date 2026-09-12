@@ -16,9 +16,24 @@ export class CategoryService {
     if (!category) return null;
     const admins = category.adminCategories?.map((ac: any) => ac.user) || [];
     const { adminCategories, ...rest } = category;
+    const totalCompanies = category._count?.companies ?? 0;
+    const totalParties = category._count?.parties ?? 0;
+    const totalSubCategories = category._count?.subCategories ?? 0;
+
     return {
       ...rest,
       admins,
+      totalCompanies,
+      totalParties,
+      totalSubCategories,
+      companyCount: totalCompanies,
+      partyCount: totalParties,
+      subCategoryCount: totalSubCategories,
+      _count: {
+        companies: totalCompanies,
+        parties: totalParties,
+        subCategories: totalSubCategories,
+      },
     };
   }
 
@@ -36,6 +51,14 @@ export class CategoryService {
       include: {
         adminCategories: {
           include: { user: true },
+        },
+        subCategories: true,
+        _count: {
+          select: {
+            companies: true,
+            parties: true,
+            subCategories: true,
+          },
         },
       },
     });
@@ -62,6 +85,14 @@ export class CategoryService {
           adminCategories: {
             include: { user: true },
           },
+          subCategories: true,
+          _count: {
+            select: {
+              companies: true,
+              parties: true,
+              subCategories: true,
+            },
+          },
         },
         skip,
         take: limit,
@@ -72,7 +103,6 @@ export class CategoryService {
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
-
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { categoryId: id },
@@ -80,10 +110,28 @@ export class CategoryService {
         adminCategories: {
           include: { user: true },
         },
+        subCategories: true,
+        _count: {
+          select: {
+            companies: true,
+            parties: true,
+            subCategories: true,
+          },
+        },
       },
     });
     if (!category) throw new NotFoundException('Category not found');
     return this.mapCategoryAdmins(category);
+  }
+
+  async findSubCategoriesByCategoryId(categoryId: string) {
+    await this.findOne(categoryId);
+    return this.prisma.subCategory.findMany({
+      where: { categoryId },
+      include: {
+        category: true,
+      },
+    });
   }
 
   async findCompaniesByCategoryId(categoryId: string) {
@@ -205,6 +253,14 @@ export class CategoryService {
       include: {
         adminCategories: {
           include: { user: true },
+        },
+        subCategories: true,
+        _count: {
+          select: {
+            companies: true,
+            parties: true,
+            subCategories: true,
+          },
         },
       },
     });

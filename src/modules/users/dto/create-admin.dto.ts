@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsBoolean,
@@ -49,6 +50,30 @@ export class CreateAdminDto {
     description: 'List of Category IDs to associate this admin with (multiple)',
     example: ['uuid-string'],
     type: [String],
+  })
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    if (Array.isArray(value)) {
+      return value
+        .flatMap((v) =>
+          typeof v === 'string'
+            ? v.split(',').map((s) => s.trim()).filter(Boolean)
+            : v,
+        )
+        .filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed.map((s) => String(s).trim()).filter(Boolean);
+        }
+      } catch {
+        // Not a JSON array, treat as comma-separated
+      }
+      return value.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [value];
   })
   @IsArray()
   @IsString({ each: true })

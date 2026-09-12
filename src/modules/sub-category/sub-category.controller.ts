@@ -9,7 +9,7 @@ import {
   UseGuards,
   Query,
 } from '@nestjs/common';
-import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
+import { QuerySubCategoryDto } from './dto/query-sub-category.dto';
 import { SubCategoryService } from './sub-category.service';
 import { CreateSubCategoryDto } from './dto/create-sub-category.dto';
 import { UpdateSubCategoryDto } from './dto/update-sub-category.dto';
@@ -43,10 +43,27 @@ export class SubCategoryController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all SubCategories (Public)' })
+  @ApiOperation({
+    summary: 'Get all SubCategories or filter by categoryId (Public)',
+  })
   @ApiResponse({ status: 200, description: 'Return all sub-categories.' })
-  findAll(@Query() query: PaginationQueryDto) {
+  findAll(@Query() query: QuerySubCategoryDto) {
     return this.subCategoryService.findAll(query);
+  }
+
+  @Get('category/:categoryId')
+  @ApiOperation({
+    summary: 'Get all SubCategories by parent Category ID (Public)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return all sub-categories belonging to categoryId.',
+  })
+  findByCategoryId(
+    @Param('categoryId') categoryId: string,
+    @Query() query: QuerySubCategoryDto,
+  ) {
+    return this.subCategoryService.findAll({ ...query, categoryId });
   }
 
   @Get(':id')

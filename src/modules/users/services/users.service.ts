@@ -3,6 +3,7 @@ import {
   OnApplicationBootstrap,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../core/database/database.service';
@@ -114,6 +115,32 @@ export class UsersService implements OnApplicationBootstrap {
       catIds = data.categoryIds;
     } else if ((data as any).categoryId) {
       catIds = [(data as any).categoryId];
+    }
+
+    const normalizedCatIds = Array.from(
+      new Set(
+        catIds
+          .flatMap((c) =>
+            typeof c === 'string' ? c.split(',') : [c],
+          )
+          .map((c) => String(c).trim())
+          .filter(Boolean),
+      ),
+    );
+    catIds = normalizedCatIds;
+
+    if (catIds.length > 0) {
+      const existingCategories = await this.prisma.category.findMany({
+        where: { categoryId: { in: catIds } },
+        select: { categoryId: true },
+      });
+      const existingIds = new Set(existingCategories.map((c) => c.categoryId));
+      const invalidIds = catIds.filter((cid) => !existingIds.has(cid));
+      if (invalidIds.length > 0) {
+        throw new BadRequestException(
+          `One or more categories do not exist: ${invalidIds.join(', ')}`,
+        );
+      }
     }
 
     const user = await this.prisma.user.create({
@@ -241,27 +268,61 @@ export class UsersService implements OnApplicationBootstrap {
       catIds = [(data as any).categoryId];
     }
 
-    // Update categories by deleting existing ones and inserting new ones if provided
     if (catIds !== undefined) {
+      const normalizedCatIds = Array.from(
+        new Set(
+          catIds
+            .flatMap((c) =>
+              typeof c === 'string' ? c.split(',') : [c],
+            )
+            .map((c) => String(c).trim())
+            .filter(Boolean),
+        ),
+      );
+      catIds = normalizedCatIds;
+
+      if (catIds.length > 0) {
+        const existingCategories = await this.prisma.category.findMany({
+          where: { categoryId: { in: catIds } },
+          select: { categoryId: true },
+        });
+        const existingIds = new Set(existingCategories.map((c) => c.categoryId));
+        const invalidIds = catIds.filter((cid) => !existingIds.has(cid));
+        if (invalidIds.length > 0) {
+          throw new BadRequestException(
+            `One or more categories do not exist: ${invalidIds.join(', ')}`,
+          );
+        }
+      }
+
+      // Update categories by deleting existing ones and inserting new ones if provided
       await this.prisma.adminCategory.deleteMany({
         where: { userId: id },
       });
     }
 
+    const updateData: any = {};
+    if (data.email !== undefined && typeof data.email === 'string' && data.email.trim() !== '') {
+      updateData.email = data.email.trim();
+    }
+    if (data.name !== undefined && typeof data.name === 'string' && data.name.trim() !== '') {
+      updateData.name = data.name.trim();
+    }
+    if (data.isActive !== undefined) {
+      updateData.isActive = data.isActive;
+    }
+    if (data.profileImage !== undefined && typeof data.profileImage === 'string' && data.profileImage.trim() !== '') {
+      updateData.profileImage = data.profileImage.trim();
+    }
+    if (catIds !== undefined) {
+      updateData.adminCategories = {
+        create: catIds.map((cid) => ({ categoryId: cid })),
+      };
+    }
+
     const user = await this.prisma.user.update({
       where: { id },
-      data: {
-        email: data.email,
-        name: data.name,
-        profileImage: data.profileImage,
-        ...(catIds !== undefined
-          ? {
-            adminCategories: {
-              create: catIds.map((cid) => ({ categoryId: cid })),
-            },
-          }
-          : {}),
-      },
+      data: updateData,
       select: {
         id: true,
         email: true,
