@@ -21,6 +21,7 @@ export interface SendNotificationPayload {
   driverId?: string;
   inquiryId?: string;
   data?: Record<string, string>;
+  badge?: number;
 }
 
 @Injectable()
@@ -200,6 +201,7 @@ export class NotificationService {
         title,
         message,
         data,
+        payload.badge,
       );
     }
 

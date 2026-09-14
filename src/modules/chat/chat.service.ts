@@ -292,6 +292,11 @@ export class ChatService {
               createdAt: lastMessage.createdAt,
               file: lastMessage.file,
               image: lastMessage.image,
+              latitude: lastMessage.latitude,
+              longitude: lastMessage.longitude,
+              locationName: lastMessage.locationName,
+              isLiveLocation: lastMessage.isLiveLocation,
+              liveExpiresAt: lastMessage.liveExpiresAt,
             }
           : null,
         unreadCount,
@@ -316,10 +321,21 @@ export class ChatService {
     messageText?: string,
     file?: string,
     image?: string,
+    latitude?: number,
+    longitude?: number,
+    locationName?: string,
+    isLiveLocation?: boolean,
+    liveDurationMinutes?: number,
   ) {
-    if (!messageText && !file && !image) {
+    const hasLocation =
+      latitude !== undefined &&
+      latitude !== null &&
+      longitude !== undefined &&
+      longitude !== null;
+
+    if (!messageText && !file && !image && !hasLocation) {
       throw new BadRequestException(
-        'Message text, file, or image attachment is required',
+        'Message text, file, image attachment, or location coordinates is required',
       );
     }
 
@@ -344,6 +360,17 @@ export class ChatService {
       );
     }
 
+    let liveExpiresAt: Date | null = null;
+    if (hasLocation && isLiveLocation) {
+      const duration =
+        (liveDurationMinutes && liveDurationMinutes > 0
+          ? liveDurationMinutes
+          : 60) *
+        60 *
+        1000;
+      liveExpiresAt = new Date(Date.now() + duration);
+    }
+
     const chatMessage = await this.prisma.chatMessage.create({
       data: {
         conversationId,
@@ -352,6 +379,11 @@ export class ChatService {
         message: messageText || null,
         file: file || null,
         image: image || null,
+        latitude: hasLocation ? latitude : null,
+        longitude: hasLocation ? longitude : null,
+        locationName: hasLocation ? locationName || null : null,
+        isLiveLocation: hasLocation && Boolean(isLiveLocation),
+        liveExpiresAt,
       },
     });
 
@@ -367,6 +399,28 @@ export class ChatService {
       ? conversation.participant2Role
       : conversation.participant1Role;
 
+    // Calculate receiver's updated unread counts
+    const receiverUnreadCount = await this.prisma.chatMessage.count({
+      where: {
+        conversationId,
+        senderId: { not: otherId },
+        isRead: false,
+      },
+    });
+
+    const receiverTotalUnreadCount = await this.prisma.chatMessage.count({
+      where: {
+        conversation: {
+          OR: [
+            { participant1Id: otherId, participant1Role: otherRole },
+            { participant2Id: otherId, participant2Role: otherRole },
+          ],
+        },
+        senderId: { not: otherId },
+        isRead: false,
+      },
+    });
+
     // Send notification to the receiver
     try {
       const senderProfile = await this.getParticipantProfile(
@@ -377,7 +431,17 @@ export class ChatService {
       const notificationTitle = `নতুন বার্তা: ${senderName}`;
       let notificationMessage = messageText || '';
       if (!notificationMessage) {
-        if (image) {
+        if (hasLocation) {
+          if (isLiveLocation) {
+            notificationMessage = locationName
+              ? `📍 লাইভ লোকেশন: ${locationName}`
+              : '📍 [লাইভ লোকেশন শেয়ার করা হয়েছে]';
+          } else {
+            notificationMessage = locationName
+              ? `📍 লোকেশন: ${locationName}`
+              : '📍 [লোকেশন শেয়ার করা হয়েছে]';
+          }
+        } else if (image) {
           notificationMessage = '[ছবি পাঠানো হয়েছে]';
         } else if (file) {
           notificationMessage = '[ফাইল পাঠানো হয়েছে]';
@@ -391,11 +455,17 @@ export class ChatService {
       const notifPayload: any = {
         title: notificationTitle,
         message: notificationMessage,
+        badge: receiverTotalUnreadCount,
         data: {
           type: 'CHAT_MESSAGE',
           conversationId,
           senderId,
+          senderName,
+          senderRole,
           messageId: chatMessage.messageId,
+          unreadCount: String(receiverUnreadCount),
+          totalUnreadCount: String(receiverTotalUnreadCount),
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
         },
       };
 
@@ -424,6 +494,138 @@ export class ChatService {
       chatMessage,
       receiverId: otherId,
       receiverRole: otherRole,
+      receiverUnreadCount,
+      receiverTotalUnreadCount,
+    };
+  }
+
+  /**
+   * Update coordinates for an active live location message or stop sharing.
+   */
+  async updateLiveLocation(
+    conversationId: string,
+    messageId: string,
+    userId: string,
+    userRole: Role,
+    latitude: number,
+    longitude: number,
+    isStop = false,
+  ) {
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { messageId },
+      include: { conversation: true },
+    });
+
+    if (!message || message.conversationId !== conversationId) {
+      throw new BadRequestException('Message not found in this conversation');
+    }
+
+    if (message.senderId !== userId) {
+      throw new ForbiddenException('Only the sender can update live location');
+    }
+
+    if (!message.isLiveLocation) {
+      throw new BadRequestException(
+        'This message is not an active live location message',
+      );
+    }
+
+    const isExpired =
+      message.liveExpiresAt && new Date(message.liveExpiresAt) < new Date();
+
+    if (isExpired || isStop) {
+      const updated = await this.prisma.chatMessage.update({
+        where: { messageId },
+        data: { isLiveLocation: false },
+      });
+
+      const conv = message.conversation;
+      const otherId =
+        conv.participant1Id === userId
+          ? conv.participant2Id
+          : conv.participant1Id;
+      const otherRole =
+        conv.participant1Id === userId
+          ? conv.participant2Role
+          : conv.participant1Role;
+
+      return {
+        chatMessage: updated,
+        isLive: false,
+        receiverId: otherId,
+        receiverRole: otherRole,
+      };
+    }
+
+    const updated = await this.prisma.chatMessage.update({
+      where: { messageId },
+      data: {
+        latitude,
+        longitude,
+      },
+    });
+
+    const conv = message.conversation;
+    const otherId =
+      conv.participant1Id === userId
+        ? conv.participant2Id
+        : conv.participant1Id;
+    const otherRole =
+      conv.participant1Id === userId
+        ? conv.participant2Role
+        : conv.participant1Role;
+
+    return {
+      chatMessage: updated,
+      isLive: true,
+      receiverId: otherId,
+      receiverRole: otherRole,
+    };
+  }
+
+  /**
+   * Get total unread count and per-conversation breakdown for the current user.
+   */
+  async getTotalUnreadCount(userId: string, role: Role) {
+    const conversations = await this.prisma.conversation.findMany({
+      where: {
+        OR: [
+          { participant1Id: userId, participant1Role: role },
+          { participant2Id: userId, participant2Role: role },
+        ],
+      },
+      select: { id: true },
+    });
+
+    const conversationIds = conversations.map((c) => c.id);
+
+    const totalUnreadCount = await this.prisma.chatMessage.count({
+      where: {
+        conversationId: { in: conversationIds },
+        senderId: { not: userId },
+        isRead: false,
+      },
+    });
+
+    const breakdown = await Promise.all(
+      conversationIds.map(async (convId) => {
+        const count = await this.prisma.chatMessage.count({
+          where: {
+            conversationId: convId,
+            senderId: { not: userId },
+            isRead: false,
+          },
+        });
+        return {
+          conversationId: convId,
+          unreadCount: count,
+        };
+      }),
+    );
+
+    return {
+      totalUnreadCount,
+      conversations: breakdown,
     };
   }
 

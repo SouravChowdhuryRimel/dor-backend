@@ -57,6 +57,7 @@ export class FcmService implements OnModuleInit {
     title: string,
     body: string,
     data?: Record<string, string>,
+    badge?: number,
   ): Promise<boolean> {
     if (!this.firebaseApp) {
       this.logger.warn('FCM Push notification skipped: Firebase Admin SDK not initialized.');
@@ -86,6 +87,27 @@ export class FcmService implements OnModuleInit {
           body,
         },
         data: safeData,
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'chat_messages',
+            sound: 'default',
+            priority: 'high',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
+        },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+          },
+          payload: {
+            aps: {
+              sound: 'default',
+              ...(badge !== undefined && badge !== null ? { badge } : {}),
+            },
+          },
+        },
       };
 
       const response = await getMessaging(this.firebaseApp).send(message);

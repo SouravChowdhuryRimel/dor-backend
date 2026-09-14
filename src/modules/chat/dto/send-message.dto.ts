@@ -1,4 +1,5 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsBoolean } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SendMessageDto {
@@ -25,4 +26,48 @@ export class SendMessageDto {
   @IsString()
   @IsOptional()
   image?: string;
+
+  @ApiPropertyOptional({
+    description: 'Latitude coordinate for location sharing',
+    example: 23.8103,
+  })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude coordinate for location sharing',
+    example: 90.4125,
+  })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  longitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Location name or formatted address (optional)',
+    example: 'Mirpur 10, Dhaka',
+  })
+  @IsString()
+  @IsOptional()
+  locationName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Set to true for live location sharing (Messenger style)',
+    example: false,
+  })
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsOptional()
+  isLiveLocation?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Duration in minutes for live location sharing (default: 60)',
+    example: 60,
+  })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  liveDurationMinutes?: number;
 }

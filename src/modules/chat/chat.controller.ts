@@ -27,6 +27,7 @@ import { AccessTokenGuard } from 'src/common/guards/access-token.guard';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { GetMessagesDto } from './dto/get-messages.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { UpdateLiveLocationDto } from './dto/update-live-location.dto';
 import { SearchChatUsersQueryDto } from './dto/search-chat-users-query.dto';
 import { Role } from '@prisma/client';
 
@@ -47,6 +48,17 @@ export class ChatController {
     private readonly chatService: ChatService,
     private readonly chatGateway: ChatGateway,
   ) {}
+
+  @Get('unread-count')
+  @ApiOperation({
+    summary:
+      'Get total unread chat message count and breakdown across all conversations',
+  })
+  async getUnreadCount(@Req() req: RequestWithUser) {
+    const { sub: userId, roles } = req.user;
+    const senderRole = (roles[0] || Role.USER) as Role;
+    return this.chatService.getTotalUnreadCount(userId, senderRole);
+  }
 
   @Get('search-users')
   @ApiOperation({
@@ -187,6 +199,11 @@ export class ChatController {
       dto.message,
       fileUrl,
       imageUrl,
+      dto.latitude,
+      dto.longitude,
+      dto.locationName,
+      dto.isLiveLocation,
+      dto.liveDurationMinutes,
     );
 
     // Broadcast message via WebSockets to synchronize other tabs / the receiver
@@ -198,8 +215,15 @@ export class ChatController {
       message: result.chatMessage.message,
       file: result.chatMessage.file,
       image: result.chatMessage.image,
+      latitude: result.chatMessage.latitude,
+      longitude: result.chatMessage.longitude,
+      locationName: result.chatMessage.locationName,
+      isLiveLocation: result.chatMessage.isLiveLocation,
+      liveExpiresAt: result.chatMessage.liveExpiresAt,
       isRead: result.chatMessage.isRead,
       createdAt: result.chatMessage.createdAt,
+      receiverUnreadCount: result.receiverUnreadCount,
+      receiverTotalUnreadCount: result.receiverTotalUnreadCount,
     };
 
     if (this.chatGateway.server) {
@@ -210,6 +234,51 @@ export class ChatController {
     }
 
     return result.chatMessage;
+  }
+
+  @Patch('conversations/:id/messages/:messageId/location')
+  @ApiOperation({
+    summary: 'Update coordinates of an active live location or stop sharing',
+  })
+  async updateLiveLocation(
+    @Req() req: RequestWithUser,
+    @Param('id') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() dto: UpdateLiveLocationDto,
+  ) {
+    const { sub: userId, roles } = req.user;
+    const senderRole = (roles[0] || Role.USER) as Role;
+
+    const result = await this.chatService.updateLiveLocation(
+      conversationId,
+      messageId,
+      userId,
+      senderRole,
+      dto.latitude,
+      dto.longitude,
+      Boolean(dto.isStop),
+    );
+
+    const eventData = {
+      conversationId,
+      messageId,
+      senderId: userId,
+      latitude: result.chatMessage.latitude,
+      longitude: result.chatMessage.longitude,
+      isLiveLocation: result.chatMessage.isLiveLocation,
+      liveExpiresAt: result.chatMessage.liveExpiresAt,
+      isLive: result.isLive,
+      updatedAt: new Date(),
+    };
+
+    if (this.chatGateway.server) {
+      this.chatGateway.server
+        .to(`user_${userId}`)
+        .to(`user_${result.receiverId}`)
+        .emit('live_location_updated', eventData);
+    }
+
+    return result;
   }
 
   @Patch('conversations/:id/read')

@@ -252,43 +252,46 @@ export class ProductService {
     ) || p.offers?.[0];
 
     const regularPrice = p.regularPrice ?? p.defaultPrice ?? 0;
-    const defaultPrice = p.defaultPrice ?? 0;
     const offerPrice = p.offerPrice ?? 0;
 
-    let effectivePrice = regularPrice || defaultPrice;
-    let hasSpecialPrice = false;
     let specialPrice: number | null = null;
+    let hasSpecialPrice = false;
     let hasActiveOffer = false;
     let activeOffer: any = null;
     let appliedPricingType = 'REGULAR_PRICE';
     let appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
 
     if (customRateObj && customRateObj.rate !== undefined && customRateObj.rate !== null) {
-      effectivePrice = customRateObj.rate;
-      hasSpecialPrice = true;
       specialPrice = customRateObj.rate;
+      hasSpecialPrice = true;
       appliedPricingType = 'SPECIAL_PRICE';
       appliedPricingReason = 'পার্টির জন্য স্পেশাল রেট প্রযোজ্য';
     } else if (activeOfferObj && activeOfferObj.offerPrice > 0) {
-      effectivePrice = activeOfferObj.offerPrice;
+      specialPrice = activeOfferObj.offerPrice;
+      hasSpecialPrice = true;
       hasActiveOffer = true;
       activeOffer = activeOfferObj;
-      appliedPricingType = 'OFFER_PRICE';
+      appliedPricingType = 'SPECIAL_PRICE';
       appliedPricingReason = 'চলমান অফার মূল্য প্রযোজ্য';
     } else if (offerPrice > 0) {
-      effectivePrice = offerPrice;
       hasActiveOffer = true;
       appliedPricingType = 'OFFER_PRICE';
       appliedPricingReason = 'প্রোডাক্টের অফার মূল্য প্রযোজ্য';
     } else {
-      effectivePrice = regularPrice || defaultPrice;
       appliedPricingType = 'REGULAR_PRICE';
       appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
     }
 
-    const discountAmount = regularPrice > effectivePrice ? Math.round((regularPrice - effectivePrice) * 100) / 100 : 0;
-    const discountPercentage = regularPrice > 0 && regularPrice > effectivePrice
-      ? Math.round(((regularPrice - effectivePrice) / regularPrice) * 100)
+    const currentPrice =
+      specialPrice !== null
+        ? specialPrice
+        : offerPrice > 0
+          ? offerPrice
+          : regularPrice;
+
+    const discountAmount = regularPrice > currentPrice ? Math.round((regularPrice - currentPrice) * 100) / 100 : 0;
+    const discountPercentage = regularPrice > 0 && regularPrice > currentPrice
+      ? Math.round(((regularPrice - currentPrice) / regularPrice) * 100)
       : 0;
 
     const unitText = p.unit ? `প্রতি ${p.unit} ${p.unitType || ''}`.trim() : `প্রতি ${p.unitType || 'ব্যাগ'}`;
@@ -316,17 +319,12 @@ export class ProductService {
       statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
 
       // Pricing details
-      defaultPrice,
       regularPrice,
       offerPrice,
       specialPrice,
-      specialRate: specialPrice,
-      customPrice: specialPrice,
       hasSpecialPrice,
       hasActiveOffer,
       activeOffer: activeOffer || null,
-      activePrice: effectivePrice,
-      effectivePrice,
       appliedPricingType,
       appliedPricingReason,
       discountAmount,
@@ -1031,31 +1029,22 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
       if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
       }
 
+      const { defaultPrice: _dp, ...rest } = p;
+
       return {
-        ...p,
-        effectivePrice,
-        hasSpecialPrice,
+        ...rest,
+        regularPrice: p.regularPrice ?? 0,
+        offerPrice: p.offerPrice ?? 0,
         specialPrice,
-        activePrice: effectivePrice,
+        hasSpecialPrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyName: p.company?.companyName || null,
@@ -1118,31 +1107,22 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
       if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
       }
 
+      const { defaultPrice: _dp, ...rest } = p;
+
       return {
-        ...p,
-        effectivePrice,
-        hasSpecialPrice,
+        ...rest,
+        regularPrice: p.regularPrice ?? 0,
+        offerPrice: p.offerPrice ?? 0,
         specialPrice,
-        activePrice: effectivePrice,
+        hasSpecialPrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyName: p.company?.companyName || null,
@@ -1271,31 +1251,22 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
       if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
       }
 
+      const { defaultPrice: _dp, ...rest } = p;
+
       return {
-        ...p,
-        effectivePrice,
-        hasSpecialPrice,
+        ...rest,
+        regularPrice: p.regularPrice ?? 0,
+        offerPrice: p.offerPrice ?? 0,
         specialPrice,
-        activePrice: effectivePrice,
+        hasSpecialPrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyCategoryName: p.company?.category?.categoryName || null,

@@ -101,6 +101,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       message?: string;
       file?: string;
       image?: string;
+      latitude?: number;
+      longitude?: number;
+      locationName?: string;
+      isLiveLocation?: boolean;
+      liveDurationMinutes?: number;
     },
     @ConnectedSocket() client: Socket,
   ) {
@@ -111,11 +116,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      const { conversationId, message, file, image } = body;
-      if (!conversationId || (!message && !file && !image)) {
+      const {
+        conversationId,
+        message,
+        file,
+        image,
+        latitude,
+        longitude,
+        locationName,
+        isLiveLocation,
+        liveDurationMinutes,
+      } = body;
+
+      const hasLocation =
+        latitude !== undefined &&
+        latitude !== null &&
+        longitude !== undefined &&
+        longitude !== null;
+
+      if (!conversationId || (!message && !file && !image && !hasLocation)) {
         client.emit('error', {
           message:
-            'conversationId and at least one of message, file, or image are required',
+            'conversationId and at least one of message, file, image, or location coordinates are required',
         });
         return;
       }
@@ -132,6 +154,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         message,
         file,
         image,
+        latitude,
+        longitude,
+        locationName,
+        isLiveLocation,
+        liveDurationMinutes,
       );
 
       // Broadcast message to both sender and receiver rooms
@@ -143,8 +170,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         message: result.chatMessage.message,
         file: result.chatMessage.file,
         image: result.chatMessage.image,
+        latitude: result.chatMessage.latitude,
+        longitude: result.chatMessage.longitude,
+        locationName: result.chatMessage.locationName,
+        isLiveLocation: result.chatMessage.isLiveLocation,
+        liveExpiresAt: result.chatMessage.liveExpiresAt,
         isRead: result.chatMessage.isRead,
         createdAt: result.chatMessage.createdAt,
+        receiverUnreadCount: result.receiverUnreadCount,
+        receiverTotalUnreadCount: result.receiverTotalUnreadCount,
       };
 
       this.server
@@ -158,6 +192,78 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } catch (error) {
       const err = error as Error;
       this.logger.error(`Error in send_message event: ${err.message}`);
+      client.emit('error', { message: err.message });
+    }
+  }
+
+  @SubscribeMessage('update_live_location')
+  async handleUpdateLiveLocation(
+    @MessageBody()
+    body: {
+      conversationId: string;
+      messageId: string;
+      latitude: number;
+      longitude: number;
+      isStop?: boolean;
+    },
+    @ConnectedSocket() client: Socket,
+  ) {
+    try {
+      const sender = client.data as ChatClientData;
+      if (!sender || !sender.userId) {
+        client.emit('error', { message: 'Unauthorized' });
+        return;
+      }
+
+      const { conversationId, messageId, latitude, longitude, isStop } = body;
+      if (
+        !conversationId ||
+        !messageId ||
+        latitude === undefined ||
+        longitude === undefined
+      ) {
+        client.emit('error', {
+          message:
+            'conversationId, messageId, latitude, and longitude are required',
+        });
+        return;
+      }
+
+      const senderRole = (sender.roles[0] || Role.USER) as Role;
+
+      const result = await this.chatService.updateLiveLocation(
+        conversationId,
+        messageId,
+        sender.userId,
+        senderRole,
+        latitude,
+        longitude,
+        Boolean(isStop),
+      );
+
+      const eventData = {
+        conversationId,
+        messageId,
+        senderId: sender.userId,
+        latitude: result.chatMessage.latitude,
+        longitude: result.chatMessage.longitude,
+        isLiveLocation: result.chatMessage.isLiveLocation,
+        liveExpiresAt: result.chatMessage.liveExpiresAt,
+        isLive: result.isLive,
+        updatedAt: new Date(),
+      };
+
+      this.server
+        .to(`user_${sender.userId}`)
+        .to(`user_${result.receiverId}`)
+        .emit('live_location_updated', eventData);
+
+      this.logger.log(
+        `Live location updated for message ${messageId} in conversation ${conversationId}`,
+      );
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(`Error in update_live_location event: ${err.message}`);
       client.emit('error', { message: err.message });
     }
   }
