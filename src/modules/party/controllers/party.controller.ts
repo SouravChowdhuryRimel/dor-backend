@@ -185,6 +185,17 @@ export class PartyController {
     return this.partyService.findAll(query);
   }
 
+  @Get('pending')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Get all pending parties (ADMIN and SUPER_ADMIN only)',
+  })
+  getPending(@Query() query: PaginationQueryDto) {
+    return this.partyService.findPending(query);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a party by ID' })
   findOne(@Param('id') id: string) {

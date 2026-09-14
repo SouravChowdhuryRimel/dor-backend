@@ -179,6 +179,26 @@ export class DriverService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
+  async findPending(query?: PaginationQueryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+    const where = { isVerified: false };
+
+    const [total, data] = await Promise.all([
+      this.prisma.driver.count({ where }),
+      this.prisma.driver.findMany({
+        where,
+        skip,
+        take: limit,
+        select: driverDetailsSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
+  }
+
   async findOne(id: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { driverId: id },

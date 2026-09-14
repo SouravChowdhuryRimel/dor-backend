@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -535,19 +536,49 @@ export class ProductService {
       }
     }
 
-    const deletedProduct = await this.prisma.product.delete({
+    const existingOrdersCount = await this.prisma.order.count({
       where: { productId: id },
     });
+    if (existingOrdersCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete product "${product.productName}" because it is associated with ${existingOrdersCount} existing order(s).`,
+      );
+    }
 
-    await this.activityLogService.log({
-      actorType: reqUser?.roles?.[0] || 'VENDOR',
-      actorId: reqUser?.sub || deletedProduct.companyId,
-      action: 'DELETE_PRODUCT',
-      description: `Deleted product: ${deletedProduct.productName}`,
-      companyId: deletedProduct.companyId,
+    const existingOffersCount = await this.prisma.offer.count({
+      where: { productId: id },
     });
+    if (existingOffersCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete product "${product.productName}" because it is associated with ${existingOffersCount} existing offer(s).`,
+      );
+    }
 
-    return deletedProduct;
+    try {
+      const deletedProduct = await this.prisma.product.delete({
+        where: { productId: id },
+      });
+
+      await this.activityLogService.log({
+        actorType: reqUser?.roles?.[0] || 'VENDOR',
+        actorId: reqUser?.sub || deletedProduct.companyId,
+        action: 'DELETE_PRODUCT',
+        description: `Deleted product: ${deletedProduct.productName}`,
+        companyId: deletedProduct.companyId,
+      });
+
+      return deletedProduct;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          `Cannot delete product "${product.productName}" because other database records reference it.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async findLowStock(query?: PaginationQueryDto, reqUser?: any) {
