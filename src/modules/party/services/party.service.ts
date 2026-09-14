@@ -142,6 +142,26 @@ export class PartyService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
+  async findPending(query?: PaginationQueryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+    const where = { isVerified: false };
+
+    const [total, data] = await Promise.all([
+      this.prisma.party.count({ where }),
+      this.prisma.party.findMany({
+        where,
+        skip,
+        take: limit,
+        select: partyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
+  }
+
   async findOne(id: string) {
     const party = await this.prisma.party.findUnique({
       where: { partyId: id },

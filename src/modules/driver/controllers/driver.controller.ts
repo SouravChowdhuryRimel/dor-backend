@@ -245,6 +245,17 @@ export class DriverController {
     return this.driverService.updateLocation(id, updateLocationDto, req.user);
   }
 
+  @Get('pending')
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Get all pending drivers (ADMIN and SUPER_ADMIN only)',
+  })
+  getPending(@Query() query: PaginationQueryDto) {
+    return this.driverService.findPending(query);
+  }
+
   @Get(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
