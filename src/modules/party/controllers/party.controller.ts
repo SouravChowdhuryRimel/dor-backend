@@ -192,8 +192,8 @@ export class PartyController {
   @ApiOperation({
     summary: 'Get all pending parties (ADMIN and SUPER_ADMIN only)',
   })
-  getPending(@Query() query: PaginationQueryDto) {
-    return this.partyService.findPending(query);
+  getPending(@Query() query: PaginationQueryDto, @Req() req: any) {
+    return this.partyService.findPending(query, req.user);
   }
 
   @Get(':id')

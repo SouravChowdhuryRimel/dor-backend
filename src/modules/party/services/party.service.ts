@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
+import { Role } from '../../../common/constants/role.enum';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
 import * as argon2 from 'argon2';
@@ -142,11 +147,37 @@ export class PartyService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async findPending(query?: PaginationQueryDto) {
+  async findPending(query?: PaginationQueryDto, reqUser?: any) {
     const page = Math.max(1, Number(query?.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
-    const where = { isVerified: false };
+    const where: any = { isVerified: false };
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
+
+    if ((query as any)?.categoryId) {
+      if (where.categoryId?.in) {
+        where.categoryId = {
+          in: where.categoryId.in.filter(
+            (id: string) => id === (query as any).categoryId,
+          ),
+        };
+      } else {
+        where.categoryId = (query as any).categoryId;
+      }
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.party.count({ where }),
@@ -263,6 +294,25 @@ export class PartyService {
       where: { partyId: id },
     });
     if (!party) throw new NotFoundException('Party not found');
+
+    if (
+      reqUser?.roles?.includes(Role.ADMIN) &&
+      !reqUser?.roles?.includes(Role.SUPER_ADMIN)
+    ) {
+      const hasCategory = await this.prisma.adminCategory.findUnique({
+        where: {
+          userId_categoryId: {
+            userId: reqUser.sub,
+            categoryId: party.categoryId,
+          },
+        },
+      });
+      if (!hasCategory) {
+        throw new ForbiddenException(
+          'You do not have permission to verify parties in this category',
+        );
+      }
+    }
 
     const verified = await this.prisma.party.update({
       where: { partyId: id },

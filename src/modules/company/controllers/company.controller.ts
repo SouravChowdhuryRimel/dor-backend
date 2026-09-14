@@ -174,8 +174,8 @@ export class CompanyController {
     summary:
       'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
   })
-  getPending(@Query() query: PaginationQueryDto) {
-    return this.companyService.findPending(query);
+  getPending(@Query() query: PaginationQueryDto, @Req() req: any) {
+    return this.companyService.findPending(query, req.user);
   }
 
   @Get('verified')
