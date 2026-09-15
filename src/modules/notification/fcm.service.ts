@@ -33,8 +33,11 @@ export class FcmService implements OnModuleInit {
         return;
       }
 
-      // Format private key appropriately if \n is escaped as string
-      if (privateKey && privateKey.includes('\\n')) {
+      // Format private key appropriately if \n is escaped as string or wrapped in quotes
+      if (privateKey) {
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+          privateKey = privateKey.substring(1, privateKey.length - 1);
+        }
         privateKey = privateKey.replace(/\\n/g, '\n');
       }
 
@@ -70,8 +73,12 @@ export class FcmService implements OnModuleInit {
     }
 
     try {
-      // Ensure all values in data dictionary are strings
-      const safeData: Record<string, string> = {};
+      // Ensure all values in data dictionary are strings and include title & body for background handlers
+      const safeData: Record<string, string> = {
+        title: title || '',
+        body: body || '',
+        message: body || '',
+      };
       if (data) {
         Object.entries(data).forEach(([key, val]) => {
           if (val !== undefined && val !== null) {
@@ -79,6 +86,11 @@ export class FcmService implements OnModuleInit {
           }
         });
       }
+
+      const channelId =
+        safeData.channelId ||
+        safeData.channel_id ||
+        (safeData.type === 'CHAT_MESSAGE' ? 'chat_messages' : 'high_importance_channel');
 
       const message: Message = {
         token: fcmToken,
@@ -90,11 +102,12 @@ export class FcmService implements OnModuleInit {
         android: {
           priority: 'high',
           notification: {
-            channelId: 'chat_messages',
+            channelId,
             sound: 'default',
             priority: 'high',
             defaultSound: true,
             defaultVibrateTimings: true,
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK',
           },
         },
         apns: {
@@ -103,7 +116,12 @@ export class FcmService implements OnModuleInit {
           },
           payload: {
             aps: {
+              alert: {
+                title,
+                body,
+              },
               sound: 'default',
+              contentAvailable: true,
               ...(badge !== undefined && badge !== null ? { badge } : {}),
             },
           },

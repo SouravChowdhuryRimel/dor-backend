@@ -249,32 +249,62 @@ export class NotificationService {
         where: { id: userId },
         select: { fcmToken: true, isPushNotificationEnabled: true },
       });
-      if (u?.isPushNotificationEnabled !== false) {
-        targetFcmToken = u?.fcmToken || null;
+      if (u?.isPushNotificationEnabled !== false && u?.fcmToken) {
+        targetFcmToken = u.fcmToken;
       }
-    } else if (companyId) {
+    }
+    if (!targetFcmToken && companyId) {
       const c = await this.prisma.company.findUnique({
         where: { companyId },
         select: { fcmToken: true, isPushNotificationEnabled: true },
       });
-      if (c?.isPushNotificationEnabled !== false) {
-        targetFcmToken = c?.fcmToken || null;
+      if (c?.isPushNotificationEnabled !== false && c?.fcmToken) {
+        targetFcmToken = c.fcmToken;
       }
-    } else if (partyId) {
+    }
+    if (!targetFcmToken && partyId) {
       const p = await this.prisma.party.findUnique({
         where: { partyId },
         select: { fcmToken: true, isPushNotificationEnabled: true },
       });
-      if (p?.isPushNotificationEnabled !== false) {
-        targetFcmToken = p?.fcmToken || null;
+      if (p?.isPushNotificationEnabled !== false && p?.fcmToken) {
+        targetFcmToken = p.fcmToken;
       }
-    } else if (driverId) {
+    }
+    if (!targetFcmToken && driverId) {
       const d = await this.prisma.driver.findUnique({
         where: { driverId },
         select: { fcmToken: true, isPushNotificationEnabled: true },
       });
-      if (d?.isPushNotificationEnabled !== false) {
-        targetFcmToken = d?.fcmToken || null;
+      if (d?.isPushNotificationEnabled !== false && d?.fcmToken) {
+        targetFcmToken = d.fcmToken;
+      }
+    }
+
+    // Fallback: If targetFcmToken is still null, search by the raw ID in other tables
+    const rawTargetId = userId || companyId || partyId || driverId;
+    if (!targetFcmToken && rawTargetId) {
+      const [u, c, p, d] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: rawTargetId },
+          select: { fcmToken: true, isPushNotificationEnabled: true },
+        }),
+        this.prisma.company.findUnique({
+          where: { companyId: rawTargetId },
+          select: { fcmToken: true, isPushNotificationEnabled: true },
+        }),
+        this.prisma.party.findUnique({
+          where: { partyId: rawTargetId },
+          select: { fcmToken: true, isPushNotificationEnabled: true },
+        }),
+        this.prisma.driver.findUnique({
+          where: { driverId: rawTargetId },
+          select: { fcmToken: true, isPushNotificationEnabled: true },
+        }),
+      ]);
+      const found = u || c || p || d;
+      if (found && found.isPushNotificationEnabled !== false && found.fcmToken) {
+        targetFcmToken = found.fcmToken;
       }
     }
 
@@ -288,7 +318,7 @@ export class NotificationService {
       );
     } else {
       this.logger.debug(
-        `FCM push notification skipped for target (push disabled or no FCM token)`,
+        `FCM push notification skipped for target ${rawTargetId || ''} (push disabled or no FCM token)`,
       );
     }
 

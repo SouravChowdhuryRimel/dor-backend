@@ -50,48 +50,50 @@ export class NotificationGateway
       const payload = await this.jwtService.verifyAsync(token, { secret });
 
       // 3. Join rooms based on roles
-      if (payload && payload.roles) {
-        if (payload.roles.includes(Role.VENDOR)) {
-          const companyId = payload.sub;
-          const roomName = `company_${companyId}`;
-          await client.join(roomName);
-          this.logger.log(
-            `Company connected: ${companyId} joined room: ${roomName}`,
-          );
-        }
-        if (payload.roles.includes(Role.PARTY)) {
-          const partyId = payload.sub;
-          const roomName = `party_${partyId}`;
-          await client.join(roomName);
-          this.logger.log(
-            `Party connected: ${partyId} joined room: ${roomName}`,
-          );
-        }
-        if (payload.roles.includes(Role.DRIVER)) {
-          const driverId = payload.sub;
-          const roomName = `driver_${driverId}`;
-          await client.join(roomName);
-          this.logger.log(
-            `Driver connected: ${driverId} joined room: ${roomName}`,
-          );
-        }
-        if (payload.roles.includes(Role.USER)) {
-          const userId = payload.sub;
-          const roomName = `user_${userId}`;
-          await client.join(roomName);
-          this.logger.log(
-            `User connected: ${userId} joined room: ${roomName}`,
-          );
-        }
-        if (
-          payload.roles.includes(Role.ADMIN) ||
-          payload.roles.includes(Role.SUPER_ADMIN)
-        ) {
-          const roomName = 'admin';
-          await client.join(roomName);
-          this.logger.log(
-            `Admin connected: ${payload.sub} joined room: ${roomName}`,
-          );
+      if (payload && payload.sub) {
+        const actorId = payload.sub;
+        // Always join primary user room so direct user notifications are received
+        await client.join(`user_${actorId}`);
+
+        if (payload.roles) {
+          if (payload.roles.includes(Role.VENDOR)) {
+            const roomName = `company_${actorId}`;
+            await client.join(roomName);
+            this.logger.log(
+              `Company connected: ${actorId} joined room: ${roomName}`,
+            );
+          }
+          if (payload.roles.includes(Role.PARTY)) {
+            const roomName = `party_${actorId}`;
+            await client.join(roomName);
+            this.logger.log(
+              `Party connected: ${actorId} joined room: ${roomName}`,
+            );
+          }
+          if (payload.roles.includes(Role.DRIVER)) {
+            const roomName = `driver_${actorId}`;
+            await client.join(roomName);
+            this.logger.log(
+              `Driver connected: ${actorId} joined room: ${roomName}`,
+            );
+          }
+          if (payload.roles.includes(Role.USER)) {
+            const roomName = `user_${actorId}`;
+            await client.join(roomName);
+            this.logger.log(
+              `User connected: ${actorId} joined room: ${roomName}`,
+            );
+          }
+          if (
+            payload.roles.includes(Role.ADMIN) ||
+            payload.roles.includes(Role.SUPER_ADMIN)
+          ) {
+            const roomName = 'admin';
+            await client.join(roomName);
+            this.logger.log(
+              `Admin connected: ${actorId} joined room: ${roomName}`,
+            );
+          }
         }
       } else {
         this.logger.warn(
