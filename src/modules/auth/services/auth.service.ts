@@ -23,7 +23,7 @@ import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import * as nodemailer from 'nodemailer';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
 import { PrismaService } from 'src/core/database/database.service';
 
@@ -66,7 +66,7 @@ export class AuthService {
         registerDto.phoneNumber,
       );
       if (userExists) {
-        throw new BadRequestException('User already exists');
+        throw new BadRequestException('এই ফোন নম্বর দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট তৈরি করা হয়েছে।');
       }
 
       // Hash password safely. Argon2 is highly CPU-bound.
@@ -139,14 +139,14 @@ export class AuthService {
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
       if (user) {
         if (!user.isActive) {
-          throw new ForbiddenException('Access Denied: Account is inactive');
+          throw new ForbiddenException('আপনার অ্যাকাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে।');
         }
 
         const passwordMatches = await argon2.verify(
           user.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
         if (incomingFcmToken) {
           await this.prisma.user.update({
@@ -198,15 +198,15 @@ export class AuthService {
         loginDto.phoneNumber,
       );
       if (company) {
-        if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED || !company.isVerified) {
-          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED) {
+          throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
         }
 
         const passwordMatches = await argon2.verify(
           company.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
         if (incomingFcmToken) {
           await this.prisma.company.update({
@@ -255,15 +255,15 @@ export class AuthService {
       // 3. Check Party table
       const party = await this.partyService.findByPhone(loginDto.phoneNumber);
       if (party) {
-        if (party.status === 'INACTIVE') {
-          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+        if (party.status === 'INACTIVE' || party.status === 'BLOCKED' || party.status === 'REJECTED') {
+          throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
         }
 
         const passwordMatches = await argon2.verify(
           party.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
         if (incomingFcmToken) {
           await this.prisma.party.update({
@@ -310,14 +310,11 @@ export class AuthService {
       // 4. Check Driver table
       const driver = await this.driverService.findByPhone(loginDto.phoneNumber);
       if (driver) {
-        if (!driver.isVerified) {
-          throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
-        }
         const passwordMatches = await argon2.verify(
           driver.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
         if (incomingFcmToken) {
           await this.prisma.driver.update({
@@ -361,7 +358,7 @@ export class AuthService {
         };
       }
 
-      throw new UnauthorizedException('Access Denied: Invalid credentials');
+      throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
     } catch (error) {
       this.logger.error(
         `Failed login attempt for phone ${loginDto.phoneNumber}: ${error.message}`,
@@ -377,17 +374,17 @@ export class AuthService {
       const company = await this.companyService.findByPhone(
         loginDto.phoneNumber,
       );
-      if (!company) throw new UnauthorizedException('Access Denied');
+      if (!company) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
-      if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED || !company.isVerified) {
-        throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+      if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED) {
+        throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
       }
 
       const passwordMatches = await argon2.verify(
         company.password,
         loginDto.password,
       );
-      if (!passwordMatches) throw new UnauthorizedException('Access Denied');
+      if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
       if (incomingFcmToken) {
         await this.prisma.company.update({
@@ -449,10 +446,10 @@ export class AuthService {
         partyLoginDto.phoneNumber,
       );
       if (!party)
-        throw new UnauthorizedException('Access Denied: Party not found');
+        throw new UnauthorizedException('এই ফোন নম্বর দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি।');
 
-      if (party.status === 'INACTIVE') {
-        throw new ForbiddenException('Access Denied: Account has been deactivated or deleted');
+      if (party.status === 'INACTIVE' || party.status === 'BLOCKED' || party.status === 'REJECTED') {
+        throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
       }
 
       const passwordMatches = await argon2.verify(
@@ -460,7 +457,7 @@ export class AuthService {
         partyLoginDto.password,
       );
       if (!passwordMatches)
-        throw new UnauthorizedException('Access Denied: Incorrect Password');
+        throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
       if (incomingFcmToken) {
         await this.prisma.party.update({
@@ -516,24 +513,23 @@ export class AuthService {
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const account = await this.findPasswordResetAccount(
       forgotPasswordDto.email,
-      forgotPasswordDto.role,
     );
 
-    let token = '';
+    let otp = '';
 
-    // Always return the same response to avoid email-account enumeration.
+    // Always return the same message to avoid email-account enumeration.
     if (account) {
-      token = randomBytes(32).toString('hex');
+      otp = randomInt(100000, 1000000).toString();
       const ttlSeconds = 15 * 60;
 
       await this.redisService.setJson(
-        `password-reset:${token}`,
+        `password-reset:${otp}`,
         account,
         ttlSeconds,
       );
 
       try {
-        await this.sendPasswordResetEmail(account.email, token);
+        await this.sendPasswordResetEmail(account.email, otp);
       } catch (error) {
         this.logger.error(`Failed to send password-reset email: ${error.message}`);
         // Do not throw the error if SMTP is not configured or in non-production environments
@@ -547,40 +543,43 @@ export class AuthService {
 
     const response: any = {
       message:
-        'If an account exists for this email, a password-reset token has been sent.',
+        'যদি এই ইমেইল দিয়ে কোনো অ্যাকাউন্ট থেকে থাকে, তবে একটি ৬-সংখ্যার পাসওয়ার্ড রিসেট ওটিপি পাঠানো হয়েছে।',
     };
 
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
     const hasSmtp = !!this.configService.get<string>('SMTP_HOST');
     if (account && (!isProd || !hasSmtp)) {
-      response.token = token;
+      response.otp = otp;
     }
 
     return response;
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    let account: PasswordResetAccount | null = null;
-    const key = `password-reset:${resetPasswordDto.token}`;
+    const { otp, password } = resetPasswordDto;
+    if (!otp) {
+      throw new BadRequestException('ওটিপি (OTP) কোড প্রদান করা আবশ্যক।');
+    }
 
-    // 1. Try to find the token in Redis first (standard hex token flow)
+    let account: PasswordResetAccount | null = null;
+    const key = `password-reset:${otp}`;
+
+    // 1. Try to find the OTP in Redis first
     account = await this.redisService.getJson<PasswordResetAccount>(key);
 
     if (account) {
-      // Consume the token before updating the password so it cannot be reused.
+      // Consume the OTP before updating the password so it cannot be reused.
       await this.redisService.del(key);
     } else {
-      // 2. Fallback to JWT verification if token is a JWT
+      // 2. Fallback to JWT verification if needed
       try {
         let payload: any = null;
-        // Try verifying with JWT_SECRET (Access Token)
         try {
-          payload = await this.jwtService.verifyAsync(resetPasswordDto.token, {
+          payload = await this.jwtService.verifyAsync(otp, {
             secret: this.configService.get<string>('JWT_SECRET'),
           });
         } catch (accessErr) {
-          // If access token verification fails, try with JWT_REFRESH_SECRET (Refresh Token)
-          payload = await this.jwtService.verifyAsync(resetPasswordDto.token, {
+          payload = await this.jwtService.verifyAsync(otp, {
             secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
           });
         }
@@ -605,44 +604,32 @@ export class AuthService {
         }
       } catch (jwtError) {
         this.logger.error(
-          `Failed to verify password-reset token as JWT: ${jwtError.message}`,
+          `Failed to verify password-reset OTP: ${jwtError.message}`,
         );
       }
     }
 
     if (!account) {
-      throw new BadRequestException('Invalid or expired password-reset token');
+      throw new BadRequestException('ওটিপিটি সঠিক নয় অথবা এর মেয়াদ শেষ হয়ে গেছে।');
     }
 
     switch (account.accountType) {
       case 'user':
-        await this.usersService.updatePassword(
-          account.id,
-          resetPasswordDto.password,
-        );
+        await this.usersService.updatePassword(account.id, password);
         break;
       case 'company':
-        await this.companyService.updatePassword(
-          account.id,
-          resetPasswordDto.password,
-        );
+        await this.companyService.updatePassword(account.id, password);
         break;
       case 'party':
-        await this.partyService.updatePassword(
-          account.id,
-          resetPasswordDto.password,
-        );
+        await this.partyService.updatePassword(account.id, password);
         break;
       case 'driver':
-        await this.driverService.updatePassword(
-          account.id,
-          resetPasswordDto.password,
-        );
+        await this.driverService.updatePassword(account.id, password);
         break;
     }
 
     await this.redisService.del(`session:${account.id}`);
-    return { message: 'Password reset successfully. Please sign in again.' };
+    return { message: 'পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন।' };
   }
 
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
@@ -682,12 +669,12 @@ export class AuthService {
     }
 
     if (!storedHashedPassword) {
-      throw new NotFoundException('Account not found');
+      throw new NotFoundException('কোনো অ্যাকাউন্ট পাওয়া যায়নি।');
     }
 
     const isMatch = await argon2.verify(storedHashedPassword, currentPassword);
     if (!isMatch) {
-      throw new BadRequestException('Incorrect current password');
+      throw new BadRequestException('বর্তমান পাসওয়ার্ডটি সঠিক নয়।');
     }
 
     switch (accountType) {
@@ -713,7 +700,7 @@ export class AuthService {
     });
 
     return {
-      message: 'Password changed successfully',
+      message: 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।',
     };
   }
 
@@ -848,13 +835,13 @@ export class AuthService {
       if (tokenType !== 'access') {
         if (!activeSessionToken || activeSessionToken !== refreshToken) {
           throw new ForbiddenException(
-            'Access Denied - Session Expired or Revoked',
+            'সেশন শেষ হয়ে গেছে, অনুগ্রহ করে পুনরায় লগইন করুন।',
           );
         }
       } else {
         if (!activeSessionToken) {
           throw new ForbiddenException(
-            'Access Denied - Session Expired or Revoked',
+            'সেশন শেষ হয়ে গেছে, অনুগ্রহ করে পুনরায় লগইন করুন।',
           );
         }
       }
@@ -863,7 +850,7 @@ export class AuthService {
       const user = await this.usersService.findById(userId);
       if (user) {
         if (!user.isActive) {
-          throw new ForbiddenException('Access Denied: Account is inactive');
+          throw new ForbiddenException('আপনার অ্যাকাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে।');
         }
 
         const tokens = await this.getTokens(user.id, user.email, user.roles);
@@ -1062,7 +1049,7 @@ export class AuthService {
 
   private async sendPasswordResetEmail(
     email: string,
-    token: string,
+    otp: string,
   ): Promise<void> {
     const host = this.configService.get<string>('SMTP_HOST');
     const port = Number(this.configService.get<number>('SMTP_PORT', 587));
@@ -1086,8 +1073,19 @@ export class AuthService {
     await transporter.sendMail({
       from,
       to: email,
-      subject: 'Password reset token',
-      text: `Use this token to reset your password: ${token}\n\nThis token expires in 15 minutes and can be used once.`,
+      subject: 'Password Reset OTP',
+      text: `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 15 minutes and can only be used once.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.6;">
+          <h2 style="color: #1E40AF;">Password Reset Request</h2>
+          <p>You have requested to reset your password. Use the OTP below to complete the process:</p>
+          <div style="font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #1E40AF; padding: 14px 28px; background: #F3F4F6; border-radius: 8px; display: inline-block; margin: 16px 0;">
+            ${otp}
+          </div>
+          <p>This code is valid for <strong>15 minutes</strong> and can only be used once.</p>
+          <p style="color: #6B7280; font-size: 13px; margin-top: 24px;">If you did not request a password reset, please ignore this email.</p>
+        </div>
+      `,
     });
   }
 

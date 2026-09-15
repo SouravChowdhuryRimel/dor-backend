@@ -25,34 +25,40 @@ function generateSuccessMessage(method: string, url: string): string {
 
   // Handle specific Authentication routes
   if (cleanPath.includes('/auth/login') || cleanPath.includes('/auth/signin')) {
-    return 'Logged in successfully';
+    return 'সফলভাবে লগইন সম্পন্ন হয়েছে';
   }
   if (cleanPath.includes('/auth/logout')) {
-    return 'Logged out successfully';
+    return 'সফলভাবে লগআউট হয়েছে';
   }
   if (
     cleanPath.includes('/auth/register') ||
-    cleanPath.includes('/auth/signup')
+    cleanPath.includes('/auth/signup') ||
+    cleanPath.includes('/companies/register') ||
+    cleanPath.includes('/parties/register') ||
+    cleanPath.includes('/drivers/register')
   ) {
-    return 'Registered successfully';
+    return 'সফলভাবে নিবন্ধন সম্পন্ন হয়েছে';
   }
   if (cleanPath.includes('/auth/refresh')) {
-    return 'Token refreshed successfully';
+    return 'টোকেন সফলভাবে রিফ্রেশ হয়েছে';
   }
   if (cleanPath.includes('/auth/change-password')) {
-    return 'Password changed successfully';
+    return 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে';
   }
   if (
     cleanPath.includes('/auth/password/reset') ||
-    cleanPath.includes('/auth/forgot-password')
+    cleanPath.includes('/auth/reset-password')
   ) {
-    return 'Password reset action completed successfully';
+    return 'পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে';
+  }
+  if (cleanPath.includes('/auth/forgot-password')) {
+    return 'পাসওয়ার্ড রিসেট ওটিপি সফলভাবে পাঠানো হয়েছে';
   }
   if (
     cleanPath.includes('/delete-account') ||
     cleanPath.includes('/delete-user')
   ) {
-    return 'Account soft-deleted successfully';
+    return 'অ্যাকাউন্ট সফলভাবে নিষ্ক্রিয় করা হয়েছে';
   }
 
   // Extract the first segment after /api/v1/

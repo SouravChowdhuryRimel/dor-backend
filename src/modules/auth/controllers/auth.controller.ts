@@ -129,18 +129,18 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  @ApiOperation({ summary: 'Email a password-reset token' })
+  @ApiOperation({ summary: 'Email a 6-digit password-reset OTP' })
   @ApiBody({ type: ForgotPasswordDto })
   @ApiResponse({
     status: 201,
-    description: 'A reset email is sent when the account exists.',
+    description: 'A reset OTP is sent to the email address when the account exists.',
   })
   forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto);
   }
 
   @Post('reset-password')
-  @ApiOperation({ summary: 'Reset a password using an emailed token' })
+  @ApiOperation({ summary: 'Reset a password using an emailed 6-digit OTP' })
   @ApiBody({ type: ResetPasswordDto })
   @ApiResponse({ status: 201, description: 'Password reset successfully.' })
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
