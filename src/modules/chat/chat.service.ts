@@ -747,7 +747,7 @@ export class ChatService {
     } else if (senderRole === Role.ADMIN) {
       allowedTargetRoles = [Role.VENDOR, Role.DRIVER];
     } else if (senderRole === Role.VENDOR) {
-      allowedTargetRoles = [Role.PARTY, Role.DRIVER];
+      allowedTargetRoles = [Role.ADMIN, Role.PARTY, Role.DRIVER];
     } else if (senderRole === Role.PARTY) {
       allowedTargetRoles = [Role.VENDOR, Role.DRIVER];
     } else if (senderRole === Role.DRIVER) {
@@ -786,6 +786,24 @@ export class ChatService {
             { phoneNumber: { contains: search, mode: 'insensitive' } },
           ];
         }
+
+        if (senderRole === Role.VENDOR) {
+          const company = await this.prisma.company.findUnique({
+            where: { companyId: userId },
+            select: { categoryId: true },
+          });
+          if (company && company.categoryId) {
+            const adminCategories = await this.prisma.adminCategory.findMany({
+              where: { categoryId: company.categoryId },
+              select: { userId: true },
+            });
+            const adminUserIds = adminCategories.map((ac) => ac.userId);
+            whereClause.id = { in: adminUserIds, not: userId };
+          } else {
+            whereClause.id = { in: [] };
+          }
+        }
+
         const users = await this.prisma.user.findMany({
           where: whereClause,
         });
