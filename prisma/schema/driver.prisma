@@ -17,8 +17,9 @@ model Driver {
   nidNumber            String          @map("nid_number")
   driverDocument       String[]        @map("driver_document")
   isVerified           Boolean         @default(false) @map("is_verified")
-  fcmToken             String?         @map("fcm_token")
-  companyDrivers       CompanyDriver[]
+  fcmToken                  String?         @map("fcm_token")
+  isPushNotificationEnabled Boolean         @default(true) @map("is_push_notification_enabled")
+  companyDrivers            CompanyDriver[]
   partyDrivers         PartyDriver[]
   deliveries           Delivery[]
   complaints           Complaint[]

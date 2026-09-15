@@ -8,8 +8,9 @@ model User {
   profileImage     String?         @map("profile_image")
   roles            Role[]          @default([USER])
   refreshToken     String?
-  fcmToken         String?         @map("fcm_token")
-  managedCompanies Company[]
+  fcmToken                  String?         @map("fcm_token")
+  isPushNotificationEnabled Boolean         @default(true) @map("is_push_notification_enabled")
+  managedCompanies          Company[]
   adminCategories  AdminCategory[]
   activityLogs     ActivityLog[]
   notifications    Notification[]

@@ -18,4 +18,24 @@ export class QueryKeywordDto extends PaginationQueryDto {
   @IsOptional()
   @IsBooleanString()
   all?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Field to sort by: popularity (default - by company profile usage count), name, or createdAt',
+    example: 'popularity',
+    enum: ['popularity', 'name', 'createdAt'],
+  })
+  @IsOptional()
+  @IsString()
+  sortBy?: 'popularity' | 'name' | 'createdAt' | string;
+
+  @ApiPropertyOptional({
+    description:
+      'Sort direction: desc (default for popularity/createdAt) or asc',
+    example: 'desc',
+    enum: ['asc', 'desc'],
+  })
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
 }

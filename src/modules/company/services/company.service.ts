@@ -8,6 +8,7 @@ import { PrismaService } from 'src/core/database/database.service';
 import { Role } from '../../../common/constants/role.enum';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
+import { GetCompaniesQueryDto } from '../dto/get-companies-query.dto';
 import * as argon2 from 'argon2';
 import { CompanyStatus, Prisma } from '@prisma/client';
 import {
@@ -191,11 +192,37 @@ export class CompanyService {
     return createPaginatedResponse(data, total, page, limit);
   }
 
-  async findVerified(query?: PaginationQueryDto) {
+  async findVerified(query?: GetCompaniesQueryDto, reqUser?: any) {
     const page = Math.max(1, Number(query?.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
-    const where = { isVerified: true };
+    const where: any = { isVerified: true };
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
+
+    if (query?.categoryId) {
+      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+        if (where.categoryId.in.includes(query.categoryId)) {
+          where.categoryId = query.categoryId;
+        } else {
+          where.categoryId = { in: [] };
+        }
+      } else {
+        where.categoryId = query.categoryId;
+      }
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.company.count({ where }),
@@ -204,6 +231,7 @@ export class CompanyService {
         skip,
         take: limit,
         select: companyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -272,17 +300,46 @@ export class CompanyService {
     return updatedCompany;
   }
 
-  async findAll(query?: PaginationQueryDto) {
+  async findAll(query?: GetCompaniesQueryDto, reqUser?: any) {
     const page = Math.max(1, Number(query?.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
+    const where: any = {};
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
+
+    if (query?.categoryId) {
+      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+        if (where.categoryId.in.includes(query.categoryId)) {
+          where.categoryId = query.categoryId;
+        } else {
+          where.categoryId = { in: [] };
+        }
+      } else {
+        where.categoryId = query.categoryId;
+      }
+    }
 
     const [total, data] = await Promise.all([
-      this.prisma.company.count(),
+      this.prisma.company.count({ where }),
       this.prisma.company.findMany({
+        where,
         skip,
         take: limit,
         select: companyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 

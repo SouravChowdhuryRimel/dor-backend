@@ -60,6 +60,19 @@ export class KeywordController {
     required: false,
     description: 'Pass "true" to retrieve all keywords without pagination',
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description:
+      'Field to sort by: "popularity" (default, based on company profile usage count), "name", or "createdAt"',
+    enum: ['popularity', 'name', 'createdAt'],
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    description: 'Sort order: "desc" (default for popularity) or "asc"',
+    enum: ['asc', 'desc'],
+  })
   @ApiResponse({ status: 200, description: 'Return keywords list.' })
   findAll(@Query() query: QueryKeywordDto) {
     return this.keywordService.findAll(query);

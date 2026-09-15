@@ -1250,4 +1250,181 @@ export class AuthService {
       throw error;
     }
   }
+
+  async togglePushNotification(
+    userId: string,
+    enabled: boolean,
+    fcmToken?: string,
+  ) {
+    try {
+      // 1. Check User
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        const updateData: any = { isPushNotificationEnabled: enabled };
+        if (fcmToken) updateData.fcmToken = fcmToken;
+        const updated = await this.prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+          select: { id: true, isPushNotificationEnabled: true, fcmToken: true },
+        });
+        return {
+          success: true,
+          message: enabled
+            ? 'Push notifications enabled successfully'
+            : 'Push notifications disabled successfully',
+          isPushNotificationEnabled: updated.isPushNotificationEnabled,
+          fcmToken: updated.fcmToken,
+        };
+      }
+
+      // 2. Check Company
+      const company = await this.prisma.company.findUnique({
+        where: { companyId: userId },
+      });
+      if (company) {
+        const updateData: any = { isPushNotificationEnabled: enabled };
+        if (fcmToken) updateData.fcmToken = fcmToken;
+        const updated = await this.prisma.company.update({
+          where: { companyId: userId },
+          data: updateData,
+          select: {
+            companyId: true,
+            isPushNotificationEnabled: true,
+            fcmToken: true,
+          },
+        });
+        return {
+          success: true,
+          message: enabled
+            ? 'Push notifications enabled successfully'
+            : 'Push notifications disabled successfully',
+          isPushNotificationEnabled: updated.isPushNotificationEnabled,
+          fcmToken: updated.fcmToken,
+        };
+      }
+
+      // 3. Check Party
+      const party = await this.prisma.party.findUnique({
+        where: { partyId: userId },
+      });
+      if (party) {
+        const updateData: any = { isPushNotificationEnabled: enabled };
+        if (fcmToken) updateData.fcmToken = fcmToken;
+        const updated = await this.prisma.party.update({
+          where: { partyId: userId },
+          data: updateData,
+          select: {
+            partyId: true,
+            isPushNotificationEnabled: true,
+            fcmToken: true,
+          },
+        });
+        return {
+          success: true,
+          message: enabled
+            ? 'Push notifications enabled successfully'
+            : 'Push notifications disabled successfully',
+          isPushNotificationEnabled: updated.isPushNotificationEnabled,
+          fcmToken: updated.fcmToken,
+        };
+      }
+
+      // 4. Check Driver
+      const driver = await this.prisma.driver.findUnique({
+        where: { driverId: userId },
+      });
+      if (driver) {
+        const updateData: any = { isPushNotificationEnabled: enabled };
+        if (fcmToken) updateData.fcmToken = fcmToken;
+        const updated = await this.prisma.driver.update({
+          where: { driverId: userId },
+          data: updateData,
+          select: {
+            driverId: true,
+            isPushNotificationEnabled: true,
+            fcmToken: true,
+          },
+        });
+        return {
+          success: true,
+          message: enabled
+            ? 'Push notifications enabled successfully'
+            : 'Push notifications disabled successfully',
+          isPushNotificationEnabled: updated.isPushNotificationEnabled,
+          fcmToken: updated.fcmToken,
+        };
+      }
+
+      throw new NotFoundException('User entity not found');
+    } catch (error) {
+      this.logger.error(
+        `Failed to toggle push notification for user ${userId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  async getPushNotificationStatus(userId: string) {
+    // 1. Check User
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, isPushNotificationEnabled: true, fcmToken: true },
+    });
+    if (user) {
+      return {
+        isPushNotificationEnabled: user.isPushNotificationEnabled,
+        hasFcmToken: !!user.fcmToken,
+      };
+    }
+
+    // 2. Check Company
+    const company = await this.prisma.company.findUnique({
+      where: { companyId: userId },
+      select: {
+        companyId: true,
+        isPushNotificationEnabled: true,
+        fcmToken: true,
+      },
+    });
+    if (company) {
+      return {
+        isPushNotificationEnabled: company.isPushNotificationEnabled,
+        hasFcmToken: !!company.fcmToken,
+      };
+    }
+
+    // 3. Check Party
+    const party = await this.prisma.party.findUnique({
+      where: { partyId: userId },
+      select: {
+        partyId: true,
+        isPushNotificationEnabled: true,
+        fcmToken: true,
+      },
+    });
+    if (party) {
+      return {
+        isPushNotificationEnabled: party.isPushNotificationEnabled,
+        hasFcmToken: !!party.fcmToken,
+      };
+    }
+
+    // 4. Check Driver
+    const driver = await this.prisma.driver.findUnique({
+      where: { driverId: userId },
+      select: {
+        driverId: true,
+        isPushNotificationEnabled: true,
+        fcmToken: true,
+      },
+    });
+    if (driver) {
+      return {
+        isPushNotificationEnabled: driver.isPushNotificationEnabled,
+        hasFcmToken: !!driver.fcmToken,
+      };
+    }
+
+    throw new NotFoundException('User entity not found');
+  }
 }

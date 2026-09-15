@@ -316,6 +316,7 @@ export class ProductController {
   }
 
   @Get()
+  @ApiBearerAuth()
   @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({
     summary:

@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
+import { GetPartiesQueryDto } from '../dto/get-parties-query.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -181,8 +182,9 @@ export class PartyController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  findAll(@Query() query: PaginationQueryDto) {
-    return this.partyService.findAll(query);
+  @ApiOperation({ summary: 'Get all parties' })
+  findAll(@Query() query: GetPartiesQueryDto, @Req() req: any) {
+    return this.partyService.findAll(query, req.user);
   }
 
   @Get('pending')

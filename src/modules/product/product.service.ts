@@ -171,7 +171,7 @@ export class ProductService {
         if (where.categoryId.in.includes(query.categoryId)) {
           where.categoryId = query.categoryId;
         } else {
-          where.categoryId = 'none';
+          where.categoryId = { in: [] };
         }
       } else {
         where.categoryId = query.categoryId;

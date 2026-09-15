@@ -7,6 +7,7 @@ import { PrismaService } from 'src/core/database/database.service';
 import { Role } from '../../../common/constants/role.enum';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
+import { GetPartiesQueryDto } from '../dto/get-parties-query.dto';
 import * as argon2 from 'argon2';
 import { Prisma } from '@prisma/client';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
@@ -130,17 +131,46 @@ export class PartyService {
     return party;
   }
 
-  async findAll(query?: PaginationQueryDto) {
-    const page = query?.page || 1;
-    const limit = query?.limit || 10;
+  async findAll(query?: GetPartiesQueryDto, reqUser?: any) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
+    const where: any = {};
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
+
+    if (query?.categoryId) {
+      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+        if (where.categoryId.in.includes(query.categoryId)) {
+          where.categoryId = query.categoryId;
+        } else {
+          where.categoryId = { in: [] };
+        }
+      } else {
+        where.categoryId = query.categoryId;
+      }
+    }
 
     const [total, data] = await Promise.all([
-      this.prisma.party.count(),
+      this.prisma.party.count({ where }),
       this.prisma.party.findMany({
+        where,
         skip,
         take: limit,
         select: partyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
