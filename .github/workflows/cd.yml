@@ -112,9 +112,18 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          echo "" >> ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          python3 -c "
+          import os, re
+          raw = os.environ.get('SSH_PRIVATE_KEY', '').strip()
+          clean = re.sub(r'-----BEGIN [^-]+-----', '', raw)
+          clean = re.sub(r'-----END [^-]+-----', '', clean)
+          body = re.sub(r'\s+', '', clean)
+          chunks = [body[i:i+70] for i in range(0, len(body), 70)]
+          formatted = '-----BEGIN OPENSSH PRIVATE KEY-----\n' + '\n'.join(chunks) + '\n-----END OPENSSH PRIVATE KEY-----\n'
+          with open(os.path.expanduser('~/.ssh/deploy_key'), 'w') as f:
+              f.write(formatted)
+          os.chmod(os.path.expanduser('~/.ssh/deploy_key'), 0o600)
+          "
 
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=15 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << 'EOF'
             set -e
