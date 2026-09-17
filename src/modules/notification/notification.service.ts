@@ -235,10 +235,7 @@ export class NotificationService {
       this.notificationGateway.sendNotificationToParty(partyId, notification);
     }
     if (driverId) {
-      this.notificationGateway.sendNotificationToDriver(
-        driverId,
-        notification,
-      );
+      this.notificationGateway.sendNotificationToDriver(driverId, notification);
     }
 
     // 3. Find target FCM Token and dispatch Push Notification (if enabled)
@@ -303,7 +300,11 @@ export class NotificationService {
         }),
       ]);
       const found = u || c || p || d;
-      if (found && found.isPushNotificationEnabled !== false && found.fcmToken) {
+      if (
+        found &&
+        found.isPushNotificationEnabled !== false &&
+        found.fcmToken
+      ) {
         targetFcmToken = found.fcmToken;
       }
     }

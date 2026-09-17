@@ -133,7 +133,8 @@ export class AuthController {
   @ApiBody({ type: ForgotPasswordDto })
   @ApiResponse({
     status: 201,
-    description: 'A reset OTP is sent to the email address when the account exists.',
+    description:
+      'A reset OTP is sent to the email address when the account exists.',
   })
   forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto);

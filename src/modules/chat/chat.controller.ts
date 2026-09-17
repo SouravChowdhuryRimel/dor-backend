@@ -62,7 +62,8 @@ export class ChatController {
 
   @Get('search-users')
   @ApiOperation({
-    summary: 'Search users/contacts for chat based on role permissions and query filter',
+    summary:
+      'Search users/contacts for chat based on role permissions and query filter',
   })
   async searchUsers(
     @Req() req: RequestWithUser,

@@ -155,7 +155,10 @@ export class ProductService {
         } else if (query?.companyId) {
           where.companyId = query.companyId;
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -167,7 +170,11 @@ export class ProductService {
     }
 
     if (query?.categoryId) {
-      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
         if (where.categoryId.in.includes(query.categoryId)) {
           where.categoryId = query.categoryId;
         } else {
@@ -240,16 +247,19 @@ export class ProductService {
       }),
     ]);
 
-    const mappedData = data.map((p: any) => this.formatProductDetails(p, partyId));
+    const mappedData = data.map((p: any) =>
+      this.formatProductDetails(p, partyId),
+    );
 
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   private formatProductDetails(p: any, partyId?: string | null) {
     const customRateObj = p.partyRates?.[0];
-    const activeOfferObj = p.offers?.find(
-      (o: any) => o.status === 'ACTIVE' && new Date(o.endDate) >= new Date(),
-    ) || p.offers?.[0];
+    const activeOfferObj =
+      p.offers?.find(
+        (o: any) => o.status === 'ACTIVE' && new Date(o.endDate) >= new Date(),
+      ) || p.offers?.[0];
 
     const regularPrice = p.regularPrice ?? p.defaultPrice ?? 0;
     const offerPrice = p.offerPrice ?? 0;
@@ -261,7 +271,11 @@ export class ProductService {
     let appliedPricingType = 'REGULAR_PRICE';
     let appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
 
-    if (customRateObj && customRateObj.rate !== undefined && customRateObj.rate !== null) {
+    if (
+      customRateObj &&
+      customRateObj.rate !== undefined &&
+      customRateObj.rate !== null
+    ) {
       specialPrice = customRateObj.rate;
       hasSpecialPrice = true;
       appliedPricingType = 'SPECIAL_PRICE';
@@ -289,19 +303,29 @@ export class ProductService {
           ? offerPrice
           : regularPrice;
 
-    const discountAmount = regularPrice > currentPrice ? Math.round((regularPrice - currentPrice) * 100) / 100 : 0;
-    const discountPercentage = regularPrice > 0 && regularPrice > currentPrice
-      ? Math.round(((regularPrice - currentPrice) / regularPrice) * 100)
-      : 0;
+    const discountAmount =
+      regularPrice > currentPrice
+        ? Math.round((regularPrice - currentPrice) * 100) / 100
+        : 0;
+    const discountPercentage =
+      regularPrice > 0 && regularPrice > currentPrice
+        ? Math.round(((regularPrice - currentPrice) / regularPrice) * 100)
+        : 0;
 
-    const unitText = p.unit ? `প্রতি ${p.unit} ${p.unitType || ''}`.trim() : `প্রতি ${p.unitType || 'ব্যাগ'}`;
+    const unitText = p.unit
+      ? `প্রতি ${p.unit} ${p.unitType || ''}`.trim()
+      : `প্রতি ${p.unitType || 'ব্যাগ'}`;
     const stockText = `${p.stockSize} ${p.unitType || p.unit || 'ব্যাগ'}`;
     const minOrderText = `সর্বনিম্ন অর্ডার: ${p.minimumOrder} ${p.unitType || p.unit || 'ব্যাগ'}`;
 
     return {
       productId: p.productId,
       productName: p.productName,
-      productImage: Array.isArray(p.productImage) ? p.productImage : (p.productImage ? [p.productImage] : []),
+      productImage: Array.isArray(p.productImage)
+        ? p.productImage
+        : p.productImage
+          ? [p.productImage]
+          : [],
       description: p.description || '',
       unit: p.unit,
       unitType: p.unitType,
@@ -397,15 +421,22 @@ export class ProductService {
           select: { companyId: true },
         });
         if (party && party.companyId && party.companyId !== product.companyId) {
-          throw new ForbiddenException(`You do not have permission to access this product`);
+          throw new ForbiddenException(
+            `You do not have permission to access this product`,
+          );
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to access this product`);
+          throw new ForbiddenException(
+            `You do not have permission to access this product`,
+          );
         }
       }
     }
@@ -431,13 +462,18 @@ export class ProductService {
           );
         }
         delete updateData.companyId;
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to modify this product`);
+          throw new ForbiddenException(
+            `You do not have permission to modify this product`,
+          );
         }
       }
     }
@@ -523,13 +559,18 @@ export class ProductService {
             `You do not have permission to delete this product`,
           );
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to modify this product`);
+          throw new ForbiddenException(
+            `You do not have permission to modify this product`,
+          );
         }
       }
     }
@@ -598,7 +639,10 @@ export class ProductService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes('VENDOR')) {
         where.companyId = reqUser.sub;
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -738,7 +782,9 @@ export class ProductService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes('PARTY')) {
         if (partyId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to view other parties' rates`);
+          throw new ForbiddenException(
+            `You do not have permission to view other parties' rates`,
+          );
         }
         if (companyId) {
           where.companyId = companyId;
@@ -747,7 +793,10 @@ export class ProductService {
         }
       } else if (reqUser.roles.includes('VENDOR')) {
         where.companyId = reqUser.sub;
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -1151,9 +1200,14 @@ export class ProductService {
           select: { companyId: true },
         });
         if (!party || party.companyId !== companyId) {
-          throw new ForbiddenException(`You do not have permission to access products of this company`);
+          throw new ForbiddenException(
+            `You do not have permission to access products of this company`,
+          );
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const company = await this.prisma.company.findUnique({
           where: { companyId },
           select: { categoryId: true },
@@ -1163,7 +1217,9 @@ export class ProductService {
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!company || !categoryIds.includes(company.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to access products of this company`);
+          throw new ForbiddenException(
+            `You do not have permission to access products of this company`,
+          );
         }
       }
     }

@@ -123,7 +123,8 @@ export class CreateCompanyDto {
   companyImage?: string;
 
   @ApiPropertyOptional({
-    description: 'Keywords or service tags associated with the company business',
+    description:
+      'Keywords or service tags associated with the company business',
     example: ['ইলেকট্রনিক', 'কম্পিউটার', 'মোবাইল'],
     type: [String],
   })
@@ -133,7 +134,10 @@ export class CreateCompanyDto {
         const parsed = JSON.parse(value);
         if (Array.isArray(parsed)) return parsed;
       } catch {
-        return value.split(',').map((k: string) => k.trim()).filter(Boolean);
+        return value
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
       }
     }
     return value;

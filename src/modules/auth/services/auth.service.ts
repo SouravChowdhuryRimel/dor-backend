@@ -66,7 +66,9 @@ export class AuthService {
         registerDto.phoneNumber,
       );
       if (userExists) {
-        throw new BadRequestException('এই ফোন নম্বর দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট তৈরি করা হয়েছে।');
+        throw new BadRequestException(
+          'এই ফোন নম্বর দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট তৈরি করা হয়েছে।',
+        );
       }
 
       // Hash password safely. Argon2 is highly CPU-bound.
@@ -139,14 +141,19 @@ export class AuthService {
       const user = await this.usersService.findByPhone(loginDto.phoneNumber);
       if (user) {
         if (!user.isActive) {
-          throw new ForbiddenException('আপনার অ্যাকাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে।');
+          throw new ForbiddenException(
+            'আপনার অ্যাকাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে।',
+          );
         }
 
         const passwordMatches = await argon2.verify(
           user.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
+        if (!passwordMatches)
+          throw new UnauthorizedException(
+            'ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।',
+          );
 
         if (incomingFcmToken) {
           await this.prisma.user.update({
@@ -198,15 +205,23 @@ export class AuthService {
         loginDto.phoneNumber,
       );
       if (company) {
-        if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED) {
-          throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
+        if (
+          company.status === CompanyStatus.BLOCKED ||
+          company.status === CompanyStatus.REJECTED
+        ) {
+          throw new ForbiddenException(
+            'আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।',
+          );
         }
 
         const passwordMatches = await argon2.verify(
           company.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
+        if (!passwordMatches)
+          throw new UnauthorizedException(
+            'ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।',
+          );
 
         if (incomingFcmToken) {
           await this.prisma.company.update({
@@ -255,15 +270,24 @@ export class AuthService {
       // 3. Check Party table
       const party = await this.partyService.findByPhone(loginDto.phoneNumber);
       if (party) {
-        if (party.status === 'INACTIVE' || party.status === 'BLOCKED' || party.status === 'REJECTED') {
-          throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
+        if (
+          party.status === 'INACTIVE' ||
+          party.status === 'BLOCKED' ||
+          party.status === 'REJECTED'
+        ) {
+          throw new ForbiddenException(
+            'আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।',
+          );
         }
 
         const passwordMatches = await argon2.verify(
           party.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
+        if (!passwordMatches)
+          throw new UnauthorizedException(
+            'ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।',
+          );
 
         if (incomingFcmToken) {
           await this.prisma.party.update({
@@ -314,7 +338,10 @@ export class AuthService {
           driver.password,
           loginDto.password,
         );
-        if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
+        if (!passwordMatches)
+          throw new UnauthorizedException(
+            'ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।',
+          );
 
         if (incomingFcmToken) {
           await this.prisma.driver.update({
@@ -374,17 +401,24 @@ export class AuthService {
       const company = await this.companyService.findByPhone(
         loginDto.phoneNumber,
       );
-      if (!company) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
+      if (!company)
+        throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
-      if (company.status === CompanyStatus.BLOCKED || company.status === CompanyStatus.REJECTED) {
-        throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
+      if (
+        company.status === CompanyStatus.BLOCKED ||
+        company.status === CompanyStatus.REJECTED
+      ) {
+        throw new ForbiddenException(
+          'আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।',
+        );
       }
 
       const passwordMatches = await argon2.verify(
         company.password,
         loginDto.password,
       );
-      if (!passwordMatches) throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
+      if (!passwordMatches)
+        throw new UnauthorizedException('ফোন নম্বর অথবা পাসওয়ার্ড সঠিক নয়।');
 
       if (incomingFcmToken) {
         await this.prisma.company.update({
@@ -446,10 +480,18 @@ export class AuthService {
         partyLoginDto.phoneNumber,
       );
       if (!party)
-        throw new UnauthorizedException('এই ফোন নম্বর দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি।');
+        throw new UnauthorizedException(
+          'এই ফোন নম্বর দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি।',
+        );
 
-      if (party.status === 'INACTIVE' || party.status === 'BLOCKED' || party.status === 'REJECTED') {
-        throw new ForbiddenException('আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।');
+      if (
+        party.status === 'INACTIVE' ||
+        party.status === 'BLOCKED' ||
+        party.status === 'REJECTED'
+      ) {
+        throw new ForbiddenException(
+          'আপনার অ্যাকাউন্টটি নিষ্ক্রিয় অথবা বাতিল করা হয়েছে।',
+        );
       }
 
       const passwordMatches = await argon2.verify(
@@ -531,9 +573,12 @@ export class AuthService {
       try {
         await this.sendPasswordResetEmail(account.email, otp);
       } catch (error) {
-        this.logger.error(`Failed to send password-reset email: ${error.message}`);
+        this.logger.error(
+          `Failed to send password-reset email: ${error.message}`,
+        );
         // Do not throw the error if SMTP is not configured or in non-production environments
-        const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+        const isProd =
+          this.configService.get<string>('NODE_ENV') === 'production';
         const hasSmtp = !!this.configService.get<string>('SMTP_HOST');
         if (isProd && hasSmtp) {
           throw error;
@@ -610,7 +655,9 @@ export class AuthService {
     }
 
     if (!account) {
-      throw new BadRequestException('ওটিপিটি সঠিক নয় অথবা এর মেয়াদ শেষ হয়ে গেছে।');
+      throw new BadRequestException(
+        'ওটিপিটি সঠিক নয় অথবা এর মেয়াদ শেষ হয়ে গেছে।',
+      );
     }
 
     switch (account.accountType) {
@@ -629,7 +676,10 @@ export class AuthService {
     }
 
     await this.redisService.del(`session:${account.id}`);
-    return { message: 'পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন।' };
+    return {
+      message:
+        'পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে। নতুন পাসওয়ার্ড দিয়ে লগইন করুন।',
+    };
   }
 
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
@@ -718,7 +768,10 @@ export class AuthService {
         action: 'DELETE_ACCOUNT',
         description: `User account soft-deleted: ${user.phoneNumber}`,
       });
-      return { success: true, message: 'User profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'User profile soft-deleted successfully',
+      };
     }
 
     const company = await this.prisma.company.findUnique({
@@ -736,7 +789,10 @@ export class AuthService {
         action: 'DELETE_ACCOUNT',
         description: `Company account soft-deleted: ${company.companyName}`,
       });
-      return { success: true, message: 'Company profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'Company profile soft-deleted successfully',
+      };
     }
 
     const party = await this.prisma.party.findUnique({
@@ -754,7 +810,10 @@ export class AuthService {
         action: 'DELETE_ACCOUNT',
         description: `Party account soft-deleted: ${party.partyName}`,
       });
-      return { success: true, message: 'Party profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'Party profile soft-deleted successfully',
+      };
     }
 
     const driver = await this.prisma.driver.findUnique({
@@ -772,7 +831,10 @@ export class AuthService {
         action: 'DELETE_ACCOUNT',
         description: `Driver account soft-deleted: ${driver.driverName}`,
       });
-      return { success: true, message: 'Driver profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'Driver profile soft-deleted successfully',
+      };
     }
 
     throw new NotFoundException('Account not found');
@@ -850,7 +912,9 @@ export class AuthService {
       const user = await this.usersService.findById(userId);
       if (user) {
         if (!user.isActive) {
-          throw new ForbiddenException('আপনার অ্যাকাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে।');
+          throw new ForbiddenException(
+            'আপনার অ্যাকাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে।',
+          );
         }
 
         const tokens = await this.getTokens(user.id, user.email, user.roles);

@@ -49,19 +49,27 @@ export class ActivityLogService {
 
     // Safeguard against foreign key violations on deleted records
     if (logData.userId) {
-      const exists = await this.prisma.user.findUnique({ where: { id: logData.userId } });
+      const exists = await this.prisma.user.findUnique({
+        where: { id: logData.userId },
+      });
       if (!exists) logData.userId = null;
     }
     if (logData.companyId) {
-      const exists = await this.prisma.company.findUnique({ where: { companyId: logData.companyId } });
+      const exists = await this.prisma.company.findUnique({
+        where: { companyId: logData.companyId },
+      });
       if (!exists) logData.companyId = null;
     }
     if (logData.partyId) {
-      const exists = await this.prisma.party.findUnique({ where: { partyId: logData.partyId } });
+      const exists = await this.prisma.party.findUnique({
+        where: { partyId: logData.partyId },
+      });
       if (!exists) logData.partyId = null;
     }
     if (logData.driverId) {
-      const exists = await this.prisma.driver.findUnique({ where: { driverId: logData.driverId } });
+      const exists = await this.prisma.driver.findUnique({
+        where: { driverId: logData.driverId },
+      });
       if (!exists) logData.driverId = null;
     }
 

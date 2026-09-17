@@ -94,7 +94,10 @@ function generateSuccessMessage(method: string, url: string): string {
       if (cleanPath.endsWith('/orders') || cleanPath.endsWith('/orders/')) {
         return 'Order created successfully';
       }
-      if (cleanPath.endsWith('/complaints') || cleanPath.endsWith('/complaints/')) {
+      if (
+        cleanPath.endsWith('/complaints') ||
+        cleanPath.endsWith('/complaints/')
+      ) {
         return 'Complaint submitted successfully';
       }
       if (cleanPath.includes('/complaints/') && cleanPath.endsWith('/reply')) {

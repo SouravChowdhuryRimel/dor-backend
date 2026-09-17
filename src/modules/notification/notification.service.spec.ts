@@ -132,7 +132,9 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.company.findUnique.mockResolvedValue({ fcmToken: 'token-comp-456' });
+      prisma.company.findUnique.mockResolvedValue({
+        fcmToken: 'token-comp-456',
+      });
       fcmService.sendPushNotification.mockResolvedValue(true);
 
       const result = await service.sendNotification({
@@ -142,10 +144,9 @@ describe('NotificationService', () => {
         data: { type: 'COMPANY_APPROVED' },
       });
 
-      expect(notificationGateway.sendNotificationToCompany).toHaveBeenCalledWith(
-        'company-1',
-        mockCreatedNotif,
-      );
+      expect(
+        notificationGateway.sendNotificationToCompany,
+      ).toHaveBeenCalledWith('company-1', mockCreatedNotif);
 
       expect(prisma.company.findUnique).toHaveBeenCalledWith({
         where: { companyId: 'company-1' },
@@ -173,7 +174,9 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.party.findUnique.mockResolvedValue({ fcmToken: 'token-party-789' });
+      prisma.party.findUnique.mockResolvedValue({
+        fcmToken: 'token-party-789',
+      });
       fcmService.sendPushNotification.mockResolvedValue(true);
 
       const result = await service.sendNotification({
@@ -214,7 +217,9 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.driver.findUnique.mockResolvedValue({ fcmToken: 'token-driver-999' });
+      prisma.driver.findUnique.mockResolvedValue({
+        fcmToken: 'token-driver-999',
+      });
       fcmService.sendPushNotification.mockResolvedValue(true);
 
       const result = await service.sendNotification({
@@ -255,7 +260,10 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.user.findUnique.mockResolvedValue({ fcmToken: null, isPushNotificationEnabled: true });
+      prisma.user.findUnique.mockResolvedValue({
+        fcmToken: null,
+        isPushNotificationEnabled: true,
+      });
 
       const result = await service.sendNotification({
         title: 'নোটিফিকেশন',
@@ -331,9 +339,9 @@ describe('NotificationService', () => {
         isRead: false,
       });
 
-      await expect(service.markAsRead('notif-1', 'intruder-id')).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.markAsRead('notif-1', 'intruder-id'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -365,11 +373,19 @@ describe('NotificationService', () => {
         fcmToken: 'new-token',
       });
 
-      const res = await service.togglePushNotification('comp-1', true, 'new-token');
+      const res = await service.togglePushNotification(
+        'comp-1',
+        true,
+        'new-token',
+      );
       expect(prisma.company.update).toHaveBeenCalledWith({
         where: { companyId: 'comp-1' },
         data: { isPushNotificationEnabled: true, fcmToken: 'new-token' },
-        select: { companyId: true, isPushNotificationEnabled: true, fcmToken: true },
+        select: {
+          companyId: true,
+          isPushNotificationEnabled: true,
+          fcmToken: true,
+        },
       });
       expect(res.success).toBe(true);
       expect(res.isPushNotificationEnabled).toBe(true);
@@ -382,9 +398,9 @@ describe('NotificationService', () => {
       prisma.party.findUnique.mockResolvedValue(null);
       prisma.driver.findUnique.mockResolvedValue(null);
 
-      await expect(service.togglePushNotification('unknown-id', false)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.togglePushNotification('unknown-id', false),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -469,7 +485,10 @@ describe('NotificationService', () => {
         .mockResolvedValueOnce(3); // unread
       prisma.notification.findMany.mockResolvedValue(mockList);
 
-      const res = await service.findAllForActor('user-1', { page: 1, limit: 10 });
+      const res = await service.findAllForActor('user-1', {
+        page: 1,
+        limit: 10,
+      });
       expect(res.data).toEqual(mockList);
       expect(res.meta.total).toBe(10);
       expect(res.meta.unreadCount).toBe(3);

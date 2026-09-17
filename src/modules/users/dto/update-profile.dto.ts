@@ -87,7 +87,10 @@ export class UpdateProfileDto {
         const parsed = JSON.parse(value);
         if (Array.isArray(parsed)) return parsed;
       } catch {
-        return value.split(',').map((k: string) => k.trim()).filter(Boolean);
+        return value
+          .split(',')
+          .map((k: string) => k.trim())
+          .filter(Boolean);
       }
     }
     return value;
@@ -121,26 +124,54 @@ export class UpdateProfileDto {
   @IsOptional()
   area?: string;
 
-  @ApiPropertyOptional({ description: 'Latitude of location', example: 23.8103 })
-  @Transform(({ value }) => (value !== undefined && value !== null && value !== '' ? Number(value) : undefined))
+  @ApiPropertyOptional({
+    description: 'Latitude of location',
+    example: 23.8103,
+  })
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? Number(value)
+      : undefined,
+  )
   @IsNumber()
   @IsOptional()
   latitude?: number;
 
-  @ApiPropertyOptional({ description: 'Longitude of location', example: 90.4125 })
-  @Transform(({ value }) => (value !== undefined && value !== null && value !== '' ? Number(value) : undefined))
+  @ApiPropertyOptional({
+    description: 'Longitude of location',
+    example: 90.4125,
+  })
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? Number(value)
+      : undefined,
+  )
   @IsNumber()
   @IsOptional()
   longitude?: number;
 
-  @ApiPropertyOptional({ description: 'Latitude (alias lat)', example: 23.8103 })
-  @Transform(({ value }) => (value !== undefined && value !== null && value !== '' ? Number(value) : undefined))
+  @ApiPropertyOptional({
+    description: 'Latitude (alias lat)',
+    example: 23.8103,
+  })
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? Number(value)
+      : undefined,
+  )
   @IsNumber()
   @IsOptional()
   lat?: number;
 
-  @ApiPropertyOptional({ description: 'Longitude (alias long)', example: 90.4125 })
-  @Transform(({ value }) => (value !== undefined && value !== null && value !== '' ? Number(value) : undefined))
+  @ApiPropertyOptional({
+    description: 'Longitude (alias long)',
+    example: 90.4125,
+  })
+  @Transform(({ value }) =>
+    value !== undefined && value !== null && value !== ''
+      ? Number(value)
+      : undefined,
+  )
   @IsNumber()
   @IsOptional()
   long?: number;

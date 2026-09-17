@@ -5,7 +5,8 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SearchChatUsersQueryDto {
   @ApiPropertyOptional({
-    description: 'Search string to filter by name, phone number, email, or business name',
+    description:
+      'Search string to filter by name, phone number, email, or business name',
     example: 'Karim',
   })
   @IsOptional()
@@ -13,7 +14,8 @@ export class SearchChatUsersQueryDto {
   search?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter search explicitly by target role (ADMIN, VENDOR, PARTY, DRIVER)',
+    description:
+      'Filter search explicitly by target role (ADMIN, VENDOR, PARTY, DRIVER)',
     enum: Role,
     example: Role.VENDOR,
   })

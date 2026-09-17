@@ -41,9 +41,7 @@ export class InquiryService {
       where: { categoryId },
     });
     if (!category) {
-      throw new NotFoundException(
-        `Category with ID "${categoryId}" not found`,
-      );
+      throw new NotFoundException(`Category with ID "${categoryId}" not found`);
     }
 
     const deadlineDate = createInquiryDto.deadline
@@ -147,9 +145,7 @@ export class InquiryService {
     const validNames = new Set(
       existing.map((e) => e.name.trim().toLowerCase()),
     );
-    const invalid = cleaned.filter(
-      (k) => !validNames.has(k.toLowerCase()),
-    );
+    const invalid = cleaned.filter((k) => !validNames.has(k.toLowerCase()));
 
     if (invalid.length > 0) {
       throw new BadRequestException(
@@ -526,9 +522,7 @@ export class InquiryService {
       }
     }
 
-    const hasResponded = filteredResponses.some(
-      (r) => r.companyId === userId,
-    );
+    const hasResponded = filteredResponses.some((r) => r.companyId === userId);
     const { _count, responses, ...rest } = inquiry;
     return {
       ...rest,
@@ -573,10 +567,7 @@ export class InquiryService {
       dataToUpdate.deadline = deadlineDate;
     }
 
-    if (
-      updateInquiryDto.keywords &&
-      updateInquiryDto.keywords.length > 0
-    ) {
+    if (updateInquiryDto.keywords && updateInquiryDto.keywords.length > 0) {
       dataToUpdate.keywords = await this.validateKeywordsAgainstMasterList(
         updateInquiryDto.keywords,
       );

@@ -68,7 +68,7 @@ export class CreateOrderDto {
 
   @ApiPropertyOptional({
     description: 'Drop latitude (Float number or numeric string)',
-    example: 10.00,
+    example: 10.0,
   })
   @Transform(({ value }) =>
     value !== undefined && value !== null && value !== ''

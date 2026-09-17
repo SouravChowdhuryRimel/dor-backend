@@ -23,7 +23,9 @@ export class FcmService implements OnModuleInit {
       }
 
       const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
-      const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
+      const clientEmail = this.configService.get<string>(
+        'FIREBASE_CLIENT_EMAIL',
+      );
       let privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
 
       if (!projectId || !clientEmail || !privateKey) {
@@ -49,9 +51,14 @@ export class FcmService implements OnModuleInit {
         }),
       });
 
-      this.logger.log(`Firebase Admin SDK initialized successfully for project: ${projectId}`);
+      this.logger.log(
+        `Firebase Admin SDK initialized successfully for project: ${projectId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to initialize Firebase Admin SDK: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to initialize Firebase Admin SDK: ${error.message}`,
+        error.stack,
+      );
     }
   }
 
@@ -63,12 +70,16 @@ export class FcmService implements OnModuleInit {
     badge?: number,
   ): Promise<boolean> {
     if (!this.firebaseApp) {
-      this.logger.warn('FCM Push notification skipped: Firebase Admin SDK not initialized.');
+      this.logger.warn(
+        'FCM Push notification skipped: Firebase Admin SDK not initialized.',
+      );
       return false;
     }
 
     if (!fcmToken || fcmToken.trim() === '') {
-      this.logger.warn('FCM Push notification skipped: Target fcmToken is empty.');
+      this.logger.warn(
+        'FCM Push notification skipped: Target fcmToken is empty.',
+      );
       return false;
     }
 
@@ -90,7 +101,9 @@ export class FcmService implements OnModuleInit {
       const channelId =
         safeData.channelId ||
         safeData.channel_id ||
-        (safeData.type === 'CHAT_MESSAGE' ? 'chat_messages' : 'high_importance_channel');
+        (safeData.type === 'CHAT_MESSAGE'
+          ? 'chat_messages'
+          : 'high_importance_channel');
 
       const message: Message = {
         token: fcmToken,
@@ -134,7 +147,9 @@ export class FcmService implements OnModuleInit {
       );
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send FCM push notification: ${error.message}`);
+      this.logger.error(
+        `Failed to send FCM push notification: ${error.message}`,
+      );
       return false;
     }
   }

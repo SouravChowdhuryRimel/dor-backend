@@ -159,7 +159,7 @@ export class CompanyController {
           createCompanyDto.keywords as any,
         );
       } catch {
-        createCompanyDto.keywords = ((createCompanyDto.keywords as any) as string)
+        createCompanyDto.keywords = (createCompanyDto.keywords as any as string)
           .split(',')
           .map((k: string) => k.trim())
           .filter(Boolean);
@@ -322,7 +322,7 @@ export class CompanyController {
       try {
         dataToUpdate.keywords = JSON.parse(dataToUpdate.keywords as any);
       } catch {
-        dataToUpdate.keywords = ((dataToUpdate.keywords as any) as string)
+        dataToUpdate.keywords = (dataToUpdate.keywords as any as string)
           .split(',')
           .map((k: string) => k.trim())
           .filter(Boolean);
@@ -336,7 +336,9 @@ export class CompanyController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Add, remove, or replace keywords/services for a company/seller' })
+  @ApiOperation({
+    summary: 'Add, remove, or replace keywords/services for a company/seller',
+  })
   @ApiBody({
     schema: {
       type: 'object',

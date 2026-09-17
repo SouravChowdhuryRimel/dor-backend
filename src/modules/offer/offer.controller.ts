@@ -81,4 +81,3 @@ export class OfferController {
     return this.offerService.remove(id, req.user);
   }
 }
-

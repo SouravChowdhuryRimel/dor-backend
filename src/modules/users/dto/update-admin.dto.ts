@@ -18,7 +18,9 @@ export class UpdateAdminDto {
   @Transform(({ value }) =>
     typeof value === 'string' && value.trim() === '' ? undefined : value,
   )
-  @ValidateIf((o) => o.email !== undefined && o.email !== null && o.email !== '')
+  @ValidateIf(
+    (o) => o.email !== undefined && o.email !== null && o.email !== '',
+  )
   @IsEmail()
   @IsOptional()
   email?: string;
@@ -40,8 +42,10 @@ export class UpdateAdminDto {
   })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
-    if (value === 'true' || value === true || value === 1 || value === '1') return true;
-    if (value === 'false' || value === false || value === 0 || value === '0') return false;
+    if (value === 'true' || value === true || value === 1 || value === '1')
+      return true;
+    if (value === 'false' || value === false || value === 0 || value === '0')
+      return false;
     return value;
   })
   @IsBoolean()
@@ -70,7 +74,10 @@ export class UpdateAdminDto {
       return value
         .flatMap((v) =>
           typeof v === 'string'
-            ? v.split(',').map((s) => s.trim()).filter(Boolean)
+            ? v
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
             : v,
         )
         .filter(Boolean);
@@ -84,7 +91,10 @@ export class UpdateAdminDto {
       } catch {
         // Not a JSON array, treat as comma-separated
       }
-      return value.split(',').map((s) => s.trim()).filter(Boolean);
+      return value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
     return [value];
   })
@@ -93,4 +103,3 @@ export class UpdateAdminDto {
   @IsOptional()
   categoryIds?: string[];
 }
-

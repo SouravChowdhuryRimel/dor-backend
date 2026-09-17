@@ -262,7 +262,10 @@ export class PartyController {
         businessName: { type: 'string', description: 'Business Name' },
         area: { type: 'string', description: 'Area (alias for bazzarArea)' },
         district: { type: 'string', description: 'District' },
-        bazzar: { type: 'string', description: 'Bazzar (alias for bazzarArea)' },
+        bazzar: {
+          type: 'string',
+          description: 'Bazzar (alias for bazzarArea)',
+        },
         partyName: { type: 'string', description: 'Party Name' },
         profileImage: {
           type: 'string',
@@ -275,7 +278,11 @@ export class PartyController {
         },
         upozela: { type: 'string', description: 'Upozela' },
         latitude: { type: 'number', example: 23.8103, description: 'Latitude' },
-        longitude: { type: 'number', example: 90.4125, description: 'Longitude' },
+        longitude: {
+          type: 'number',
+          example: 90.4125,
+          description: 'Longitude',
+        },
         address: { type: 'string', description: 'Address' },
         bazzarArea: { type: 'string', description: 'Bazzar/Area' },
         treadLicense: { type: 'string', description: 'Trade License' },
@@ -283,7 +290,11 @@ export class PartyController {
         companyId: { type: 'string', description: 'Company ID' },
         categoryId: { type: 'string', description: 'Category ID' },
         openingDue: { type: 'number', description: 'Opening Due' },
-        email: { type: 'string', format: 'email', description: 'Email address' },
+        email: {
+          type: 'string',
+          format: 'email',
+          description: 'Email address',
+        },
         description: { type: 'string', description: 'Description' },
       },
     },

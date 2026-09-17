@@ -24,7 +24,7 @@ export class OrderService {
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
     private readonly notificationService: NotificationService,
-  ) { }
+  ) {}
 
   async create(createOrderDto: CreateOrderDto, reqUser?: any) {
     // 1. Verify product exists
@@ -43,9 +43,7 @@ export class OrderService {
       where: { companyId },
     });
     if (!companyExists) {
-      throw new NotFoundException(
-        `Company with ID "${companyId}" not found`,
-      );
+      throw new NotFoundException(`Company with ID "${companyId}" not found`);
     }
 
     // 3. Derive partyId from authenticated user (if Party)
@@ -66,19 +64,20 @@ export class OrderService {
 
     // 4. Derive bag quantity & bag size
     const bagQuantity = Number(createOrderDto.quantity || 1);
-    const bagSize = createOrderDto.packagingType || productExists.bagSize || 'BAG';
+    const bagSize =
+      createOrderDto.packagingType || productExists.bagSize || 'BAG';
 
-    const {
-      address,
-      additionalAddress,
-      lat,
-      long,
-      deliveryTime,
-      specialNote,
-    } = createOrderDto;
+    const { address, additionalAddress, lat, long, deliveryTime, specialNote } =
+      createOrderDto;
 
-    const latFloat = lat !== undefined && lat !== null && !isNaN(Number(lat)) ? Number(lat) : null;
-    const longFloat = long !== undefined && long !== null && !isNaN(Number(long)) ? Number(long) : null;
+    const latFloat =
+      lat !== undefined && lat !== null && !isNaN(Number(lat))
+        ? Number(lat)
+        : null;
+    const longFloat =
+      long !== undefined && long !== null && !isNaN(Number(long))
+        ? Number(long)
+        : null;
 
     const showOrderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -96,7 +95,14 @@ export class OrderService {
       },
     });
 
-    if (address || additionalAddress || latFloat !== null || longFloat !== null || deliveryTime || specialNote) {
+    if (
+      address ||
+      additionalAddress ||
+      latFloat !== null ||
+      longFloat !== null ||
+      deliveryTime ||
+      specialNote
+    ) {
       await this.prisma.delivery.create({
         data: {
           address: address || '',
@@ -156,7 +162,10 @@ export class OrderService {
         where.partyId = reqUser.sub;
       } else if (reqUser.roles.includes(Role.DRIVER)) {
         where.deliveries = { some: { driverId: reqUser.sub } };
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -341,24 +350,37 @@ export class OrderService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes(Role.VENDOR)) {
         if (order.companyId !== reqUser.sub) {
-          throw new ForbiddenException('You do not have permission to access this order');
+          throw new ForbiddenException(
+            'You do not have permission to access this order',
+          );
         }
       } else if (reqUser.roles.includes(Role.PARTY)) {
         if (order.partyId !== reqUser.sub) {
-          throw new ForbiddenException('You do not have permission to access this order');
+          throw new ForbiddenException(
+            'You do not have permission to access this order',
+          );
         }
       } else if (reqUser.roles.includes(Role.DRIVER)) {
-        const hasDelivery = order.deliveries?.some((d) => d.driverId === reqUser.sub);
+        const hasDelivery = order.deliveries?.some(
+          (d) => d.driverId === reqUser.sub,
+        );
         if (!hasDelivery) {
-          throw new ForbiddenException('You do not have permission to access this order');
+          throw new ForbiddenException(
+            'You do not have permission to access this order',
+          );
         }
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(order.product.categoryId)) {
-          throw new ForbiddenException('You do not have permission to access this order');
+          throw new ForbiddenException(
+            'You do not have permission to access this order',
+          );
         }
       }
     }
@@ -639,7 +661,13 @@ export class OrderService {
       },
     });
 
-    if (address !== undefined || upozela !== undefined || district !== undefined || deliveryTime !== undefined || specialNote !== undefined) {
+    if (
+      address !== undefined ||
+      upozela !== undefined ||
+      district !== undefined ||
+      deliveryTime !== undefined ||
+      specialNote !== undefined
+    ) {
       const existingDelivery = await this.prisma.delivery.findFirst({
         where: { orderId: id },
       });
@@ -652,7 +680,8 @@ export class OrderService {
             upozela: upozela !== undefined ? upozela : undefined,
             district: district !== undefined ? district : undefined,
             description: specialNote !== undefined ? specialNote : undefined,
-            deliveryTime: deliveryTime !== undefined ? new Date(deliveryTime) : undefined,
+            deliveryTime:
+              deliveryTime !== undefined ? new Date(deliveryTime) : undefined,
           },
         });
       } else {

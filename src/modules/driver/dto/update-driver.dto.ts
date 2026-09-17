@@ -22,17 +22,26 @@ export class UpdateDriverDto {
   @IsOptional()
   driverImage?: string;
 
-  @ApiPropertyOptional({ description: 'Name of the driver', example: 'Labib Driver' })
+  @ApiPropertyOptional({
+    description: 'Name of the driver',
+    example: 'Labib Driver',
+  })
   @IsString()
   @IsOptional()
   driverName?: string;
 
-  @ApiPropertyOptional({ description: 'Address of the driver', example: '456 Road St' })
+  @ApiPropertyOptional({
+    description: 'Address of the driver',
+    example: '456 Road St',
+  })
   @IsString()
   @IsOptional()
   address?: string;
 
-  @ApiPropertyOptional({ description: 'District of the driver', example: 'Dhaka' })
+  @ApiPropertyOptional({
+    description: 'District of the driver',
+    example: 'Dhaka',
+  })
   @IsString()
   @IsOptional()
   district?: string;
@@ -79,7 +88,10 @@ export class UpdateDriverDto {
   @IsOptional()
   driverDocument?: string[];
 
-  @ApiPropertyOptional({ description: 'Latitude of driver location', example: 23.8103 })
+  @ApiPropertyOptional({
+    description: 'Latitude of driver location',
+    example: 23.8103,
+  })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
     return typeof value === 'string' ? parseFloat(value) : value;
@@ -88,7 +100,10 @@ export class UpdateDriverDto {
   @IsOptional()
   lat?: number;
 
-  @ApiPropertyOptional({ description: 'Longitude of driver location', example: 90.4125 })
+  @ApiPropertyOptional({
+    description: 'Longitude of driver location',
+    example: 90.4125,
+  })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
     return typeof value === 'string' ? parseFloat(value) : value;
@@ -97,7 +112,10 @@ export class UpdateDriverDto {
   @IsOptional()
   long?: number;
 
-  @ApiPropertyOptional({ description: 'Upozela of the driver', example: 'Mirpur' })
+  @ApiPropertyOptional({
+    description: 'Upozela of the driver',
+    example: 'Mirpur',
+  })
   @IsString()
   @IsOptional()
   upozela?: string;
@@ -120,4 +138,3 @@ export class UpdateDriverDto {
   @IsOptional()
   truckType?: string;
 }
-

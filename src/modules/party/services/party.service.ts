@@ -152,7 +152,11 @@ export class PartyService {
     }
 
     if (query?.categoryId) {
-      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
         if (where.categoryId.in.includes(query.categoryId)) {
           where.categoryId = query.categoryId;
         } else {
@@ -269,7 +273,10 @@ export class PartyService {
     delete dataToUpdate.longitude;
 
     if (dataToUpdate.password) {
-      if (typeof dataToUpdate.password === 'string' && dataToUpdate.password.trim() !== '') {
+      if (
+        typeof dataToUpdate.password === 'string' &&
+        dataToUpdate.password.trim() !== ''
+      ) {
         dataToUpdate.password = await argon2.hash(dataToUpdate.password, {
           type: argon2.argon2id,
           memoryCost: 65536,

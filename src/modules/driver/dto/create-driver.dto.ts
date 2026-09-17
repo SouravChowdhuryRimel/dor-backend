@@ -56,7 +56,10 @@ export class CreateDriverDto {
   @IsNotEmpty()
   district: string;
 
-  @ApiPropertyOptional({ description: 'Upozela of the driver', example: 'Mirpur' })
+  @ApiPropertyOptional({
+    description: 'Upozela of the driver',
+    example: 'Mirpur',
+  })
   @IsString()
   @IsOptional()
   upozela?: string;
@@ -183,7 +186,10 @@ export class CreateDriverDto {
   @IsOptional()
   driverDocument?: string[];
 
-  @ApiPropertyOptional({ description: 'Latitude of driver location', example: 23.8103 })
+  @ApiPropertyOptional({
+    description: 'Latitude of driver location',
+    example: 23.8103,
+  })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
     return typeof value === 'string' ? parseFloat(value) : value;
@@ -192,7 +198,10 @@ export class CreateDriverDto {
   @IsOptional()
   lat?: number;
 
-  @ApiPropertyOptional({ description: 'Longitude of driver location', example: 90.4125 })
+  @ApiPropertyOptional({
+    description: 'Longitude of driver location',
+    example: 90.4125,
+  })
   @Transform(({ value }) => {
     if (value === '' || value === undefined || value === null) return undefined;
     return typeof value === 'string' ? parseFloat(value) : value;

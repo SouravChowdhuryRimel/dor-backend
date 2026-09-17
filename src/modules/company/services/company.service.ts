@@ -213,7 +213,11 @@ export class CompanyService {
     }
 
     if (query?.categoryId) {
-      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
         if (where.categoryId.in.includes(query.categoryId)) {
           where.categoryId = query.categoryId;
         } else {
@@ -321,7 +325,11 @@ export class CompanyService {
     }
 
     if (query?.categoryId) {
-      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
         if (where.categoryId.in.includes(query.categoryId)) {
           where.categoryId = query.categoryId;
         } else {
@@ -381,10 +389,7 @@ export class CompanyService {
       companyId: id,
     });
 
-    if (
-      updateCompanyDto.status &&
-      updateCompanyDto.status !== company.status
-    ) {
+    if (updateCompanyDto.status && updateCompanyDto.status !== company.status) {
       if (
         updateCompanyDto.status === CompanyStatus.REJECTED ||
         updateCompanyDto.status === CompanyStatus.BLOCKED
@@ -499,7 +504,8 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    const cleanKeywords = await this.validateKeywordsAgainstMasterList(keywords);
+    const cleanKeywords =
+      await this.validateKeywordsAgainstMasterList(keywords);
 
     return this.update(companyId, { keywords: cleanKeywords }, reqUser);
   }
@@ -556,9 +562,7 @@ export class CompanyService {
     const validNames = new Set(
       existing.map((e) => e.name.trim().toLowerCase()),
     );
-    const invalid = cleaned.filter(
-      (k) => !validNames.has(k.toLowerCase()),
-    );
+    const invalid = cleaned.filter((k) => !validNames.has(k.toLowerCase()));
 
     if (invalid.length > 0) {
       throw new BadRequestException(

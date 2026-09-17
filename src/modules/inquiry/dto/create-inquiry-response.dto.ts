@@ -22,7 +22,8 @@ export class CreateInquiryResponseDto {
   offeredPrice?: number;
 
   @ApiPropertyOptional({
-    description: 'Optional Product ID to allow Party to directly order the product',
+    description:
+      'Optional Product ID to allow Party to directly order the product',
     example: 'uuid-string-of-product',
   })
   @IsString()

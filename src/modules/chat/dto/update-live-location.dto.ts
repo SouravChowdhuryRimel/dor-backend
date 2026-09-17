@@ -5,7 +5,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class UpdateLiveLocationDto {
   @ApiProperty({
     description: 'Updated latitude coordinate',
-    example: 23.8150,
+    example: 23.815,
   })
   @IsNumber()
   @Type(() => Number)
@@ -13,7 +13,7 @@ export class UpdateLiveLocationDto {
 
   @ApiProperty({
     description: 'Updated longitude coordinate',
-    example: 90.4180,
+    example: 90.418,
   })
   @IsNumber()
   @Type(() => Number)

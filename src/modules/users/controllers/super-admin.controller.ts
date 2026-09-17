@@ -106,7 +106,8 @@ export class SuperAdminController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update currently logged-in Super Admin profile',
-    description: 'Updates the profile information for the authenticated SUPER_ADMIN user.',
+    description:
+      'Updates the profile information for the authenticated SUPER_ADMIN user.',
   })
   @ApiBody({ type: UpdateSuperAdminProfileDto })
   @ApiResponse({

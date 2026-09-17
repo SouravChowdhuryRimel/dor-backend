@@ -157,12 +157,12 @@ export class ChatService {
     }
 
     // Operational roles (Company, Party) can only chat within the exact same category
-    const isP1Categorized = (
-      [Role.VENDOR, Role.PARTY] as Role[]
-    ).includes(p1.role);
-    const isP2Categorized = (
-      [Role.VENDOR, Role.PARTY] as Role[]
-    ).includes(p2.role);
+    const isP1Categorized = ([Role.VENDOR, Role.PARTY] as Role[]).includes(
+      p1.role,
+    );
+    const isP2Categorized = ([Role.VENDOR, Role.PARTY] as Role[]).includes(
+      p2.role,
+    );
 
     if (isP1Categorized && isP2Categorized) {
       return profile1.categoryId === profile2.categoryId;
@@ -873,10 +873,7 @@ export class ChatService {
               { categoryId: company.categoryId },
             ];
             if (whereClause.OR) {
-              whereClause.AND = [
-                { OR: whereClause.OR },
-                { OR: filters },
-              ];
+              whereClause.AND = [{ OR: whereClause.OR }, { OR: filters }];
               delete whereClause.OR;
             } else {
               whereClause.OR = filters;

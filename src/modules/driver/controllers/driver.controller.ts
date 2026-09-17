@@ -205,10 +205,7 @@ export class DriverController {
     status: 200,
     description: 'Return list of nearby drivers sorted by distance.',
   })
-  findNearby(
-    @Query() query: GetNearbyDriversQueryDto,
-    @Req() req: any,
-  ) {
+  findNearby(@Query() query: GetNearbyDriversQueryDto, @Req() req: any) {
     return this.driverService.findNearbyDrivers(query, req.user);
   }
 
@@ -217,7 +214,8 @@ export class DriverController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.DRIVER, Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Update location coordinates for logged-in user (Driver or Company)',
+    summary:
+      'Update location coordinates for logged-in user (Driver or Company)',
   })
   @ApiResponse({ status: 200, description: 'Location updated successfully.' })
   updateMyLocation(
@@ -235,7 +233,9 @@ export class DriverController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.DRIVER, Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Update location coordinates for a driver or company by ID' })
+  @ApiOperation({
+    summary: 'Update location coordinates for a driver or company by ID',
+  })
   @ApiResponse({ status: 200, description: 'Location updated successfully.' })
   updateLocation(
     @Param('id') id: string,
@@ -312,7 +312,11 @@ export class DriverController {
     schema: {
       type: 'object',
       properties: {
-        email: { type: 'string', format: 'email', description: 'Email address' },
+        email: {
+          type: 'string',
+          format: 'email',
+          description: 'Email address',
+        },
         driverImage: {
           type: 'string',
           format: 'binary',
@@ -381,8 +385,7 @@ export class DriverController {
 
     const district =
       updateDriverDto.district || (updateDriverDto as any).districs;
-    const upozela =
-      updateDriverDto.upozela || (updateDriverDto as any).upazela;
+    const upozela = updateDriverDto.upozela || (updateDriverDto as any).upazela;
     const truckNumber =
       updateDriverDto.truckNumber || (updateDriverDto as any).trackNumber;
     const truckType =
