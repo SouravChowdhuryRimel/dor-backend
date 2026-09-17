@@ -57,7 +57,10 @@ export class CreateAdminDto {
       return value
         .flatMap((v) =>
           typeof v === 'string'
-            ? v.split(',').map((s) => s.trim()).filter(Boolean)
+            ? v
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
             : v,
         )
         .filter(Boolean);
@@ -71,7 +74,10 @@ export class CreateAdminDto {
       } catch {
         // Not a JSON array, treat as comma-separated
       }
-      return value.split(',').map((s) => s.trim()).filter(Boolean);
+      return value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
     return [value];
   })

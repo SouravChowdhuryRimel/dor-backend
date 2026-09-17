@@ -20,7 +20,7 @@ export class UsersService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   async onApplicationBootstrap() {
     this.logger.log('Checking for Super Admin existence...');
@@ -120,9 +120,7 @@ export class UsersService implements OnApplicationBootstrap {
     const normalizedCatIds = Array.from(
       new Set(
         catIds
-          .flatMap((c) =>
-            typeof c === 'string' ? c.split(',') : [c],
-          )
+          .flatMap((c) => (typeof c === 'string' ? c.split(',') : [c]))
           .map((c) => String(c).trim())
           .filter(Boolean),
       ),
@@ -272,9 +270,7 @@ export class UsersService implements OnApplicationBootstrap {
       const normalizedCatIds = Array.from(
         new Set(
           catIds
-            .flatMap((c) =>
-              typeof c === 'string' ? c.split(',') : [c],
-            )
+            .flatMap((c) => (typeof c === 'string' ? c.split(',') : [c]))
             .map((c) => String(c).trim())
             .filter(Boolean),
         ),
@@ -286,7 +282,9 @@ export class UsersService implements OnApplicationBootstrap {
           where: { categoryId: { in: catIds } },
           select: { categoryId: true },
         });
-        const existingIds = new Set(existingCategories.map((c) => c.categoryId));
+        const existingIds = new Set(
+          existingCategories.map((c) => c.categoryId),
+        );
         const invalidIds = catIds.filter((cid) => !existingIds.has(cid));
         if (invalidIds.length > 0) {
           throw new BadRequestException(
@@ -302,16 +300,28 @@ export class UsersService implements OnApplicationBootstrap {
     }
 
     const updateData: any = {};
-    if (data.email !== undefined && typeof data.email === 'string' && data.email.trim() !== '') {
+    if (
+      data.email !== undefined &&
+      typeof data.email === 'string' &&
+      data.email.trim() !== ''
+    ) {
       updateData.email = data.email.trim();
     }
-    if (data.name !== undefined && typeof data.name === 'string' && data.name.trim() !== '') {
+    if (
+      data.name !== undefined &&
+      typeof data.name === 'string' &&
+      data.name.trim() !== ''
+    ) {
       updateData.name = data.name.trim();
     }
     if (data.isActive !== undefined) {
       updateData.isActive = data.isActive;
     }
-    if (data.profileImage !== undefined && typeof data.profileImage === 'string' && data.profileImage.trim() !== '') {
+    if (
+      data.profileImage !== undefined &&
+      typeof data.profileImage === 'string' &&
+      data.profileImage.trim() !== ''
+    ) {
       updateData.profileImage = data.profileImage.trim();
     }
     if (catIds !== undefined) {
@@ -450,7 +460,10 @@ export class UsersService implements OnApplicationBootstrap {
         where: { id: userId },
         data: { isActive: false },
       });
-      return { success: true, message: 'User profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'User profile soft-deleted successfully',
+      };
     }
 
     const company = await this.prisma.company.findUnique({
@@ -461,7 +474,10 @@ export class UsersService implements OnApplicationBootstrap {
         where: { companyId: userId },
         data: { status: CompanyStatus.BLOCKED, isVerified: false },
       });
-      return { success: true, message: 'Company profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'Company profile soft-deleted successfully',
+      };
     }
 
     const party = await this.prisma.party.findUnique({
@@ -472,7 +488,10 @@ export class UsersService implements OnApplicationBootstrap {
         where: { partyId: userId },
         data: { status: 'INACTIVE' },
       });
-      return { success: true, message: 'Party profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'Party profile soft-deleted successfully',
+      };
     }
 
     const driver = await this.prisma.driver.findUnique({
@@ -483,7 +502,10 @@ export class UsersService implements OnApplicationBootstrap {
         where: { driverId: userId },
         data: { isVerified: false },
       });
-      return { success: true, message: 'Driver profile soft-deleted successfully' };
+      return {
+        success: true,
+        message: 'Driver profile soft-deleted successfully',
+      };
     }
 
     throw new NotFoundException('Account not found');

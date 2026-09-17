@@ -15,7 +15,9 @@ export class UpdateSuperAdminProfileDto {
   @Transform(({ value }) =>
     typeof value === 'string' && value.trim() === '' ? undefined : value,
   )
-  @ValidateIf((o) => o.email !== undefined && o.email !== null && o.email !== '')
+  @ValidateIf(
+    (o) => o.email !== undefined && o.email !== null && o.email !== '',
+  )
   @IsEmail()
   @IsOptional()
   email?: string;
@@ -47,4 +49,3 @@ export class UpdateSuperAdminProfileDto {
   @IsOptional()
   profileImage?: any;
 }
-

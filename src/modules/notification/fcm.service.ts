@@ -23,7 +23,9 @@ export class FcmService implements OnModuleInit {
       }
 
       const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
-      const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
+      const clientEmail = this.configService.get<string>(
+        'FIREBASE_CLIENT_EMAIL',
+      );
       let privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
 
       if (!projectId || !clientEmail || !privateKey) {
@@ -33,8 +35,11 @@ export class FcmService implements OnModuleInit {
         return;
       }
 
-      // Format private key appropriately if \n is escaped as string
-      if (privateKey && privateKey.includes('\\n')) {
+      // Format private key appropriately if \n is escaped as string or wrapped in quotes
+      if (privateKey) {
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+          privateKey = privateKey.substring(1, privateKey.length - 1);
+        }
         privateKey = privateKey.replace(/\\n/g, '\n');
       }
 
@@ -46,9 +51,14 @@ export class FcmService implements OnModuleInit {
         }),
       });
 
-      this.logger.log(`Firebase Admin SDK initialized successfully for project: ${projectId}`);
+      this.logger.log(
+        `Firebase Admin SDK initialized successfully for project: ${projectId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to initialize Firebase Admin SDK: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to initialize Firebase Admin SDK: ${error.message}`,
+        error.stack,
+      );
     }
   }
 
@@ -57,20 +67,29 @@ export class FcmService implements OnModuleInit {
     title: string,
     body: string,
     data?: Record<string, string>,
+    badge?: number,
   ): Promise<boolean> {
     if (!this.firebaseApp) {
-      this.logger.warn('FCM Push notification skipped: Firebase Admin SDK not initialized.');
+      this.logger.warn(
+        'FCM Push notification skipped: Firebase Admin SDK not initialized.',
+      );
       return false;
     }
 
     if (!fcmToken || fcmToken.trim() === '') {
-      this.logger.warn('FCM Push notification skipped: Target fcmToken is empty.');
+      this.logger.warn(
+        'FCM Push notification skipped: Target fcmToken is empty.',
+      );
       return false;
     }
 
     try {
-      // Ensure all values in data dictionary are strings
-      const safeData: Record<string, string> = {};
+      // Ensure all values in data dictionary are strings and include title & body for background handlers
+      const safeData: Record<string, string> = {
+        title: title || '',
+        body: body || '',
+        message: body || '',
+      };
       if (data) {
         Object.entries(data).forEach(([key, val]) => {
           if (val !== undefined && val !== null) {
@@ -79,6 +98,13 @@ export class FcmService implements OnModuleInit {
         });
       }
 
+      const channelId =
+        safeData.channelId ||
+        safeData.channel_id ||
+        (safeData.type === 'CHAT_MESSAGE'
+          ? 'chat_messages'
+          : 'high_importance_channel');
+
       const message: Message = {
         token: fcmToken,
         notification: {
@@ -86,6 +112,33 @@ export class FcmService implements OnModuleInit {
           body,
         },
         data: safeData,
+        android: {
+          priority: 'high',
+          notification: {
+            channelId,
+            sound: 'default',
+            priority: 'high',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+          },
+        },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+          },
+          payload: {
+            aps: {
+              alert: {
+                title,
+                body,
+              },
+              sound: 'default',
+              contentAvailable: true,
+              ...(badge !== undefined && badge !== null ? { badge } : {}),
+            },
+          },
+        },
       };
 
       const response = await getMessaging(this.firebaseApp).send(message);
@@ -94,7 +147,9 @@ export class FcmService implements OnModuleInit {
       );
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send FCM push notification: ${error.message}`);
+      this.logger.error(
+        `Failed to send FCM push notification: ${error.message}`,
+      );
       return false;
     }
   }

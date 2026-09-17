@@ -44,7 +44,8 @@ export class CreateInquiryDto {
   deadline?: string;
 
   @ApiPropertyOptional({
-    description: 'Category ID of the inquiry (Optional: Auto-retrieved from logged-in Party profile if omitted)',
+    description:
+      'Category ID of the inquiry (Optional: Auto-retrieved from logged-in Party profile if omitted)',
     example: 'uuid-string-for-category',
   })
   @IsString()
@@ -60,7 +61,8 @@ export class CreateInquiryDto {
   imageUrls?: string[];
 
   @ApiPropertyOptional({
-    description: 'Keywords/tags for the inquiry (e.g. ["ইলেকট্রনিক", "কম্পিউটার", "চাল"])',
+    description:
+      'Keywords/tags for the inquiry (e.g. ["ইলেকট্রনিক", "কম্পিউটার", "চাল"])',
     example: ['ইলেকট্রনিক', 'কম্পিউটার'],
     type: [String],
   })

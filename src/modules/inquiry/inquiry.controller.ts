@@ -82,7 +82,9 @@ export class InquiryController {
   @Roles(Role.PARTY)
   @UseInterceptors(FilesInterceptor('images', 5, inquiryImageUpload))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Submit a new product inquiry with optional images (PARTY only)' })
+  @ApiOperation({
+    summary: 'Submit a new product inquiry with optional images (PARTY only)',
+  })
   @ApiResponse({ status: 201, description: 'Inquiry successfully submitted.' })
   @ApiBody({
     schema: {
@@ -91,10 +93,17 @@ export class InquiryController {
       properties: {
         title: { type: 'string', example: 'Looking for Premium Cement' },
         productName: { type: 'string', example: 'Supercrete Cement' },
-        description: { type: 'string', example: 'Need 500 bags for construction' },
+        description: {
+          type: 'string',
+          example: 'Need 500 bags for construction',
+        },
         quantity: { type: 'string', example: '500 Bags' },
         deadline: { type: 'string', example: '2026-09-15' },
-        categoryId: { type: 'string', description: 'Category ID (Optional: Auto-retrieved from Party profile if omitted)' },
+        categoryId: {
+          type: 'string',
+          description:
+            'Category ID (Optional: Auto-retrieved from Party profile if omitted)',
+        },
         keywords: {
           type: 'array',
           items: { type: 'string' },
@@ -120,11 +129,16 @@ export class InquiryController {
         (file) => `/uploads/inquiries/${file.filename}`,
       );
     }
-    if (createInquiryDto.keywords && typeof (createInquiryDto.keywords as any) === 'string') {
+    if (
+      createInquiryDto.keywords &&
+      typeof (createInquiryDto.keywords as any) === 'string'
+    ) {
       try {
-        createInquiryDto.keywords = JSON.parse(createInquiryDto.keywords as any);
+        createInquiryDto.keywords = JSON.parse(
+          createInquiryDto.keywords as any,
+        );
       } catch {
-        createInquiryDto.keywords = ((createInquiryDto.keywords as any) as string)
+        createInquiryDto.keywords = (createInquiryDto.keywords as any as string)
           .split(',')
           .map((k: string) => k.trim())
           .filter(Boolean);
@@ -137,8 +151,13 @@ export class InquiryController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.VENDOR)
-  @ApiOperation({ summary: 'Submit a response or price offer for an inquiry (COMPANY only)' })
-  @ApiResponse({ status: 201, description: 'Response/offer submitted successfully.' })
+  @ApiOperation({
+    summary: 'Submit a response or price offer for an inquiry (COMPANY only)',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Response/offer submitted successfully.',
+  })
   respond(
     @Param('id') id: string,
     @Req() req: any,
@@ -152,7 +171,10 @@ export class InquiryController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.PARTY)
-  @ApiOperation({ summary: 'Close an inquiry so no further responses are accepted (PARTY only)' })
+  @ApiOperation({
+    summary:
+      'Close an inquiry so no further responses are accepted (PARTY only)',
+  })
   @ApiResponse({ status: 200, description: 'Inquiry closed successfully.' })
   close(@Param('id') id: string, @Req() req: any) {
     const partyId = req.user.sub;
@@ -162,7 +184,10 @@ export class InquiryController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Get all inquiries with role-based privacy filters (Authenticated)' })
+  @ApiOperation({
+    summary:
+      'Get all inquiries with role-based privacy filters (Authenticated)',
+  })
   @ApiResponse({ status: 200, description: 'Return all inquiries.' })
   findAll(@Req() req: any, @Query() query: GetInquiriesQueryDto) {
     const { userId, role } = this.extractUserRoleAndId(req);
@@ -172,7 +197,10 @@ export class InquiryController {
   @Get(':id')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  @ApiOperation({ summary: 'Get inquiry details by ID with role-based privacy filters (Authenticated)' })
+  @ApiOperation({
+    summary:
+      'Get inquiry details by ID with role-based privacy filters (Authenticated)',
+  })
   @ApiResponse({ status: 200, description: 'Return inquiry details.' })
   findOne(@Param('id') id: string, @Req() req: any) {
     const { userId, role } = this.extractUserRoleAndId(req);
@@ -222,11 +250,16 @@ export class InquiryController {
         (file) => `/uploads/inquiries/${file.filename}`,
       );
     }
-    if (updateInquiryDto.keywords && typeof (updateInquiryDto.keywords as any) === 'string') {
+    if (
+      updateInquiryDto.keywords &&
+      typeof (updateInquiryDto.keywords as any) === 'string'
+    ) {
       try {
-        updateInquiryDto.keywords = JSON.parse(updateInquiryDto.keywords as any);
+        updateInquiryDto.keywords = JSON.parse(
+          updateInquiryDto.keywords as any,
+        );
       } catch {
-        updateInquiryDto.keywords = ((updateInquiryDto.keywords as any) as string)
+        updateInquiryDto.keywords = (updateInquiryDto.keywords as any as string)
           .split(',')
           .map((k: string) => k.trim())
           .filter(Boolean);

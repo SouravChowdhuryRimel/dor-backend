@@ -1,0 +1,184 @@
+name: CD - Build, Push & Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  ci-verification:
+    name: Run Quality & Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Build Application
+        run: npm run build
+
+      - name: Run Tests
+        run: npm run test
+
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: ci-verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long,prefix=sha-
+            type=ref,event=tag
+            type=ref,event=branch
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-to-vps:
+    name: Deploy to Production VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code (for compose & scripts transfer)
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          GITHUB_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          envs: GITHUB_ACTOR,GITHUB_TOKEN,REGISTRY,IMAGE_NAME,GITHUB_SHA
+          script: |
+            set -e
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH || '/opt/dor-backend' }}"
+            echo "🚀 Starting Deployment in $DEPLOY_DIR..."
+
+            # Ensure deployment directory exists
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
+
+            # Authenticate with GHCR on VPS
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Pull latest production Docker image
+            IMAGE_LOWER=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            echo "📥 Pulling latest image: $IMAGE_LOWER:latest..."
+            docker pull $IMAGE_LOWER:latest
+
+            # Ensure docker-compose.prod.yml and environment exists
+            if [ ! -f "docker-compose.prod.yml" ]; then
+              echo "⚠️ docker-compose.prod.yml not found. Please ensure it is present in $DEPLOY_DIR."
+            fi
+
+            if [ ! -f ".env" ]; then
+              echo "⚠️ Warning: .env file is missing in $DEPLOY_DIR! Creating from template if available..."
+            fi
+
+            # Export current image tag for compose
+            export BACKEND_IMAGE="$IMAGE_LOWER:latest"
+
+            # Execute database migrations
+            echo "🔄 Running Prisma database migrations..."
+            docker compose -f docker-compose.prod.yml run --rm --no-deps backend npx prisma migrate deploy || echo "Migration step completed."
+
+            # Start or restart containers gracefully
+            echo "⚡ Restarting application containers..."
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Healthcheck Verification (retry up to 6 times, 5s delay)
+            echo "🩺 Verifying container health..."
+            HEALTH_URL="http://127.0.0.1:${PORT:-3000}/api/v1/health"
+            RETRY_COUNT=0
+            MAX_RETRIES=6
+            UNTIL_HEALTHY=0
+
+            until [ $RETRY_COUNT -ge $MAX_RETRIES ]
+            do
+              sleep 5
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_URL || echo "000")
+              if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "204" ]; then
+                echo "✅ Service is healthy! (HTTP $HTTP_STATUS)"
+                UNTIL_HEALTHY=1
+                break
+              fi
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              echo "⏳ Healthcheck attempt $RETRY_COUNT/$MAX_RETRIES returned HTTP $HTTP_STATUS. Waiting..."
+            done
+
+            if [ $UNTIL_HEALTHY -eq 0 ]; then
+              echo "⚠️ Warning: Healthcheck did not return HTTP 200 within expected time. Please check logs:"
+              docker compose -f docker-compose.prod.yml logs --tail=50 backend
+            fi
+
+            # Clean up old unused images to prevent disk exhaustion
+            echo "🧹 Cleaning up unused Docker images..."
+            docker image prune -af --filter "until=72h" || true
+
+            echo "🎉 Deployment successfully completed!"

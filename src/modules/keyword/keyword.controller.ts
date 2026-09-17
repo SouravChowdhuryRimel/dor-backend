@@ -35,7 +35,8 @@ export class KeywordController {
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @ApiOperation({
-    summary: 'Add one or more global keywords to the master list (ADMIN/SUPER_ADMIN only)',
+    summary:
+      'Add one or more global keywords to the master list (ADMIN/SUPER_ADMIN only)',
     description:
       'Creates new global keywords. Accepts a single "name" or an array of "names" for bulk creation. Duplicate names are safely ignored.',
   })
@@ -60,6 +61,19 @@ export class KeywordController {
     required: false,
     description: 'Pass "true" to retrieve all keywords without pagination',
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description:
+      'Field to sort by: "popularity" (default, based on company profile usage count), "name", or "createdAt"',
+    enum: ['popularity', 'name', 'createdAt'],
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    description: 'Sort order: "desc" (default for popularity) or "asc"',
+    enum: ['asc', 'desc'],
+  })
   @ApiResponse({ status: 200, description: 'Return keywords list.' })
   findAll(@Query() query: QueryKeywordDto) {
     return this.keywordService.findAll(query);
@@ -77,7 +91,9 @@ export class KeywordController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @ApiOperation({ summary: 'Update a global keyword name (ADMIN/SUPER_ADMIN only)' })
+  @ApiOperation({
+    summary: 'Update a global keyword name (ADMIN/SUPER_ADMIN only)',
+  })
   @ApiResponse({ status: 200, description: 'Keyword updated successfully.' })
   @ApiResponse({ status: 404, description: 'Keyword not found.' })
   @ApiResponse({ status: 409, description: 'Keyword name already exists.' })
@@ -89,7 +105,10 @@ export class KeywordController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @ApiOperation({ summary: 'Delete a global keyword from the master list (ADMIN/SUPER_ADMIN only)' })
+  @ApiOperation({
+    summary:
+      'Delete a global keyword from the master list (ADMIN/SUPER_ADMIN only)',
+  })
   @ApiResponse({ status: 200, description: 'Keyword deleted successfully.' })
   @ApiResponse({ status: 404, description: 'Keyword not found.' })
   remove(@Param('id') id: string) {

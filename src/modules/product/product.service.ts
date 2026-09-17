@@ -155,7 +155,10 @@ export class ProductService {
         } else if (query?.companyId) {
           where.companyId = query.companyId;
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -167,11 +170,15 @@ export class ProductService {
     }
 
     if (query?.categoryId) {
-      if (where.categoryId && typeof where.categoryId === 'object' && 'in' in where.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
         if (where.categoryId.in.includes(query.categoryId)) {
           where.categoryId = query.categoryId;
         } else {
-          where.categoryId = 'none';
+          where.categoryId = { in: [] };
         }
       } else {
         where.categoryId = query.categoryId;
@@ -240,65 +247,85 @@ export class ProductService {
       }),
     ]);
 
-    const mappedData = data.map((p: any) => this.formatProductDetails(p, partyId));
+    const mappedData = data.map((p: any) =>
+      this.formatProductDetails(p, partyId),
+    );
 
     return createPaginatedResponse(mappedData, total, page, limit);
   }
 
   private formatProductDetails(p: any, partyId?: string | null) {
     const customRateObj = p.partyRates?.[0];
-    const activeOfferObj = p.offers?.find(
-      (o: any) => o.status === 'ACTIVE' && new Date(o.endDate) >= new Date(),
-    ) || p.offers?.[0];
+    const activeOfferObj =
+      p.offers?.find(
+        (o: any) => o.status === 'ACTIVE' && new Date(o.endDate) >= new Date(),
+      ) || p.offers?.[0];
 
     const regularPrice = p.regularPrice ?? p.defaultPrice ?? 0;
-    const defaultPrice = p.defaultPrice ?? 0;
     const offerPrice = p.offerPrice ?? 0;
 
-    let effectivePrice = regularPrice || defaultPrice;
-    let hasSpecialPrice = false;
     let specialPrice: number | null = null;
+    let hasSpecialPrice = false;
     let hasActiveOffer = false;
     let activeOffer: any = null;
     let appliedPricingType = 'REGULAR_PRICE';
     let appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
 
-    if (customRateObj && customRateObj.rate !== undefined && customRateObj.rate !== null) {
-      effectivePrice = customRateObj.rate;
-      hasSpecialPrice = true;
+    if (
+      customRateObj &&
+      customRateObj.rate !== undefined &&
+      customRateObj.rate !== null
+    ) {
       specialPrice = customRateObj.rate;
+      hasSpecialPrice = true;
       appliedPricingType = 'SPECIAL_PRICE';
       appliedPricingReason = 'পার্টির জন্য স্পেশাল রেট প্রযোজ্য';
     } else if (activeOfferObj && activeOfferObj.offerPrice > 0) {
-      effectivePrice = activeOfferObj.offerPrice;
+      specialPrice = activeOfferObj.offerPrice;
+      hasSpecialPrice = true;
       hasActiveOffer = true;
       activeOffer = activeOfferObj;
-      appliedPricingType = 'OFFER_PRICE';
+      appliedPricingType = 'SPECIAL_PRICE';
       appliedPricingReason = 'চলমান অফার মূল্য প্রযোজ্য';
     } else if (offerPrice > 0) {
-      effectivePrice = offerPrice;
       hasActiveOffer = true;
       appliedPricingType = 'OFFER_PRICE';
       appliedPricingReason = 'প্রোডাক্টের অফার মূল্য প্রযোজ্য';
     } else {
-      effectivePrice = regularPrice || defaultPrice;
       appliedPricingType = 'REGULAR_PRICE';
       appliedPricingReason = 'রেগুলার মূল্য প্রযোজ্য';
     }
 
-    const discountAmount = regularPrice > effectivePrice ? Math.round((regularPrice - effectivePrice) * 100) / 100 : 0;
-    const discountPercentage = regularPrice > 0 && regularPrice > effectivePrice
-      ? Math.round(((regularPrice - effectivePrice) / regularPrice) * 100)
-      : 0;
+    const currentPrice =
+      specialPrice !== null
+        ? specialPrice
+        : offerPrice > 0
+          ? offerPrice
+          : regularPrice;
 
-    const unitText = p.unit ? `প্রতি ${p.unit} ${p.unitType || ''}`.trim() : `প্রতি ${p.unitType || 'ব্যাগ'}`;
+    const discountAmount =
+      regularPrice > currentPrice
+        ? Math.round((regularPrice - currentPrice) * 100) / 100
+        : 0;
+    const discountPercentage =
+      regularPrice > 0 && regularPrice > currentPrice
+        ? Math.round(((regularPrice - currentPrice) / regularPrice) * 100)
+        : 0;
+
+    const unitText = p.unit
+      ? `প্রতি ${p.unit} ${p.unitType || ''}`.trim()
+      : `প্রতি ${p.unitType || 'ব্যাগ'}`;
     const stockText = `${p.stockSize} ${p.unitType || p.unit || 'ব্যাগ'}`;
     const minOrderText = `সর্বনিম্ন অর্ডার: ${p.minimumOrder} ${p.unitType || p.unit || 'ব্যাগ'}`;
 
     return {
       productId: p.productId,
       productName: p.productName,
-      productImage: Array.isArray(p.productImage) ? p.productImage : (p.productImage ? [p.productImage] : []),
+      productImage: Array.isArray(p.productImage)
+        ? p.productImage
+        : p.productImage
+          ? [p.productImage]
+          : [],
       description: p.description || '',
       unit: p.unit,
       unitType: p.unitType,
@@ -316,17 +343,12 @@ export class ProductService {
       statusText: p.stockSize > 0 ? 'সক্রিয়' : 'নিষ্ক্রিয়',
 
       // Pricing details
-      defaultPrice,
       regularPrice,
       offerPrice,
       specialPrice,
-      specialRate: specialPrice,
-      customPrice: specialPrice,
       hasSpecialPrice,
       hasActiveOffer,
       activeOffer: activeOffer || null,
-      activePrice: effectivePrice,
-      effectivePrice,
       appliedPricingType,
       appliedPricingReason,
       discountAmount,
@@ -399,15 +421,22 @@ export class ProductService {
           select: { companyId: true },
         });
         if (party && party.companyId && party.companyId !== product.companyId) {
-          throw new ForbiddenException(`You do not have permission to access this product`);
+          throw new ForbiddenException(
+            `You do not have permission to access this product`,
+          );
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to access this product`);
+          throw new ForbiddenException(
+            `You do not have permission to access this product`,
+          );
         }
       }
     }
@@ -433,13 +462,18 @@ export class ProductService {
           );
         }
         delete updateData.companyId;
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to modify this product`);
+          throw new ForbiddenException(
+            `You do not have permission to modify this product`,
+          );
         }
       }
     }
@@ -525,13 +559,18 @@ export class ProductService {
             `You do not have permission to delete this product`,
           );
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!categoryIds.includes(product.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to modify this product`);
+          throw new ForbiddenException(
+            `You do not have permission to modify this product`,
+          );
         }
       }
     }
@@ -600,7 +639,10 @@ export class ProductService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes('VENDOR')) {
         where.companyId = reqUser.sub;
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -740,7 +782,9 @@ export class ProductService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes('PARTY')) {
         if (partyId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to view other parties' rates`);
+          throw new ForbiddenException(
+            `You do not have permission to view other parties' rates`,
+          );
         }
         if (companyId) {
           where.companyId = companyId;
@@ -749,7 +793,10 @@ export class ProductService {
         }
       } else if (reqUser.roles.includes('VENDOR')) {
         where.companyId = reqUser.sub;
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -1031,31 +1078,22 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
       if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
       }
 
+      const { defaultPrice: _dp, ...rest } = p;
+
       return {
-        ...p,
-        effectivePrice,
-        hasSpecialPrice,
+        ...rest,
+        regularPrice: p.regularPrice ?? 0,
+        offerPrice: p.offerPrice ?? 0,
         specialPrice,
-        activePrice: effectivePrice,
+        hasSpecialPrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyName: p.company?.companyName || null,
@@ -1118,31 +1156,22 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
       if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
       }
 
+      const { defaultPrice: _dp, ...rest } = p;
+
       return {
-        ...p,
-        effectivePrice,
-        hasSpecialPrice,
+        ...rest,
+        regularPrice: p.regularPrice ?? 0,
+        offerPrice: p.offerPrice ?? 0,
         specialPrice,
-        activePrice: effectivePrice,
+        hasSpecialPrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyName: p.company?.companyName || null,
@@ -1171,9 +1200,14 @@ export class ProductService {
           select: { companyId: true },
         });
         if (!party || party.companyId !== companyId) {
-          throw new ForbiddenException(`You do not have permission to access products of this company`);
+          throw new ForbiddenException(
+            `You do not have permission to access products of this company`,
+          );
         }
-      } else if (reqUser.roles.includes('ADMIN') && !reqUser.roles.includes('SUPER_ADMIN')) {
+      } else if (
+        reqUser.roles.includes('ADMIN') &&
+        !reqUser.roles.includes('SUPER_ADMIN')
+      ) {
         const company = await this.prisma.company.findUnique({
           where: { companyId },
           select: { categoryId: true },
@@ -1183,7 +1217,9 @@ export class ProductService {
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
         if (!company || !categoryIds.includes(company.categoryId)) {
-          throw new ForbiddenException(`You do not have permission to access products of this company`);
+          throw new ForbiddenException(
+            `You do not have permission to access products of this company`,
+          );
         }
       }
     }
@@ -1271,31 +1307,22 @@ export class ProductService {
     ]);
 
     const mappedData = data.map((p: any) => {
-      let effectivePrice =
-        p.offerPrice || p.regularPrice || p.defaultPrice || 0;
       let hasSpecialPrice = false;
       let specialPrice = null;
 
       if (p.partyRates && p.partyRates.length > 0) {
-        effectivePrice = p.partyRates[0].rate;
         hasSpecialPrice = true;
         specialPrice = p.partyRates[0].rate;
-      } else if (
-        p.offerPrice !== undefined &&
-        p.offerPrice !== null &&
-        p.offerPrice > 0
-      ) {
-        effectivePrice = p.offerPrice;
-      } else {
-        effectivePrice = p.regularPrice;
       }
 
+      const { defaultPrice: _dp, ...rest } = p;
+
       return {
-        ...p,
-        effectivePrice,
-        hasSpecialPrice,
+        ...rest,
+        regularPrice: p.regularPrice ?? 0,
+        offerPrice: p.offerPrice ?? 0,
         specialPrice,
-        activePrice: effectivePrice,
+        hasSpecialPrice,
         stockStatus: p.stockSize > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         stockStatusText: p.stockSize > 0 ? 'মজুদ' : 'স্টক আউট',
         companyCategoryName: p.company?.category?.categoryName || null,

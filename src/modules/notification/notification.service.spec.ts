@@ -16,20 +16,25 @@ describe('NotificationService', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn(),
       findMany: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     company: {
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     party: {
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     driver: {
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
   };
 
@@ -103,7 +108,7 @@ describe('NotificationService', () => {
 
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        select: { fcmToken: true },
+        select: { fcmToken: true, isPushNotificationEnabled: true },
       });
 
       expect(fcmService.sendPushNotification).toHaveBeenCalledWith(
@@ -111,6 +116,7 @@ describe('NotificationService', () => {
         'নতুন নোটিফিকেশন',
         'টেস্ট মেসেজ',
         { type: 'NEW_ORDER', orderId: 'ord-101' },
+        undefined,
       );
 
       expect(result).toEqual(mockCreatedNotif);
@@ -126,7 +132,9 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.company.findUnique.mockResolvedValue({ fcmToken: 'token-comp-456' });
+      prisma.company.findUnique.mockResolvedValue({
+        fcmToken: 'token-comp-456',
+      });
       fcmService.sendPushNotification.mockResolvedValue(true);
 
       const result = await service.sendNotification({
@@ -136,14 +144,13 @@ describe('NotificationService', () => {
         data: { type: 'COMPANY_APPROVED' },
       });
 
-      expect(notificationGateway.sendNotificationToCompany).toHaveBeenCalledWith(
-        'company-1',
-        mockCreatedNotif,
-      );
+      expect(
+        notificationGateway.sendNotificationToCompany,
+      ).toHaveBeenCalledWith('company-1', mockCreatedNotif);
 
       expect(prisma.company.findUnique).toHaveBeenCalledWith({
         where: { companyId: 'company-1' },
-        select: { fcmToken: true },
+        select: { fcmToken: true, isPushNotificationEnabled: true },
       });
 
       expect(fcmService.sendPushNotification).toHaveBeenCalledWith(
@@ -151,6 +158,7 @@ describe('NotificationService', () => {
         'কোম্পানি নোটিফিকেশন',
         'কোম্পানি মেসেজ',
         { type: 'COMPANY_APPROVED' },
+        undefined,
       );
 
       expect(result).toEqual(mockCreatedNotif);
@@ -166,7 +174,9 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.party.findUnique.mockResolvedValue({ fcmToken: 'token-party-789' });
+      prisma.party.findUnique.mockResolvedValue({
+        fcmToken: 'token-party-789',
+      });
       fcmService.sendPushNotification.mockResolvedValue(true);
 
       const result = await service.sendNotification({
@@ -183,7 +193,7 @@ describe('NotificationService', () => {
 
       expect(prisma.party.findUnique).toHaveBeenCalledWith({
         where: { partyId: 'party-1' },
-        select: { fcmToken: true },
+        select: { fcmToken: true, isPushNotificationEnabled: true },
       });
 
       expect(fcmService.sendPushNotification).toHaveBeenCalledWith(
@@ -191,6 +201,7 @@ describe('NotificationService', () => {
         'পার্টি নোটিফিকেশন',
         'পার্টি মেসেজ',
         { type: 'PARTY_VERIFIED' },
+        undefined,
       );
 
       expect(result).toEqual(mockCreatedNotif);
@@ -206,7 +217,9 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.driver.findUnique.mockResolvedValue({ fcmToken: 'token-driver-999' });
+      prisma.driver.findUnique.mockResolvedValue({
+        fcmToken: 'token-driver-999',
+      });
       fcmService.sendPushNotification.mockResolvedValue(true);
 
       const result = await service.sendNotification({
@@ -223,7 +236,7 @@ describe('NotificationService', () => {
 
       expect(prisma.driver.findUnique).toHaveBeenCalledWith({
         where: { driverId: 'driver-1' },
-        select: { fcmToken: true },
+        select: { fcmToken: true, isPushNotificationEnabled: true },
       });
 
       expect(fcmService.sendPushNotification).toHaveBeenCalledWith(
@@ -231,6 +244,7 @@ describe('NotificationService', () => {
         'ড্রাইভার নোটিফিকেশন',
         'ড্রাইভার মেসেজ',
         { type: 'DRIVER_VERIFIED' },
+        undefined,
       );
 
       expect(result).toEqual(mockCreatedNotif);
@@ -246,12 +260,41 @@ describe('NotificationService', () => {
       };
 
       prisma.notification.create.mockResolvedValue(mockCreatedNotif);
-      prisma.user.findUnique.mockResolvedValue({ fcmToken: null });
+      prisma.user.findUnique.mockResolvedValue({
+        fcmToken: null,
+        isPushNotificationEnabled: true,
+      });
 
       const result = await service.sendNotification({
         title: 'নোটিফিকেশন',
         message: 'মেসেজ',
         userId: 'user-2',
+      });
+
+      expect(notificationGateway.sendNotificationToUser).toHaveBeenCalled();
+      expect(fcmService.sendPushNotification).not.toHaveBeenCalled();
+      expect(result).toEqual(mockCreatedNotif);
+    });
+
+    it('should skip FCM push notification if isPushNotificationEnabled is false', async () => {
+      const mockCreatedNotif = {
+        notificationId: 'notif-6',
+        title: 'নোটিফিকেশন',
+        message: 'মেসেজ',
+        userId: 'user-3',
+        isRead: false,
+      };
+
+      prisma.notification.create.mockResolvedValue(mockCreatedNotif);
+      prisma.user.findUnique.mockResolvedValue({
+        fcmToken: 'valid-token',
+        isPushNotificationEnabled: false,
+      });
+
+      const result = await service.sendNotification({
+        title: 'নোটিফিকেশন',
+        message: 'মেসেজ',
+        userId: 'user-3',
       });
 
       expect(notificationGateway.sendNotificationToUser).toHaveBeenCalled();
@@ -296,8 +339,172 @@ describe('NotificationService', () => {
         isRead: false,
       });
 
-      await expect(service.markAsRead('notif-1', 'intruder-id')).rejects.toThrow(
-        ForbiddenException,
+      await expect(
+        service.markAsRead('notif-1', 'intruder-id'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('togglePushNotification', () => {
+    it('should toggle push notification for User', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prisma.user.update.mockResolvedValue({
+        id: 'user-1',
+        isPushNotificationEnabled: false,
+        fcmToken: null,
+      });
+
+      const res = await service.togglePushNotification('user-1', false);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { isPushNotificationEnabled: false },
+        select: { id: true, isPushNotificationEnabled: true, fcmToken: true },
+      });
+      expect(res.success).toBe(true);
+      expect(res.isPushNotificationEnabled).toBe(false);
+    });
+
+    it('should toggle push notification and update fcmToken for Company', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.company.findUnique.mockResolvedValue({ companyId: 'comp-1' });
+      prisma.company.update.mockResolvedValue({
+        companyId: 'comp-1',
+        isPushNotificationEnabled: true,
+        fcmToken: 'new-token',
+      });
+
+      const res = await service.togglePushNotification(
+        'comp-1',
+        true,
+        'new-token',
+      );
+      expect(prisma.company.update).toHaveBeenCalledWith({
+        where: { companyId: 'comp-1' },
+        data: { isPushNotificationEnabled: true, fcmToken: 'new-token' },
+        select: {
+          companyId: true,
+          isPushNotificationEnabled: true,
+          fcmToken: true,
+        },
+      });
+      expect(res.success).toBe(true);
+      expect(res.isPushNotificationEnabled).toBe(true);
+      expect(res.fcmToken).toBe('new-token');
+    });
+
+    it('should throw NotFoundException if actor is not found', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.company.findUnique.mockResolvedValue(null);
+      prisma.party.findUnique.mockResolvedValue(null);
+      prisma.driver.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.togglePushNotification('unknown-id', false),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getPushNotificationStatus', () => {
+    it('should return status for User', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        isPushNotificationEnabled: true,
+        fcmToken: 'user-token',
+      });
+
+      const res = await service.getPushNotificationStatus('user-1');
+      expect(res).toEqual({
+        isPushNotificationEnabled: true,
+        hasFcmToken: true,
+      });
+    });
+
+    it('should return status for Party', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.company.findUnique.mockResolvedValue(null);
+      prisma.party.findUnique.mockResolvedValue({
+        partyId: 'party-1',
+        isPushNotificationEnabled: false,
+        fcmToken: null,
+      });
+
+      const res = await service.getPushNotificationStatus('party-1');
+      expect(res).toEqual({
+        isPushNotificationEnabled: false,
+        hasFcmToken: false,
+      });
+    });
+  });
+
+  describe('getUnreadCount', () => {
+    it('should return total and unread notification counts for actor', async () => {
+      prisma.notification.count
+        .mockResolvedValueOnce(15) // total
+        .mockResolvedValueOnce(4); // unread
+
+      const res = await service.getUnreadCount('comp-123');
+      expect(res).toEqual({
+        total: 15,
+        unreadCount: 4,
+      });
+    });
+  });
+
+  describe('markAllAsRead', () => {
+    it('should mark all unread notifications as read and return updated count', async () => {
+      prisma.notification.updateMany.mockResolvedValue({ count: 5 });
+
+      const res = await service.markAllAsRead('party-456');
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { userId: 'party-456' },
+            { companyId: 'party-456' },
+            { partyId: 'party-456' },
+            { driverId: 'party-456' },
+          ],
+          isRead: false,
+        },
+        data: { isRead: true },
+      });
+      expect(res).toEqual({
+        success: true,
+        message: 'All notifications marked as read',
+        updatedCount: 5,
+      });
+    });
+  });
+
+  describe('findAllForActor', () => {
+    it('should return paginated notifications with unreadCount in meta', async () => {
+      const mockList = [
+        { notificationId: 'n-1', title: 'Test', isRead: false },
+      ];
+      prisma.notification.count
+        .mockResolvedValueOnce(10) // total
+        .mockResolvedValueOnce(3); // unread
+      prisma.notification.findMany.mockResolvedValue(mockList);
+
+      const res = await service.findAllForActor('user-1', {
+        page: 1,
+        limit: 10,
+      });
+      expect(res.data).toEqual(mockList);
+      expect(res.meta.total).toBe(10);
+      expect(res.meta.unreadCount).toBe(3);
+    });
+
+    it('should filter by isRead when provided in query', async () => {
+      prisma.notification.count
+        .mockResolvedValueOnce(2) // total matching filter
+        .mockResolvedValueOnce(2); // unread count
+      prisma.notification.findMany.mockResolvedValue([]);
+
+      await service.findAllForActor('user-1', { isRead: 'false' });
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isRead: false }),
+        }),
       );
     });
   });

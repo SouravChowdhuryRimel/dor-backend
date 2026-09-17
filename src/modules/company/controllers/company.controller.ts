@@ -24,7 +24,9 @@ import {
 } from '@nestjs/swagger';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
+import { GetCompaniesQueryDto } from '../dto/get-companies-query.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
+import { OptionalAccessTokenGuard } from '../../../common/guards/optional-access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../../common/constants/role.enum';
@@ -157,7 +159,7 @@ export class CompanyController {
           createCompanyDto.keywords as any,
         );
       } catch {
-        createCompanyDto.keywords = ((createCompanyDto.keywords as any) as string)
+        createCompanyDto.keywords = (createCompanyDto.keywords as any as string)
           .split(',')
           .map((k: string) => k.trim())
           .filter(Boolean);
@@ -174,15 +176,17 @@ export class CompanyController {
     summary:
       'Get all pending company registrations (ADMIN and SUPER_ADMIN only)',
   })
-  getPending(@Query() query: PaginationQueryDto) {
-    return this.companyService.findPending(query);
+  getPending(@Query() query: PaginationQueryDto, @Req() req: any) {
+    return this.companyService.findPending(query, req.user);
   }
 
   @Get('verified')
+  @ApiBearerAuth()
+  @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({ summary: 'Get all verified companies' })
   @ApiResponse({ status: 200, description: 'Returns all verified companies.' })
-  getVerified(@Query() query: PaginationQueryDto) {
-    return this.companyService.findVerified(query);
+  getVerified(@Query() query: GetCompaniesQueryDto, @Req() req: any) {
+    return this.companyService.findVerified(query, req.user);
   }
 
   @Patch(':id/approve')
@@ -199,9 +203,11 @@ export class CompanyController {
   }
 
   @Get()
+  @ApiBearerAuth()
+  @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({ summary: 'Get all companies' })
-  findAll(@Query() query: PaginationQueryDto) {
-    return this.companyService.findAll(query);
+  findAll(@Query() query: GetCompaniesQueryDto, @Req() req: any) {
+    return this.companyService.findAll(query, req.user);
   }
 
   @Get(':id')
@@ -316,7 +322,7 @@ export class CompanyController {
       try {
         dataToUpdate.keywords = JSON.parse(dataToUpdate.keywords as any);
       } catch {
-        dataToUpdate.keywords = ((dataToUpdate.keywords as any) as string)
+        dataToUpdate.keywords = (dataToUpdate.keywords as any as string)
           .split(',')
           .map((k: string) => k.trim())
           .filter(Boolean);
@@ -330,7 +336,9 @@ export class CompanyController {
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard, RolesGuard)
   @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Add, remove, or replace keywords/services for a company/seller' })
+  @ApiOperation({
+    summary: 'Add, remove, or replace keywords/services for a company/seller',
+  })
   @ApiBody({
     schema: {
       type: 'object',

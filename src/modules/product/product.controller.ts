@@ -39,7 +39,6 @@ import { extname } from 'path';
 import * as fs from 'fs';
 import { PackagingType, UnitType } from '@prisma/client';
 
-
 const productImageUpload = {
   storage: diskStorage({
     destination: (req, file, callback) => {
@@ -107,8 +106,15 @@ export class ProductController {
         minimumOrder: { type: 'number' },
         description: { type: 'string' },
         stockSize: { type: 'number' },
-        subCategoryId: { type: 'string', description: 'ID of the SubCategory (Optional)' },
-        categoryId: { type: 'string', description: 'ID of the Category (Required if subCategoryId is not provided)' },
+        subCategoryId: {
+          type: 'string',
+          description: 'ID of the SubCategory (Optional)',
+        },
+        categoryId: {
+          type: 'string',
+          description:
+            'ID of the Category (Required if subCategoryId is not provided)',
+        },
         companyId: { type: 'string', description: 'Associated company ID' },
       },
     },
@@ -316,6 +322,7 @@ export class ProductController {
   }
 
   @Get()
+  @ApiBearerAuth()
   @UseGuards(OptionalAccessTokenGuard)
   @ApiOperation({
     summary:

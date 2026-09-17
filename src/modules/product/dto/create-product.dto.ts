@@ -139,7 +139,8 @@ export class CreateProductDto {
   subCategoryId?: string;
 
   @ApiPropertyOptional({
-    description: 'ID of the Category (required if subCategoryId is not provided)',
+    description:
+      'ID of the Category (required if subCategoryId is not provided)',
     example: 'uuid-string',
   })
   @IsString()

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { Role } from '../../common/constants/role.enum';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateComplaintDto } from './dto/create-complaint.dto';
@@ -38,9 +43,7 @@ export class ComplaintService {
       where: { partyId },
     });
     if (!partyExists) {
-      throw new NotFoundException(
-        `Party with ID "${partyId}" not found`,
-      );
+      throw new NotFoundException(`Party with ID "${partyId}" not found`);
     }
 
     // Verify company exists
@@ -48,9 +51,7 @@ export class ComplaintService {
       where: { companyId },
     });
     if (!companyExists) {
-      throw new NotFoundException(
-        `Company with ID "${companyId}" not found`,
-      );
+      throw new NotFoundException(`Company with ID "${companyId}" not found`);
     }
 
     // Verify order exists if orderId is provided
@@ -59,9 +60,7 @@ export class ComplaintService {
         where: { orderId },
       });
       if (!orderExists) {
-        throw new NotFoundException(
-          `Order with ID "${orderId}" not found`,
-        );
+        throw new NotFoundException(`Order with ID "${orderId}" not found`);
       }
     }
 
@@ -71,9 +70,7 @@ export class ComplaintService {
         where: { driverId },
       });
       if (!driverExists) {
-        throw new NotFoundException(
-          `Driver with ID "${driverId}" not found`,
-        );
+        throw new NotFoundException(`Driver with ID "${driverId}" not found`);
       }
     }
 
@@ -83,9 +80,7 @@ export class ComplaintService {
         where: { productId },
       });
       if (!productExists) {
-        throw new NotFoundException(
-          `Product with ID "${productId}" not found`,
-        );
+        throw new NotFoundException(`Product with ID "${productId}" not found`);
       }
     }
 
@@ -125,7 +120,8 @@ export class ComplaintService {
 
     // Send notifications to Company, Driver (if any), and Admins
     try {
-      const partyName = partyExists.partyName || partyExists.businessName || 'A party';
+      const partyName =
+        partyExists.partyName || partyExists.businessName || 'A party';
 
       // 1. Notify Company (Vendor)
       await this.notificationService.sendNotification({
@@ -180,7 +176,10 @@ export class ComplaintService {
         type: 'COMPLAINT_CREATED',
       });
     } catch (err: any) {
-      this.logger.error(`Failed to send complaint notifications: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to send complaint notifications: ${err.message}`,
+        err.stack,
+      );
     }
 
     return complaint;
@@ -213,8 +212,7 @@ export class ComplaintService {
     });
 
     const actorId = reqUser?.sub || senderId;
-    const actorType =
-      reqUser?.roles[0] || senderRole || 'USER';
+    const actorType = reqUser?.roles[0] || senderRole || 'USER';
     await this.activityLogService.log({
       actorType,
       actorId,
@@ -224,9 +222,11 @@ export class ComplaintService {
 
     // Notify thread participants
     try {
-      const shortMsg = message.length > 80 ? `${message.substring(0, 80)}...` : message;
+      const shortMsg =
+        message.length > 80 ? `${message.substring(0, 80)}...` : message;
       const isParty = complaint.partyId === senderId || actorType === 'PARTY';
-      const isCompany = complaint.companyId === senderId || actorType === 'VENDOR';
+      const isCompany =
+        complaint.companyId === senderId || actorType === 'VENDOR';
 
       if (isParty) {
         // Party replied -> Notify Company
@@ -285,7 +285,10 @@ export class ComplaintService {
         type: 'COMPLAINT_REPLIED',
       });
     } catch (err: any) {
-      this.logger.error(`Failed to send reply notifications: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to send reply notifications: ${err.message}`,
+        err.stack,
+      );
     }
 
     return reply;
@@ -316,7 +319,10 @@ export class ComplaintService {
         where.partyId = reqUser.sub;
       } else if (reqUser.roles.includes(Role.DRIVER)) {
         where.driverId = reqUser.sub;
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
@@ -380,29 +386,41 @@ export class ComplaintService {
     if (reqUser && reqUser.roles) {
       if (reqUser.roles.includes(Role.VENDOR)) {
         if (complaint.companyId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to access this complaint`);
+          throw new ForbiddenException(
+            `You do not have permission to access this complaint`,
+          );
         }
       } else if (reqUser.roles.includes(Role.PARTY)) {
         if (complaint.partyId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to access this complaint`);
+          throw new ForbiddenException(
+            `You do not have permission to access this complaint`,
+          );
         }
       } else if (reqUser.roles.includes(Role.DRIVER)) {
         if (complaint.driverId !== reqUser.sub) {
-          throw new ForbiddenException(`You do not have permission to access this complaint`);
+          throw new ForbiddenException(
+            `You do not have permission to access this complaint`,
+          );
         }
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });
         const categoryIds = adminCategories.map((ac) => ac.categoryId);
-        const targetProductId = complaint.productId || complaint.order?.productId;
+        const targetProductId =
+          complaint.productId || complaint.order?.productId;
         if (targetProductId) {
           const product = await this.prisma.product.findUnique({
             where: { productId: targetProductId },
             select: { categoryId: true },
           });
           if (!product || !categoryIds.includes(product.categoryId)) {
-            throw new ForbiddenException(`You do not have permission to access this complaint`);
+            throw new ForbiddenException(
+              `You do not have permission to access this complaint`,
+            );
           }
         }
       }
@@ -484,7 +502,10 @@ export class ComplaintService {
         });
       }
     } catch (err: any) {
-      this.logger.error(`Failed to send status update notification: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to send status update notification: ${err.message}`,
+        err.stack,
+      );
     }
 
     return updated;
@@ -499,7 +520,10 @@ export class ComplaintService {
         where.partyId = reqUser.sub;
       } else if (reqUser.roles.includes(Role.DRIVER)) {
         where.driverId = reqUser.sub;
-      } else if (reqUser.roles.includes(Role.ADMIN) && !reqUser.roles.includes(Role.SUPER_ADMIN)) {
+      } else if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
         const adminCategories = await this.prisma.adminCategory.findMany({
           where: { userId: reqUser.sub },
         });

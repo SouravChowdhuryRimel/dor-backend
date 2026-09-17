@@ -23,6 +23,11 @@ model ChatMessage {
   message        String?
   file           String?      @map("file")
   image          String?      @map("image")
+  latitude       Float?       @map("latitude")
+  longitude      Float?       @map("longitude")
+  locationName   String?      @map("location_name")
+  isLiveLocation Boolean      @default(false) @map("is_live_location")
+  liveExpiresAt  DateTime?    @map("live_expires_at")
   isRead         Boolean      @default(false) @map("is_read")
   createdAt      DateTime     @default(now()) @map("created_at")
 

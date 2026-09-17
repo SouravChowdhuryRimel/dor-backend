@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
 import { CreateDriverDto } from '../dto/create-driver.dto';
 import { UpdateDriverDto } from '../dto/update-driver.dto';
@@ -440,9 +444,7 @@ export class DriverService {
     // If base coordinates were supplied, filter by radius and sort by distance
     if (baseLat !== undefined && baseLong !== undefined) {
       processedDrivers = processedDrivers
-        .filter(
-          (d) => d.distanceInKm !== null && d.distanceInKm <= maxRadius,
-        )
+        .filter((d) => d.distanceInKm !== null && d.distanceInKm <= maxRadius)
         .sort((a, b) => (a.distanceInKm || 0) - (b.distanceInKm || 0));
     }
 

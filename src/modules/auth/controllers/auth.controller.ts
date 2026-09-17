@@ -23,6 +23,7 @@ import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { UpdateFcmTokenDto } from '../dto/update-fcm-token.dto';
+import { TogglePushNotificationDto } from '../../notification/dto/toggle-push-notification.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RefreshTokenGuard } from '../../../common/guards/refresh-token.guard';
 import {
@@ -128,18 +129,19 @@ export class AuthController {
   }
 
   @Post('forgot-password')
-  @ApiOperation({ summary: 'Email a password-reset token' })
+  @ApiOperation({ summary: 'Email a 6-digit password-reset OTP' })
   @ApiBody({ type: ForgotPasswordDto })
   @ApiResponse({
     status: 201,
-    description: 'A reset email is sent when the account exists.',
+    description:
+      'A reset OTP is sent to the email address when the account exists.',
   })
   forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto);
   }
 
   @Post('reset-password')
-  @ApiOperation({ summary: 'Reset a password using an emailed token' })
+  @ApiOperation({ summary: 'Reset a password using an emailed 6-digit OTP' })
   @ApiBody({ type: ResetPasswordDto })
   @ApiResponse({ status: 201, description: 'Password reset successfully.' })
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
@@ -317,6 +319,68 @@ export class AuthController {
   })
   removeFcmTokenPost(@Req() req: any) {
     return this.authService.removeFcmToken(req.user['sub']);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Patch('push-toggle')
+  @ApiOperation({
+    summary: 'Toggle FCM push notifications ON or OFF (PATCH) (All roles)',
+    description:
+      'Enables or disables FCM push notifications for the authenticated user, company, party, or driver. Optionally updates fcmToken.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Push notification preference updated successfully.',
+  })
+  togglePushNotificationPatch(
+    @Req() req: any,
+    @Body() dto: TogglePushNotificationDto,
+  ) {
+    return this.authService.togglePushNotification(
+      req.user['sub'],
+      dto.enabled,
+      dto.fcmToken,
+    );
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Post('push-toggle')
+  @ApiOperation({
+    summary: 'Toggle FCM push notifications ON or OFF (POST alias) (All roles)',
+    description:
+      'Enables or disables FCM push notifications for the authenticated user, company, party, or driver.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Push notification preference updated successfully.',
+  })
+  togglePushNotificationPost(
+    @Req() req: any,
+    @Body() dto: TogglePushNotificationDto,
+  ) {
+    return this.authService.togglePushNotification(
+      req.user['sub'],
+      dto.enabled,
+      dto.fcmToken,
+    );
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @Get('push-status')
+  @ApiOperation({
+    summary: 'Get current FCM push notification toggle status (All roles)',
+    description:
+      'Retrieves whether push notifications are enabled and if an FCM token is registered for the authenticated account.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Current push notification status.',
+  })
+  getPushStatus(@Req() req: any) {
+    return this.authService.getPushNotificationStatus(req.user['sub']);
   }
 
   @ApiBearerAuth()

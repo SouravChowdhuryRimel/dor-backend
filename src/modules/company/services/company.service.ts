@@ -2,10 +2,13 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/core/database/database.service';
+import { Role } from '../../../common/constants/role.enum';
 import { CreateCompanyDto } from '../dto/create-company.dto';
 import { UpdateCompanyDto } from '../dto/update-company.dto';
+import { GetCompaniesQueryDto } from '../dto/get-companies-query.dto';
 import * as argon2 from 'argon2';
 import { CompanyStatus, Prisma } from '@prisma/client';
 import {
@@ -143,42 +146,37 @@ export class CompanyService {
     return company;
   }
 
-  async findPending(query?: PaginationQueryDto) {
+  async findPending(query?: PaginationQueryDto, reqUser?: any) {
     const page = Math.max(1, Number(query?.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
-    const where = { status: CompanyStatus.PENDING };
+    const where: any = { status: CompanyStatus.PENDING };
 
-    const [total, data] = await Promise.all([
-      this.prisma.company.count({ where }),
-      this.prisma.company.findMany({
-        where,
-        skip,
-        take: limit,
-        select: {
-          companyId: true,
-          email: true,
-          phoneNumber: true,
-          companyName: true,
-          ownerName: true,
-          status: true,
-          isVerified: true,
-          incomeTax: true,
-          companyDocument: true,
-          companyImage: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
 
-    return createPaginatedResponse(data, total, page, limit);
-  }
-
-  async findVerified(query?: PaginationQueryDto) {
-    const page = Math.max(1, Number(query?.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
-    const skip = (page - 1) * limit;
-    const where = { isVerified: true };
+    if ((query as any)?.categoryId) {
+      if (where.categoryId?.in) {
+        where.categoryId = {
+          in: where.categoryId.in.filter(
+            (id: string) => id === (query as any).categoryId,
+          ),
+        };
+      } else {
+        where.categoryId = (query as any).categoryId;
+      }
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.company.count({ where }),
@@ -187,6 +185,57 @@ export class CompanyService {
         skip,
         take: limit,
         select: companyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return createPaginatedResponse(data, total, page, limit);
+  }
+
+  async findVerified(query?: GetCompaniesQueryDto, reqUser?: any) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
+    const where: any = { isVerified: true };
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
+
+    if (query?.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
+        if (where.categoryId.in.includes(query.categoryId)) {
+          where.categoryId = query.categoryId;
+        } else {
+          where.categoryId = { in: [] };
+        }
+      } else {
+        where.categoryId = query.categoryId;
+      }
+    }
+
+    const [total, data] = await Promise.all([
+      this.prisma.company.count({ where }),
+      this.prisma.company.findMany({
+        where,
+        skip,
+        take: limit,
+        select: companyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -198,6 +247,25 @@ export class CompanyService {
       where: { companyId },
     });
     if (!company) throw new NotFoundException('Company not found');
+
+    if (
+      reqUser?.roles?.includes(Role.ADMIN) &&
+      !reqUser?.roles?.includes(Role.SUPER_ADMIN)
+    ) {
+      const hasCategory = await this.prisma.adminCategory.findUnique({
+        where: {
+          userId_categoryId: {
+            userId: adminId,
+            categoryId: company.categoryId,
+          },
+        },
+      });
+      if (!hasCategory) {
+        throw new ForbiddenException(
+          'You do not have permission to approve companies in this category',
+        );
+      }
+    }
 
     const updatedCompany = await this.prisma.company.update({
       where: { companyId },
@@ -236,17 +304,50 @@ export class CompanyService {
     return updatedCompany;
   }
 
-  async findAll(query?: PaginationQueryDto) {
+  async findAll(query?: GetCompaniesQueryDto, reqUser?: any) {
     const page = Math.max(1, Number(query?.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(query?.limit) || 10));
     const skip = (page - 1) * limit;
+    const where: any = {};
+
+    if (reqUser && reqUser.roles) {
+      if (
+        reqUser.roles.includes(Role.ADMIN) &&
+        !reqUser.roles.includes(Role.SUPER_ADMIN)
+      ) {
+        const adminCategories = await this.prisma.adminCategory.findMany({
+          where: { userId: reqUser.sub },
+          select: { categoryId: true },
+        });
+        const categoryIds = adminCategories.map((ac) => ac.categoryId);
+        where.categoryId = { in: categoryIds };
+      }
+    }
+
+    if (query?.categoryId) {
+      if (
+        where.categoryId &&
+        typeof where.categoryId === 'object' &&
+        'in' in where.categoryId
+      ) {
+        if (where.categoryId.in.includes(query.categoryId)) {
+          where.categoryId = query.categoryId;
+        } else {
+          where.categoryId = { in: [] };
+        }
+      } else {
+        where.categoryId = query.categoryId;
+      }
+    }
 
     const [total, data] = await Promise.all([
-      this.prisma.company.count(),
+      this.prisma.company.count({ where }),
       this.prisma.company.findMany({
+        where,
         skip,
         take: limit,
         select: companyDetailsSelect,
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -288,10 +389,7 @@ export class CompanyService {
       companyId: id,
     });
 
-    if (
-      updateCompanyDto.status &&
-      updateCompanyDto.status !== company.status
-    ) {
+    if (updateCompanyDto.status && updateCompanyDto.status !== company.status) {
       if (
         updateCompanyDto.status === CompanyStatus.REJECTED ||
         updateCompanyDto.status === CompanyStatus.BLOCKED
@@ -406,7 +504,8 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    const cleanKeywords = await this.validateKeywordsAgainstMasterList(keywords);
+    const cleanKeywords =
+      await this.validateKeywordsAgainstMasterList(keywords);
 
     return this.update(companyId, { keywords: cleanKeywords }, reqUser);
   }
@@ -463,9 +562,7 @@ export class CompanyService {
     const validNames = new Set(
       existing.map((e) => e.name.trim().toLowerCase()),
     );
-    const invalid = cleaned.filter(
-      (k) => !validNames.has(k.toLowerCase()),
-    );
+    const invalid = cleaned.filter((k) => !validNames.has(k.toLowerCase()));
 
     if (invalid.length > 0) {
       throw new BadRequestException(

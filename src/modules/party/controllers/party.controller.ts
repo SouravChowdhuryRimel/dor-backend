@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { CreatePartyDto } from '../dto/create-party.dto';
 import { UpdatePartyDto } from '../dto/update-party.dto';
+import { GetPartiesQueryDto } from '../dto/get-parties-query.dto';
 import { AccessTokenGuard } from '../../../common/guards/access-token.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -181,8 +182,9 @@ export class PartyController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  findAll(@Query() query: PaginationQueryDto) {
-    return this.partyService.findAll(query);
+  @ApiOperation({ summary: 'Get all parties' })
+  findAll(@Query() query: GetPartiesQueryDto, @Req() req: any) {
+    return this.partyService.findAll(query, req.user);
   }
 
   @Get('pending')
@@ -192,8 +194,8 @@ export class PartyController {
   @ApiOperation({
     summary: 'Get all pending parties (ADMIN and SUPER_ADMIN only)',
   })
-  getPending(@Query() query: PaginationQueryDto) {
-    return this.partyService.findPending(query);
+  getPending(@Query() query: PaginationQueryDto, @Req() req: any) {
+    return this.partyService.findPending(query, req.user);
   }
 
   @Get(':id')
@@ -260,7 +262,10 @@ export class PartyController {
         businessName: { type: 'string', description: 'Business Name' },
         area: { type: 'string', description: 'Area (alias for bazzarArea)' },
         district: { type: 'string', description: 'District' },
-        bazzar: { type: 'string', description: 'Bazzar (alias for bazzarArea)' },
+        bazzar: {
+          type: 'string',
+          description: 'Bazzar (alias for bazzarArea)',
+        },
         partyName: { type: 'string', description: 'Party Name' },
         profileImage: {
           type: 'string',
@@ -273,7 +278,11 @@ export class PartyController {
         },
         upozela: { type: 'string', description: 'Upozela' },
         latitude: { type: 'number', example: 23.8103, description: 'Latitude' },
-        longitude: { type: 'number', example: 90.4125, description: 'Longitude' },
+        longitude: {
+          type: 'number',
+          example: 90.4125,
+          description: 'Longitude',
+        },
         address: { type: 'string', description: 'Address' },
         bazzarArea: { type: 'string', description: 'Bazzar/Area' },
         treadLicense: { type: 'string', description: 'Trade License' },
@@ -281,7 +290,11 @@ export class PartyController {
         companyId: { type: 'string', description: 'Company ID' },
         categoryId: { type: 'string', description: 'Category ID' },
         openingDue: { type: 'number', description: 'Opening Due' },
-        email: { type: 'string', format: 'email', description: 'Email address' },
+        email: {
+          type: 'string',
+          format: 'email',
+          description: 'Email address',
+        },
         description: { type: 'string', description: 'Description' },
       },
     },

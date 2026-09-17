@@ -21,7 +21,8 @@ export class LoginDto {
   password: string;
 
   @ApiPropertyOptional({
-    description: 'Optional Firebase Cloud Messaging (FCM) token for push notifications',
+    description:
+      'Optional Firebase Cloud Messaging (FCM) token for push notifications',
     example: 'fcm_token_sample_123456',
   })
   @IsString()

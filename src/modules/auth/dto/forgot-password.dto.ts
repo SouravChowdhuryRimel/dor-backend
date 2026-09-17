@@ -1,18 +1,12 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
-import { IsEmail, IsEnum, IsOptional } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty } from 'class-validator';
 
 export class ForgotPasswordDto {
-  @ApiProperty({ example: 'admin@example.com' })
-  @IsEmail()
-  email: string;
-
-  @ApiPropertyOptional({
-    enum: Role,
-    description:
-      'Optional account role when one email is used by multiple accounts',
+  @ApiProperty({
+    example: 'admin@example.com',
+    description: 'Registered email address of the account',
   })
-  @IsOptional()
-  @IsEnum(Role)
-  role?: Role;
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
 }

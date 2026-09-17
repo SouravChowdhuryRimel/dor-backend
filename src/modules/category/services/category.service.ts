@@ -10,7 +10,7 @@ import { QueryCategoryDto } from '../dto/query-category.dto';
 
 @Injectable()
 export class CategoryService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   private mapCategoryAdmins(category: any) {
     if (!category) return null;

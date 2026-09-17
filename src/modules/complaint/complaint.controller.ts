@@ -98,7 +98,10 @@ export class ComplaintController {
     } else {
       createComplaintDto.attachments = [];
     }
-    const complaint = await this.complaintService.create(createComplaintDto, req.user);
+    const complaint = await this.complaintService.create(
+      createComplaintDto,
+      req.user,
+    );
     return {
       message: 'Complaint submitted successfully',
       data: complaint,

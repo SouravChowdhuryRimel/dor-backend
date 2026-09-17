@@ -55,20 +55,20 @@ async function main() {
     skipDuplicates: true,
   });
 
-  // 2. Create Admin (User with ADMIN/SUPER_ADMIN roles)
+  // 2. Create Admin (User with ADMIN role)
   console.log('Upserting Admin user...');
   const adminUser = await prisma.user.upsert({
     where: { phoneNumber: '01600000000' },
     update: {
-      password: hashedPassword,
-      roles: [Role.ADMIN, Role.SUPER_ADMIN],
+      roles: [Role.ADMIN],
+      isActive: true,
     },
     create: {
       phoneNumber: '01600000000',
       email: 'admin@example.com',
       password: hashedPassword,
       name: 'Seed Admin',
-      roles: [Role.ADMIN, Role.SUPER_ADMIN],
+      roles: [Role.ADMIN],
       isActive: true,
     },
   });
@@ -85,6 +85,31 @@ async function main() {
     create: {
       userId: adminUser.id,
       categoryId: category.categoryId,
+    },
+  });
+
+  // 2.1 Create Super Admin (User with SUPER_ADMIN role)
+  const superAdminEmail =
+    process.env.SUPER_ADMIN_EMAIL || 'superadmin@example.com';
+  const superAdminPhone =
+    process.env.SUPER_ADMIN_PHONE || '01700000000';
+  const superAdminPassword = await argon2.hash(
+    process.env.SUPER_ADMIN_PASSWORD || 'password123',
+  );
+
+  console.log('Upserting Super Admin user...');
+  await prisma.user.upsert({
+    where: { phoneNumber: superAdminPhone },
+    update: {
+      roles: [Role.SUPER_ADMIN],
+    },
+    create: {
+      phoneNumber: superAdminPhone,
+      email: superAdminEmail,
+      password: superAdminPassword,
+      name: 'Super Admin',
+      roles: [Role.SUPER_ADMIN],
+      isActive: true,
     },
   });
 
