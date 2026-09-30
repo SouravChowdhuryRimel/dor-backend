@@ -109,6 +109,12 @@ function generateSuccessMessage(method: string, url: string): string {
       if (cleanPath.endsWith('/accept')) {
         return 'Order accepted successfully';
       }
+      if (cleanPath.endsWith('/assign-driver')) {
+        return 'Driver assigned to order successfully';
+      }
+      if (cleanPath.endsWith('/remove-driver')) {
+        return 'Driver removed from order successfully';
+      }
       if (cleanPath.endsWith('/location')) {
         return 'Location updated successfully';
       }
