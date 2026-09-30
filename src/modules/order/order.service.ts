@@ -9,6 +9,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
 import { AcceptOrderDto } from './dto/accept-order.dto';
+import { AssignDriverDto } from './dto/assign-driver.dto';
 import {
   createPaginatedResponse,
   PaginationQueryDto,
@@ -908,7 +909,12 @@ export class OrderService {
       );
     }
 
-    const driverId = acceptOrderDto?.driverId;
+    const driverId =
+      acceptOrderDto?.driverId &&
+      typeof acceptOrderDto.driverId === 'string' &&
+      acceptOrderDto.driverId.trim() !== ''
+        ? acceptOrderDto.driverId.trim()
+        : undefined;
     if (driverId) {
       const driverExists = await this.prisma.driver.findUnique({
         where: { driverId },
@@ -984,6 +990,247 @@ export class OrderService {
           type: 'ORDER_ACCEPTED',
           orderId: id,
           showOrderId: updatedOrder.showOrderId,
+        },
+      });
+    }
+
+    return this.findOne(id, reqUser);
+  }
+
+  async assignDriver(
+    id: string,
+    reqUser: any,
+    assignDriverDto?: AssignDriverDto,
+  ) {
+    const rawDriverId = assignDriverDto?.driverId;
+    const driverId =
+      rawDriverId && typeof rawDriverId === 'string' && rawDriverId.trim() !== ''
+        ? rawDriverId.trim()
+        : undefined;
+
+    // If driverId is omitted or null/empty, treat as remove driver
+    if (!driverId) {
+      return this.removeDriver(id, reqUser);
+    }
+
+    const order = await this.findOne(id, reqUser);
+
+    // If requester is a VENDOR, ensure they own the order
+    if (reqUser?.roles?.includes(Role.VENDOR)) {
+      if (order.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You do not have permission to assign a driver to this order',
+        );
+      }
+    } else if (reqUser?.roles?.includes(Role.PARTY)) {
+      if (order.partyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You do not have permission to assign a driver to this order',
+        );
+      }
+    }
+
+    // Verify order is not DELIVERED or CANCELLED
+    if (
+      order.status === OrderStatus.DELIVERED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot assign driver to an order in ${order.status} status`,
+      );
+    }
+
+    const driverExists = await this.prisma.driver.findUnique({
+      where: { driverId },
+    });
+    if (!driverExists) {
+      throw new NotFoundException(`Driver with ID "${driverId}" not found`);
+    }
+
+    const existingDelivery = await this.prisma.delivery.findFirst({
+      where: { orderId: id },
+    });
+
+    const previousDriverId = existingDelivery?.driverId;
+
+    if (existingDelivery) {
+      await this.prisma.delivery.update({
+        where: { deliveryId: existingDelivery.deliveryId },
+        data: { driverId },
+      });
+    } else {
+      await this.prisma.delivery.create({
+        data: {
+          address: order.party?.address || '',
+          upozela: '',
+          district: '',
+          description: '',
+          deliveryTime: new Date(),
+          orderId: id,
+          status: 'PENDING',
+          driverId,
+        },
+      });
+    }
+
+    const actorId = reqUser?.sub || order.companyId;
+    const actorType = reqUser?.roles?.[0] || 'VENDOR';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'ASSIGN_DRIVER',
+      description: `Assigned driver ${driverId} to order ${order.showOrderId}`,
+      companyId: order.companyId,
+      partyId: order.partyId || undefined,
+    });
+
+    // 1. If a different previous driver was assigned, notify the previous driver of reassignment
+    if (previousDriverId && previousDriverId !== driverId) {
+      await this.notificationService.sendNotification({
+        title: 'ডেলিভারি দায়িত্ব প্রত্যাহার',
+        message: `অর্ডার ${order.showOrderId}-এর ডেলিভারির দায়িত্ব প্রত্যাহার করা হয়েছে।`,
+        driverId: previousDriverId,
+        data: {
+          type: 'DRIVER_REMOVED',
+          orderId: id,
+          showOrderId: order.showOrderId,
+        },
+      });
+    }
+
+    // 2. Notify the assigned Driver
+    await this.notificationService.sendNotification({
+      title: 'নতুন ডেলিভারি নির্ধারিত',
+      message: `আপনাকে অর্ডার ${order.showOrderId}-এর ডেলিভারির দায়িত্ব প্রদান করা হয়েছে।`,
+      driverId,
+      data: {
+        type: 'DRIVER_ASSIGNED',
+        orderId: id,
+        showOrderId: order.showOrderId,
+      },
+    });
+
+    // 3. Notify Company
+    if (order.companyId) {
+      await this.notificationService.sendNotification({
+        title: 'ড্রাইভার নির্ধারিত হয়েছে',
+        message: `অর্ডার ${order.showOrderId}-এর জন্য ড্রাইভার নির্ধারণ করা হয়েছে।`,
+        companyId: order.companyId,
+        data: {
+          type: 'DRIVER_ASSIGNED',
+          orderId: id,
+          showOrderId: order.showOrderId,
+        },
+      });
+    }
+
+    // 4. Notify Party
+    if (order.partyId) {
+      await this.notificationService.sendNotification({
+        title: 'ড্রাইভার নির্ধারিত হয়েছে',
+        message: `আপনার অর্ডার ${order.showOrderId}-এর জন্য ড্রাইভার নির্ধারণ করা হয়েছে।`,
+        partyId: order.partyId,
+        data: {
+          type: 'DRIVER_ASSIGNED',
+          orderId: id,
+          showOrderId: order.showOrderId,
+        },
+      });
+    }
+
+    return this.findOne(id, reqUser);
+  }
+
+  async removeDriver(id: string, reqUser: any) {
+    const order = await this.findOne(id, reqUser);
+
+    // If requester is a VENDOR, ensure they own the order
+    if (reqUser?.roles?.includes(Role.VENDOR)) {
+      if (order.companyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You do not have permission to remove driver for this order',
+        );
+      }
+    } else if (reqUser?.roles?.includes(Role.PARTY)) {
+      if (order.partyId !== reqUser.sub) {
+        throw new ForbiddenException(
+          'You do not have permission to remove driver for this order',
+        );
+      }
+    }
+
+    // Verify order is not DELIVERED or CANCELLED
+    if (
+      order.status === OrderStatus.DELIVERED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot remove driver from an order in ${order.status} status`,
+      );
+    }
+
+    const existingDelivery = await this.prisma.delivery.findFirst({
+      where: { orderId: id },
+    });
+
+    const previousDriverId = existingDelivery?.driverId;
+
+    if (existingDelivery) {
+      await this.prisma.delivery.update({
+        where: { deliveryId: existingDelivery.deliveryId },
+        data: { driverId: null },
+      });
+    }
+
+    const actorId = reqUser?.sub || order.companyId;
+    const actorType = reqUser?.roles?.[0] || 'VENDOR';
+    await this.activityLogService.log({
+      actorType,
+      actorId,
+      action: 'REMOVE_DRIVER',
+      description: `Removed driver from order ${order.showOrderId}`,
+      companyId: order.companyId,
+      partyId: order.partyId || undefined,
+    });
+
+    // 1. Notify previous driver if existed
+    if (previousDriverId) {
+      await this.notificationService.sendNotification({
+        title: 'ডেলিভারি দায়িত্ব প্রত্যাহার',
+        message: `অর্ডার ${order.showOrderId}-এর ডেলিভারির দায়িত্ব প্রত্যাহার করা হয়েছে।`,
+        driverId: previousDriverId,
+        data: {
+          type: 'DRIVER_REMOVED',
+          orderId: id,
+          showOrderId: order.showOrderId,
+        },
+      });
+    }
+
+    // 2. Notify Company
+    if (order.companyId) {
+      await this.notificationService.sendNotification({
+        title: 'ড্রাইভার অপসারণ করা হয়েছে',
+        message: `অর্ডার ${order.showOrderId}-এর নির্ধারিত ড্রাইভার অপসারণ করা হয়েছে।`,
+        companyId: order.companyId,
+        data: {
+          type: 'DRIVER_REMOVED',
+          orderId: id,
+          showOrderId: order.showOrderId,
+        },
+      });
+    }
+
+    // 3. Notify Party
+    if (order.partyId) {
+      await this.notificationService.sendNotification({
+        title: 'ড্রাইভার অপসারণ করা হয়েছে',
+        message: `আপনার অর্ডার ${order.showOrderId}-এর নির্ধারিত ড্রাইভার অপসারণ করা হয়েছে।`,
+        partyId: order.partyId,
+        data: {
+          type: 'DRIVER_REMOVED',
+          orderId: id,
+          showOrderId: order.showOrderId,
         },
       });
     }

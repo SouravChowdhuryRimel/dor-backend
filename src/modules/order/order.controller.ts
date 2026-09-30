@@ -15,6 +15,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
 import { AcceptOrderDto } from './dto/accept-order.dto';
+import { AssignDriverDto } from './dto/assign-driver.dto';
 import { GetDriverOrdersQueryDto } from './dto/get-driver-orders-query.dto';
 import { PaginationQueryDto } from '../../shared/pagination/pagination.util';
 import {
@@ -103,7 +104,7 @@ export class OrderController {
   @UseGuards(RolesGuard)
   @Roles(Role.VENDOR, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Accept an order and assign a driver (Company/Admin only)',
+    summary: 'Accept an order (Driver assignment is optional) (Company/Admin only)',
   })
   @ApiBody({ type: AcceptOrderDto, required: false })
   @ApiResponse({ status: 200, description: 'Order successfully accepted.' })
@@ -114,10 +115,61 @@ export class OrderController {
   @ApiResponse({ status: 404, description: 'Order or Driver not found.' })
   accept(
     @Param('id') id: string,
-    @Body() acceptOrderDto: AcceptOrderDto,
     @Req() req: any,
+    @Body() acceptOrderDto?: AcceptOrderDto,
   ) {
     return this.orderService.acceptOrder(id, req.user, acceptOrderDto);
+  }
+
+  @Patch(':id/assign-driver')
+  @UseGuards(RolesGuard)
+  @Roles(Role.VENDOR, Role.PARTY, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Assign or remove a driver from an order (Company and Party only)',
+  })
+  @ApiBody({ type: AssignDriverDto, required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Driver successfully assigned or removed from order.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid order status or invalid driver ID.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden. Requester is not the owner company or party.',
+  })
+  @ApiResponse({ status: 404, description: 'Order or Driver not found.' })
+  assignDriver(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() assignDriverDto?: AssignDriverDto,
+  ) {
+    return this.orderService.assignDriver(id, req.user, assignDriverDto);
+  }
+
+  @Patch(':id/remove-driver')
+  @UseGuards(RolesGuard)
+  @Roles(Role.VENDOR, Role.PARTY, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Remove driver from an order (Company and Party only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Driver successfully removed from order.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid order status.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden. Requester is not the owner company or party.',
+  })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  removeDriver(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.removeDriver(id, req.user);
   }
 
   @Patch(':id/cancel')
