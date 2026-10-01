@@ -81,7 +81,7 @@ jobs:
             type=ref,event=branch
 
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
