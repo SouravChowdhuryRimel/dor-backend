@@ -391,7 +391,26 @@ To operate at enterprise scale handling millions of monthly active users and hig
 
 ---
 
-## 12. Authors & Maintenance
+## 12. Documentation & Guides
+
+Comprehensive architecture specifications, mobile integration guides (Flutter), and DevOps runbooks are available in the [`docs/`](./docs) directory:
+
+- [**Business Logic Specification**](./docs/Price_Check_BD_Final_Business_Logic.md): Master functional source of truth.
+- [**CI/CD & Deployment Runbook**](./docs/CI_CD_GUIDE.md): Automated GitHub Actions pipeline and VPS deployment.
+- [**Inquiry & RFQ Flow**](./docs/INQUIRY_FLOW.md): Reverse-auction workflows and quote negotiation mechanics.
+- [**Inquiry Flutter Integration Guide**](./docs/INQUIRY_FLUTTER_GUIDE.md): Mobile integration for customer inquiries and vendor quotes.
+- [**Order & Delivery Flow**](./docs/ORDER_AND_DELIVERY_FLOW.md): End-to-end order fulfillment and delivery lifecycle.
+- [**Order & Driver Assignment Guide**](./docs/ORDER_DRIVER_ASSIGNMENT_FLUTTER_GUIDE.md): Mobile driver dispatching and delivery milestones.
+- [**Flutter Chat Integration**](./docs/FLUTTER_CHAT_INTEGRATION.md): Real-time chat, live tracking, and unread count badges.
+- [**Flutter Chat Socket & REST Guide**](./docs/FLUTTER_CHAT_INTEGRATION_GUIDE.md): Deep-dive Socket.io event handling and REST integration.
+- [**Flutter Notification Integration**](./docs/FLUTTER_NOTIFICATION_INTEGRATION_GUIDE.md): Push notifications, FCM tokens, and unread counters.
+- [**Seller Keywords & Inquiry Routing**](./docs/SELLER_KEYWORDS_AND_INQUIRY_FLUTTER_GUIDE.md): Vendor keyword indexing and inquiry targeting.
+
+For more details, visit the [Documentation Directory](./docs/README.md).
+
+---
+
+## 13. Authors & Maintenance
 
 - **Platform Architecture**: Price Check BD Core Engineering Team
 - **Repository**: [SouravChowdhuryRimel/dor-backend](https://github.com/SouravChowdhuryRimel/dor-backend)

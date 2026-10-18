@@ -40,3 +40,9 @@ Thumbs.db
 docker-compose.override.yml
 *.mp4
 *.mp4
+
+#DB passwords
+db_passwords.txt
+db_password.txt
+/scratch/*
+scratch/
